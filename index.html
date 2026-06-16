@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vũ Đức An — Portfolio</title>
+  <meta name="description" content="Portfolio cá nhân của Vũ Đức An — lập trình viên web." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui'] } } }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    /* blur-fade animation */
+    .blur-fade { opacity: 0; filter: blur(8px); transform: translateY(18px); transition: opacity .6s ease, filter .6s ease, transform .6s ease; }
+    .blur-fade.show { opacity: 1; filter: blur(0); transform: none; }
+    .dock-item { transition: transform .18s ease; }
+    .dock-item:hover { transform: translateY(-6px) scale(1.12); }
+  </style>
+</head>
+<body class="bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100 antialiased transition-colors">
+
+  <main class="mx-auto max-w-2xl px-6 pt-16 pb-40">
+
+    <!-- HERO -->
+    <section class="flex items-center justify-between gap-6">
+      <div class="flex-1 space-y-2">
+        <h1 class="blur-fade text-4xl sm:text-5xl font-extrabold tracking-tight">
+          Xin chào, tôi là An <span class="inline-block animate-pulse">👋</span>
+        </h1>
+        <p class="blur-fade text-lg text-neutral-600 dark:text-neutral-400" style="transition-delay:.1s">
+          Lập trình viên web, yêu thiết kế và xây dựng những sản phẩm số đẹp, nhanh, hữu ích.
+        </p>
+      </div>
+      <div class="blur-fade shrink-0" style="transition-delay:.15s">
+        <div class="h-28 w-28 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-400 p-[3px]">
+          <div class="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-neutral-950 text-3xl font-extrabold text-neutral-800 dark:text-neutral-100">
+            VA
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="about" class="mt-16">
+      <h2 class="blur-fade text-xl font-bold">Giới thiệu</h2>
+      <p class="blur-fade mt-3 leading-relaxed text-neutral-600 dark:text-neutral-400" style="transition-delay:.05s">
+        Tôi là người thích biến ý tưởng thành sản phẩm thực tế. Quan tâm đến trải nghiệm người dùng,
+        hiệu năng và mã nguồn sạch. Luôn học hỏi công nghệ mới mỗi ngày. Phần nội dung này bạn có thể
+        thay bằng câu chuyện của riêng mình.
+      </p>
+    </section>
+
+    <!-- EXPERIENCE -->
+    <section id="work" class="mt-16">
+      <h2 class="blur-fade text-xl font-bold">Kinh nghiệm</h2>
+      <div class="mt-5 space-y-4">
+        <div class="blur-fade flex items-start gap-4 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800 font-bold">CT</div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold">Công ty / Dự án A</h3>
+              <span class="text-sm text-neutral-500">2024 — nay</span>
+            </div>
+            <p class="text-sm text-neutral-500">Vị trí công việc</p>
+            <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-400">Mô tả ngắn về vai trò và thành tựu của bạn ở đây.</p>
+          </div>
+        </div>
+        <div class="blur-fade flex items-start gap-4 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4" style="transition-delay:.05s">
+          <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800 font-bold">CT</div>
+          <div class="flex-1">
+            <div class="flex items-center justify-between">
+              <h3 class="font-semibold">Công ty / Dự án B</h3>
+              <span class="text-sm text-neutral-500">2022 — 2024</span>
+            </div>
+            <p class="text-sm text-neutral-500">Vị trí công việc</p>
+            <p class="mt-2 text-sm text-neutral-600 dark:text-neutral-400">Mô tả ngắn về vai trò và thành tựu của bạn ở đây.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SKILLS -->
+    <section id="skills" class="mt-16">
+      <h2 class="blur-fade text-xl font-bold">Kỹ năng</h2>
+      <div class="blur-fade mt-4 flex flex-wrap gap-2" style="transition-delay:.05s">
+        <span class="rounded-md bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-sm font-medium">React</span>
+        <span class="rounded-md bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-sm font-medium">Next.js</span>
+        <span class="rounded-md bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-sm font-medium">TypeScript</span>
+        <span class="rounded-md bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-sm font-medium">Tailwind CSS</span>
+        <span class="rounded-md bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-sm font-medium">Node.js</span>
+        <span class="rounded-md bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-sm font-medium">Python</span>
+        <span class="rounded-md bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-sm font-medium">Git</span>
+        <span class="rounded-md bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-sm font-medium">Cloudflare</span>
+      </div>
+    </section>
+
+    <!-- PROJECTS -->
+    <section id="projects" class="mt-16">
+      <div class="blur-fade text-center">
+        <span class="rounded-full bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-xs font-semibold">Dự án</span>
+        <h2 class="mt-3 text-3xl font-extrabold tracking-tight">Một số sản phẩm tôi đã làm</h2>
+        <p class="mt-2 text-neutral-600 dark:text-neutral-400">Click vào từng dự án để xem chi tiết.</p>
+      </div>
+      <div class="mt-8 grid gap-4 sm:grid-cols-2">
+        <article class="blur-fade group overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800">
+          <div class="h-36 bg-gradient-to-br from-indigo-500 to-cyan-400"></div>
+          <div class="p-4">
+            <h3 class="font-semibold">Dự án 1</h3>
+            <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Mô tả ngắn về dự án, công nghệ dùng và kết quả.</p>
+            <div class="mt-3 flex gap-2 text-xs">
+              <span class="rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5">Next.js</span>
+              <span class="rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5">Tailwind</span>
+            </div>
+          </div>
+        </article>
+        <article class="blur-fade group overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800" style="transition-delay:.05s">
+          <div class="h-36 bg-gradient-to-br from-fuchsia-500 to-orange-400"></div>
+          <div class="p-4">
+            <h3 class="font-semibold">Dự án 2</h3>
+            <p class="mt-1 text-sm text-neutral-600 dark:text-neutral-400">Mô tả ngắn về dự án, công nghệ dùng và kết quả.</p>
+            <div class="mt-3 flex gap-2 text-xs">
+              <span class="rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5">React</span>
+              <span class="rounded bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5">Node</span>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section id="contact" class="mt-20 text-center">
+      <div class="blur-fade">
+        <span class="rounded-full bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 px-3 py-1 text-xs font-semibold">Liên hệ</span>
+        <h2 class="mt-3 text-3xl font-extrabold tracking-tight">Cùng làm việc nhé</h2>
+        <p class="mx-auto mt-3 max-w-md text-neutral-600 dark:text-neutral-400">
+          Bạn có ý tưởng hoặc dự án? Gửi cho tôi một lời nhắn, tôi rất sẵn lòng trò chuyện.
+        </p>
+        <a href="mailto:vuducan0ran9e@gmail.com" class="mt-6 inline-block rounded-lg bg-neutral-900 dark:bg-neutral-100 px-6 py-3 font-semibold text-white dark:text-neutral-900 hover:opacity-90 transition">
+          Gửi email cho tôi
+        </a>
+      </div>
+    </section>
+  </main>
+
+  <!-- FLOATING DOCK -->
+  <nav class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+    <div class="flex items-center gap-1 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white/80 dark:bg-neutral-900/80 px-3 py-2 shadow-lg backdrop-blur">
+      <a href="#" class="dock-item rounded-full p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Trang chủ">🏠</a>
+      <a href="#work" class="dock-item rounded-full p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Kinh nghiệm">💼</a>
+      <a href="#projects" class="dock-item rounded-full p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Dự án">🧩</a>
+      <a href="#contact" class="dock-item rounded-full p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Liên hệ">✉️</a>
+      <span class="mx-1 h-6 w-px bg-neutral-200 dark:bg-neutral-700"></span>
+      <button id="themeToggle" class="dock-item rounded-full p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800" title="Đổi giao diện">🌙</button>
+    </div>
+  </nav>
+
+  <footer class="pb-28 text-center text-sm text-neutral-500">
+    © <span id="year"></span> Vũ Đức An · vuducan.qzz.io
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // Theme toggle (in-memory, follows system by default)
+    const root = document.documentElement;
+    const toggle = document.getElementById('themeToggle');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    let dark = prefersDark;
+    function apply() { root.classList.toggle('dark', dark); toggle.textContent = dark ? '☀️' : '🌙'; }
+    apply();
+    toggle.addEventListener('click', () => { dark = !dark; apply(); });
+
+    // blur-fade on scroll
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('show'); io.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.blur-fade').forEach((el) => io.observe(el));
+  </script>
+</body>
+</html>
