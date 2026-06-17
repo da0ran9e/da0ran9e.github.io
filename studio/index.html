@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VŨ ĐỨC AN — STUDIO</title>
+<meta name="description" content="Portfolio demo — Swiss layout, WebGL geometry, motion." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --bg:#f3f1ea;        /* off-white paper */
+    --ink:#101010;       /* near black */
+    --muted:#6b6a63;
+    --accent:#e8482b;    /* swiss red */
+    --line:rgba(16,16,16,.14);
+    --maxw:1320px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:'Inter',Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.3;overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+
+  /* WebGL canvas behind content */
+  #gl{position:fixed;inset:0;z-index:0;pointer-events:none}
+  .wrap{position:relative;z-index:1}
+
+  /* thin swiss grid overlay */
+  .grid-lines{position:fixed;inset:0;z-index:0;pointer-events:none;display:grid;
+    grid-template-columns:repeat(12,1fr);max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  .grid-lines span{border-left:1px solid var(--line)}
+  .grid-lines span:last-child{border-right:1px solid var(--line)}
+  @media(max-width:760px){.grid-lines{grid-template-columns:repeat(4,1fr)}}
+
+  .container{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+
+  /* top bar */
+  header{position:fixed;top:0;left:0;right:0;z-index:20;mix-blend-mode:difference;color:#fff}
+  header .container{display:flex;justify-content:space-between;align-items:center;padding-top:22px;padding-bottom:22px;
+    font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
+  header nav a{margin-left:26px;opacity:.85}
+  @media(max-width:620px){header nav a{margin-left:14px;font-size:11px}}
+
+  /* hero */
+  .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:7vh}
+  .hero .eyebrow{font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:22px}
+  .hero h1{font-weight:900;letter-spacing:-.03em;line-height:.92;
+    font-size:clamp(54px,15vw,220px);text-transform:uppercase}
+  .hero h1 .accent{color:var(--accent)}
+  .hero .meta{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin-top:42px;
+    border-top:1px solid var(--line);padding-top:18px;font-size:14px;color:var(--muted)}
+  .hero .meta .c{grid-column:span 3}
+  .hero .meta .c b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+  @media(max-width:760px){.hero .meta .c{grid-column:span 6}}
+
+  /* section heading */
+  .sec{padding:13vh 0}
+  .sec-head{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:baseline;
+    border-top:2px solid var(--ink);padding-top:16px;margin-bottom:48px}
+  .sec-head .idx{grid-column:span 2;font-size:14px;color:var(--muted);font-weight:600}
+  .sec-head h2{grid-column:span 7;font-size:clamp(26px,4vw,46px);font-weight:800;letter-spacing:-.02em;line-height:1.02}
+  .sec-head .note{grid-column:span 3;font-size:14px;color:var(--muted)}
+  @media(max-width:760px){.sec-head .idx{grid-column:span 12}.sec-head h2{grid-column:span 12}.sec-head .note{grid-column:span 12;margin-top:8px}}
+
+  /* intro statement */
+  .statement{font-size:clamp(22px,3.4vw,40px);font-weight:500;letter-spacing:-.01em;line-height:1.16;max-width:18ch}
+  .statement em{color:var(--accent);font-style:normal}
+
+  /* work grid */
+  .work{display:grid;grid-template-columns:repeat(12,1fr);gap:18px 18px}
+  .item{position:relative;overflow:hidden;background:#e3e0d6;border:1px solid var(--line)}
+  .item .ph{display:block;width:100%;height:100%;object-fit:cover;
+    transition:transform .9s cubic-bezier(.2,.7,.2,1),filter .9s;filter:grayscale(.15) contrast(1.02)}
+  .item:hover .ph{transform:scale(1.05);filter:grayscale(0)}
+  .item .cap{position:absolute;left:12px;bottom:12px;right:12px;display:flex;justify-content:space-between;
+    font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#fff;mix-blend-mode:difference}
+  .item.big{grid-column:span 7;aspect-ratio:4/3}
+  .item.tall{grid-column:span 5;aspect-ratio:3/4}
+  .item.half{grid-column:span 6;aspect-ratio:3/2}
+  .item.third{grid-column:span 4;aspect-ratio:1/1}
+  @media(max-width:760px){
+    .item.big,.item.tall,.item.half,.item.third{grid-column:span 12;aspect-ratio:4/3}
+  }
+  .empty-note{grid-column:span 12;color:var(--muted);font-size:15px;padding:40px 0;text-align:center}
+
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(30px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1)}
+  .reveal.show{opacity:1;transform:none}
+
+  footer{border-top:2px solid var(--ink);padding:48px 0 60px}
+  footer .container{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:end}
+  footer h3{grid-column:span 8;font-size:clamp(30px,6vw,84px);font-weight:900;letter-spacing:-.03em;text-transform:uppercase;line-height:.95}
+  footer .links{grid-column:span 4;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
+  footer .links a:hover{color:var(--accent)}
+  @media(max-width:760px){footer h3{grid-column:span 12}footer .links{grid-column:span 12;margin-top:18px}}
+
+  .tag{position:fixed;right:18px;bottom:16px;z-index:30;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="grid-lines" id="gridlines"></div>
+
+<header>
+  <div class="container">
+    <div>Vũ Đức An ©2026</div>
+    <nav>
+      <a href="#work">Work</a>
+      <a href="#about">About</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container">
+      <div class="eyebrow reveal">Designer · Developer · Hà Nội</div>
+      <h1 class="reveal">Studio<br>Vũ Đức <span class="accent">An</span></h1>
+      <div class="meta reveal">
+        <div class="c"><b>Discipline</b>Web · WebGL · Motion</div>
+        <div class="c"><b>Approach</b>Swiss grid, geometry, rhythm</div>
+        <div class="c"><b>Status</b>Mở cho dự án mới</div>
+        <div class="c"><b>Year</b>2026 — ∞</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section class="sec" id="about">
+    <div class="container">
+      <div class="sec-head reveal">
+        <div class="idx">01 — Về tôi</div>
+        <h2>Bố cục mạch lạc, hình khối, và chuyển động có chủ đích.</h2>
+        <div class="note">Trang demo dựng theo tinh thần Swiss + WebGL. Nội dung là mẫu — bạn thay sau.</div>
+      </div>
+      <p class="statement reveal">Tôi thiết kế và xây dựng những trải nghiệm web <em>gọn gàng</em>, có nhịp điệu — nơi hình học và typography dẫn dắt người xem.</p>
+    </div>
+  </section>
+
+  <!-- WORK -->
+  <section class="sec" id="work">
+    <div class="container">
+      <div class="sec-head reveal">
+        <div class="idx">02 — Tuyển tập</div>
+        <h2>Selected Work</h2>
+        <div class="note">Ảnh lấy trực tiếp từ kho của bạn (Supabase). Thêm ảnh là tự cập nhật.</div>
+      </div>
+      <div class="work" id="work-grid">
+        <div class="empty-note" id="work-empty">Đang tải ảnh…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT / FOOTER -->
+  <footer id="contact">
+    <div class="container">
+      <h3>Let's<br>work →</h3>
+      <div class="links">
+        <a href="mailto:vuducan0ran9e@gmail.com">vuducan0ran9e@gmail.com</a>
+        <a href="https://github.com/da0ran9e" target="_blank" rel="noopener">GitHub ↗</a>
+        <a href="https://vuducan.qzz.io" target="_blank" rel="noopener">vuducan.qzz.io ↗</a>
+        <span style="margin-top:14px">© 2026 — Demo gốc, phong cách Swiss/WebGL.</span>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<div class="tag">WebGL · Three.js · Static</div>
+
+<script>
+  // grid overlay columns
+  (function(){
+    const gl=document.getElementById('gridlines');
+    const cols = window.matchMedia('(max-width:760px)').matches?4:12;
+    for(let i=0;i<cols;i++){const s=document.createElement('span');gl.appendChild(s);}
+  })();
+
+  // reveal on scroll
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('show');io.unobserve(e.target);}})},{threshold:.12});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+  // ---- Load album images from Supabase (client-side, public bucket) ----
+  const SUPABASE_URL='https://huhzwawyysehjtofkpvb.supabase.co';
+  const SUPABASE_KEY='sb_publishable_U0L64ODHeuid599c6oRgvw_5fM-2D8n';
+  const BUCKET='album';
+  const IMG_RE=/\.(jpe?g|png|webp|avif|gif)$/i;
+  const CLASSES=['big','tall','half','half','third','third','third'];
+
+  async function loadWork(){
+    const grid=document.getElementById('work-grid');
+    const empty=document.getElementById('work-empty');
+    try{
+      const r=await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET}`,{
+        method:'POST',
+        headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},
+        body:JSON.stringify({prefix:'',limit:100,offset:0,sortBy:{column:'created_at',order:'desc'}})
+      });
+      const items=await r.json();
+      const photos=(Array.isArray(items)?items:[])
+        .filter(it=>it&&it.name&&IMG_RE.test(it.name)&&(!it.metadata||it.metadata.size==null||it.metadata.size>0));
+      if(!photos.length){empty.textContent='Chưa có ảnh trong album. Thêm ảnh vào Supabase để hiện ở đây.';return;}
+      grid.innerHTML='';
+      photos.forEach((p,i)=>{
+        const a=document.createElement('a');
+        a.className='item reveal '+CLASSES[i%CLASSES.length];
+        a.href=`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(p.name)}`;
+        a.target='_blank';a.rel='noopener';
+        const img=document.createElement('img');
+        img.className='ph';img.loading='lazy';img.alt=p.name;
+        img.src=a.href;
+        const cap=document.createElement('div');
+        cap.className='cap';
+        cap.innerHTML=`<span>${String(i+1).padStart(2,'0')}</span><span>Image</span>`;
+        a.appendChild(img);a.appendChild(cap);grid.appendChild(a);
+        io.observe(a);
+      });
+    }catch(e){
+      empty.textContent='Không tải được ảnh (kiểm tra Supabase).';
+    }
+  }
+  loadWork();
+
+  // ---- WebGL abstract geometry (Three.js) ----
+  (function(){
+    const SRC='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    function start(){
+      const THREE=window.THREE;const canvas=document.getElementById('gl');
+      const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+      let w=innerWidth,h=innerHeight;renderer.setSize(w,h);
+      const scene=new THREE.Scene();
+      const cam=new THREE.PerspectiveCamera(45,w/h,.1,100);cam.position.z=6;
+
+      const grp=new THREE.Group();scene.add(grp);
+      const geo=new THREE.IcosahedronGeometry(2.05,1);
+      const solid=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x101010,transparent:true,opacity:.04}));
+      const wire=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x101010,transparent:true,opacity:.28}));
+      grp.add(solid);grp.add(wire);
+      // accent small shape
+      const dotGeo=new THREE.IcosahedronGeometry(.5,0);
+      const dot=new THREE.Mesh(dotGeo,new THREE.MeshBasicMaterial({color:0xe8482b}));
+      dot.position.set(2.6,1.4,1);grp.add(dot);
+
+      let mx=0,my=0,tx=0,ty=0,scrollY=0;
+      addEventListener('mousemove',e=>{mx=(e.clientX/innerWidth-.5);my=(e.clientY/innerHeight-.5);});
+      addEventListener('scroll',()=>{scrollY=window.scrollY;});
+      addEventListener('resize',()=>{w=innerWidth;h=innerHeight;cam.aspect=w/h;cam.updateProjectionMatrix();renderer.setSize(w,h);});
+
+      function tick(){
+        tx+=(mx-tx)*.05;ty+=(my-ty)*.05;
+        const s=scrollY/innerHeight;
+        grp.rotation.y+=.0024;
+        grp.rotation.x = ty*.6 + s*.5;
+        grp.rotation.z = tx*.3;
+        grp.position.x = 1.6 + tx*1.2;
+        grp.position.y = -s*1.4 - ty*1.0;
+        dot.position.x = 2.6 + Math.sin(performance.now()*0.0006)*0.4;
+        renderer.render(scene,cam);
+        requestAnimationFrame(tick);
+      }
+      tick();
+    }
+    if(window.THREE)start();else{const sc=document.createElement('script');sc.src=SRC;sc.onload=start;document.body.appendChild(sc);}
+  })();
+</script>
+</body>
+</html>
