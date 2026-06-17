@@ -4,55 +4,66 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>VŨ ĐỨC AN — GRAVITY BOX</title>
-<meta name="description" content="Hộp trọng lực — thả khối lập phương ảnh, vật lý Three.js + cannon.js" />
+<meta name="description" content="Hộp trọng lực — màn hình là mặt kính, kéo & ném khối ảnh. Three.js + cannon.js" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
 <style>
-  :root{ --ink:#0c0c0c; --paper:#ece9e2; --accent:#e8482b; --muted:#9a958c; }
+  :root{ --ink:#0c0c0c; --paper:#ece9e2; --accent:#e8482b; --muted:#b9b1a4; }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
-  body{background:radial-gradient(120% 120% at 50% 0%, #1a1a1a 0%, #0c0c0c 60%);
-    color:var(--paper);font-family:'Inter',Helvetica,Arial,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
-  #gl{position:fixed;inset:0;display:block;cursor:grab}
-  #gl.drag{cursor:grabbing}
+  body{background:#0c0c0c;color:var(--paper);font-family:'Inter',Helvetica,Arial,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #gl{position:fixed;inset:0;display:block;cursor:grab;touch-action:none}
+  #gl.grabbing{cursor:grabbing}
+
+  /* khung "mặt kính" phủ lên màn hình */
+  .glass-frame{position:fixed;inset:14px;z-index:4;pointer-events:none;border:1px solid rgba(255,255,255,.10);
+    box-shadow:inset 0 0 120px rgba(255,255,255,.05), inset 0 0 0 1px rgba(255,255,255,.03)}
+  .glass-frame::before,.glass-frame::after{content:"";position:absolute;width:22px;height:22px;border:2px solid var(--accent)}
+  .glass-frame::before{top:-1px;left:-1px;border-right:none;border-bottom:none}
+  .glass-frame::after{bottom:-1px;right:-1px;border-left:none;border-top:none}
+  /* phản chiếu chéo trên kính */
+  .sheen{position:fixed;inset:0;z-index:3;pointer-events:none;
+    background:linear-gradient(115deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,0) 22%, rgba(255,255,255,0) 78%, rgba(255,255,255,.04) 100%)}
 
   .ui{position:fixed;inset:0;z-index:5;pointer-events:none}
-  .top{position:absolute;top:22px;left:24px;right:24px;display:flex;justify-content:space-between;
+  .top{position:absolute;top:30px;left:34px;right:34px;display:flex;justify-content:space-between;
     font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
   .top .r{color:var(--accent)}
-  .title{position:absolute;left:24px;top:64px;font-weight:900;letter-spacing:-.03em;line-height:.86;
-    font-size:clamp(34px,7vw,92px);text-transform:uppercase;mix-blend-mode:difference}
-  .sub{position:absolute;left:26px;top:calc(64px + clamp(34px,7vw,92px) + 6px);
-    font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);max-width:420px}
+  .title{position:absolute;left:34px;top:70px;font-weight:900;letter-spacing:-.03em;line-height:.86;
+    font-size:clamp(30px,6vw,76px);text-transform:uppercase;mix-blend-mode:difference}
+  .sub{position:absolute;left:36px;top:calc(70px + clamp(30px,6vw,76px) + 8px);
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);max-width:380px;mix-blend-mode:difference}
+  a.back{position:absolute;left:34px;top:46px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);text-decoration:none;pointer-events:auto}
+  a.back:hover{color:var(--paper)}
 
-  .panel{position:absolute;left:24px;bottom:24px;display:flex;gap:10px;align-items:center;pointer-events:auto}
+  .panel{position:absolute;left:34px;bottom:34px;display:flex;gap:10px;align-items:center;pointer-events:auto}
   button{pointer-events:auto;font-family:inherit;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
-    font-size:12px;padding:14px 22px;border:1px solid #3a3a3a;background:#141414;color:var(--paper);
-    cursor:pointer;border-radius:2px;transition:.18s}
+    font-size:12px;padding:14px 22px;border:1px solid #3a3a3a;background:rgba(20,20,20,.7);color:var(--paper);
+    cursor:pointer;border-radius:2px;transition:.18s;backdrop-filter:blur(4px)}
   button:hover{background:var(--paper);color:var(--ink)}
   button.acc{background:var(--accent);border-color:var(--accent);color:#fff}
   button.acc:hover{filter:brightness(1.12);background:var(--accent);color:#fff}
   button:disabled{opacity:.4;cursor:not-allowed}
-  .count{position:absolute;right:24px;bottom:30px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .count{position:absolute;right:34px;bottom:40px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
   .count b{color:var(--paper)}
-  .hint{position:absolute;right:24px;top:64px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:right}
+  .hint{position:absolute;right:34px;top:70px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:right;mix-blend-mode:difference}
   .loader{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
     background:var(--ink);font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);transition:opacity .6s}
   .loader.hide{opacity:0;pointer-events:none}
-  a.back{position:absolute;left:24px;top:40px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);text-decoration:none;pointer-events:auto}
-  a.back:hover{color:var(--paper)}
 </style>
 </head>
 <body>
 <canvas id="gl"></canvas>
+<div class="sheen"></div>
+<div class="glass-frame"></div>
 
 <div class="ui">
   <div class="top"><span>Vũ Đức An · Lab</span><span class="r">Physics · Three.js + Cannon</span></div>
   <a class="back" href="/#apps">← apps</a>
   <h1 class="title">Gravity<br>Box</h1>
-  <div class="sub">Nhấn nút để thả một khối lập phương vào hộp. Mỗi mặt khối là một ảnh ngẫu nhiên từ album của bạn.</div>
-  <div class="hint">Kéo để xoay góc nhìn<br>Cuộn để zoom</div>
+  <div class="sub">Màn hình là mặt kính của hộp. Kéo để cầm một khối, buông tay để ném — khối sẽ nảy vào thành carton.</div>
+  <div class="hint">Kéo khối để cầm / ném</div>
   <div class="count">Khối: <b id="cnt">0</b></div>
 </div>
 
@@ -80,123 +91,150 @@ const IMG_RE=/\.(jpe?g|png|webp|avif)$/i;
   // ---------- THREE ----------
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-  renderer.setSize(innerWidth,innerHeight);
   renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
-  const scene=new THREE.Scene();
-  const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,200);
+  const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0c0c0c);
+  const FOV=45;
+  const camera=new THREE.PerspectiveCamera(FOV,1,0.1,400);
 
-  // orbit đơn giản quanh tâm hộp
-  let camTheta=0.0, camPhi=1.12, camRadius=20; const camTarget=new THREE.Vector3(0,4,0);
-  function placeCam(){
-    camera.position.set(
-      camTarget.x + camRadius*Math.sin(camPhi)*Math.sin(camTheta),
-      camTarget.y + camRadius*Math.cos(camPhi),
-      camTarget.z + camRadius*Math.sin(camPhi)*Math.cos(camTheta)
-    );
-    camera.lookAt(camTarget);
+  // ánh sáng kiểu "softbox" hắt từ phía kính (người xem)
+  scene.add(new THREE.AmbientLight(0xfff2e6,0.85));
+  const key=new THREE.DirectionalLight(0xffffff,0.9); key.castShadow=true;
+  key.shadow.mapSize.set(2048,2048); key.shadow.camera.near=1; key.shadow.camera.far=200; scene.add(key);
+  const warm=new THREE.DirectionalLight(0xe8482b,0.18); warm.position.set(-10,4,40); scene.add(warm);
+
+  // ---------- vật liệu ----------
+  function cardboard(){
+    const c=document.createElement('canvas'); c.width=c.height=256; const x=c.getContext('2d');
+    x.fillStyle='#c8a268'; x.fillRect(0,0,256,256);
+    for(let i=0;i<11000;i++){const v=(Math.random()*46-23)|0;x.fillStyle='rgba('+(176+v)+','+(140+v)+','+(86+v)+',0.22)';x.fillRect(Math.random()*256,Math.random()*256,2,2);}
+    x.strokeStyle='rgba(120,88,46,0.15)'; for(let i=0;i<256;i+=6){x.beginPath();x.moveTo(0,i);x.lineTo(256,i);x.stroke();}
+    const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.encoding=THREE.sRGBEncoding; return t;
   }
-  placeCam();
-
-  scene.add(new THREE.AmbientLight(0xffffff,0.55));
-  const key=new THREE.DirectionalLight(0xffffff,1.15); key.position.set(6,18,10);
-  key.castShadow=true; key.shadow.mapSize.set(1024,1024);
-  key.shadow.camera.left=-14;key.shadow.camera.right=14;key.shadow.camera.top=14;key.shadow.camera.bottom=-14;
-  key.shadow.camera.near=1;key.shadow.camera.far=60; scene.add(key);
-  const fill=new THREE.DirectionalLight(0xe8482b,0.25); fill.position.set(-8,4,-6); scene.add(fill);
-
-  // ---------- kích thước hộp ----------
-  const HX=4, HZ=4, WALL_H=11, T=0.3; // nửa rộng x/z, cao tường
-  const FLOOR_Y=0;
-
-  // sàn hiển thị
-  const floorMat=new THREE.MeshStandardMaterial({color:0x161616,roughness:0.95,metalness:0.0});
-  const floor=new THREE.Mesh(new THREE.BoxGeometry(HX*2,0.4,HZ*2),floorMat);
-  floor.position.set(0,FLOOR_Y-0.2,0); floor.receiveShadow=true; scene.add(floor);
-
-  // tường kính mờ (3 mặt: trái, phải, sau) + viền
-  const glass=new THREE.MeshStandardMaterial({color:0x9fb4c8,transparent:true,opacity:0.06,roughness:0.1,metalness:0,side:THREE.DoubleSide});
-  function wallMesh(w,h,d,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),glass);m.position.set(x,y,z);scene.add(m);}
-  wallMesh(0.06,WALL_H,HZ*2,-HX,WALL_H/2,0);
-  wallMesh(0.06,WALL_H,HZ*2, HX,WALL_H/2,0);
-  wallMesh(HX*2,WALL_H,0.06,0,WALL_H/2,-HZ);
-  // viền khung
-  const edges=new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(HX*2,WALL_H,HZ*2)),
-    new THREE.LineBasicMaterial({color:0x3a3a3a}));
-  edges.position.set(0,WALL_H/2,0); scene.add(edges);
-  // viền accent ở miệng hộp
-  const rim=new THREE.LineSegments(
-    new THREE.EdgesGeometry(new THREE.BoxGeometry(HX*2,0.02,HZ*2)),
-    new THREE.LineBasicMaterial({color:0xe8482b}));
-  rim.position.set(0,WALL_H,0); scene.add(rim);
+  const cardTex=cardboard();
+  const cardMat=new THREE.MeshStandardMaterial({map:cardTex,color:0xffffff,roughness:0.96,metalness:0.0});
+  const glassMat=new THREE.MeshPhysicalMaterial({color:0xbfd4e6,transparent:true,opacity:0.05,roughness:0.05,metalness:0,transmission:0.0,side:THREE.BackSide});
 
   // ---------- CANNON ----------
-  const world=new CANNON.World(); world.gravity.set(0,-26,0);
-  world.broadphase=new CANNON.NaiveBroadphase(); world.solver.iterations=12;
-  const boxMat=new CANNON.Material('box');
-  const groundMat=new CANNON.Material('ground');
-  world.addContactMaterial(new CANNON.ContactMaterial(boxMat,groundMat,{friction:0.35,restitution:0.35}));
-  world.addContactMaterial(new CANNON.ContactMaterial(boxMat,boxMat,{friction:0.4,restitution:0.2}));
+  const world=new CANNON.World(); world.gravity.set(0,-24,0);
+  world.broadphase=new CANNON.NaiveBroadphase(); world.solver.iterations=14; world.allowSleep=false;
+  const boxM=new CANNON.Material('box'); const wallM=new CANNON.Material('wall');
+  world.addContactMaterial(new CANNON.ContactMaterial(boxM,wallM,{friction:0.4,restitution:0.45}));
+  world.addContactMaterial(new CANNON.ContactMaterial(boxM,boxM,{friction:0.45,restitution:0.25}));
 
-  function addStatic(hx,hy,hz,x,y,z){
-    const b=new CANNON.Body({mass:0,material:groundMat});
-    b.addShape(new CANNON.Box(new CANNON.Vec3(hx,hy,hz)));
-    b.position.set(x,y,z); world.addBody(b); return b;
+  // joint body để cầm khối
+  const jointBody=new CANNON.Body({mass:0}); jointBody.addShape(new CANNON.Sphere(0.15));
+  jointBody.collisionFilterGroup=0; jointBody.collisionFilterMask=0; world.addBody(jointBody);
+  let joint=null, picked=null;
+
+  // ---------- hộp (dựng theo khung nhìn) ----------
+  let W=20,H=14; const DZ=8, T=2;          // DZ: chiều sâu; T: độ dày thành (chống xuyên)
+  let camDist=20;
+  const wallBodies=[], wallMeshes=[];
+
+  function clearWalls(){ wallBodies.forEach(b=>world.removeBody(b)); wallBodies.length=0;
+    wallMeshes.forEach(m=>scene.remove(m)); wallMeshes.length=0; }
+
+  function addWall(hx,hy,hz,x,y,z,material,visible){
+    const b=new CANNON.Body({mass:0,material:wallM});
+    b.addShape(new CANNON.Box(new CANNON.Vec3(hx,hy,hz))); b.position.set(x,y,z);
+    world.addBody(b); wallBodies.push(b);
+    if(visible){
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(hx*2,hy*2,hz*2),material);
+      mesh.position.set(x,y,z); mesh.receiveShadow=true; scene.add(mesh); wallMeshes.push(mesh);
+      // lặp hoạ tiết carton theo kích thước
+      if(material===cardMat){ /* dùng chung map, ổn cho mọi mặt */ }
+    }
   }
-  addStatic(HX,0.2,HZ,0,FLOOR_Y-0.2,0);          // sàn
-  addStatic(T,WALL_H,HZ,-HX-T,WALL_H/2,0);        // trái
-  addStatic(T,WALL_H,HZ, HX+T,WALL_H/2,0);        // phải
-  addStatic(HX+T,WALL_H,T,0,WALL_H/2,-HZ-T);      // sau
-  addStatic(HX+T,WALL_H,T,0,WALL_H/2, HZ+T);      // trước (vô hình)
 
-  // ---------- khối lập phương ----------
-  const CUBE=1.7, HC=CUBE/2;
+  function buildBox(){
+    clearWalls();
+    const aspect=innerWidth/innerHeight;
+    camDist=(H/2)/Math.tan((FOV*Math.PI/180)/2);   // để mặt kính (z=0) lấp đầy chiều cao
+    W=H*aspect;
+    camera.aspect=aspect; camera.fov=FOV;
+    camera.position.set(0,H/2,camDist); camera.lookAt(0,H/2,0); camera.updateProjectionMatrix();
+    // ánh sáng theo hộp
+    key.position.set(W*0.18,H+8,camDist*0.7); key.target.position.set(0,H/2,-DZ/2); key.target.updateMatrixWorld?.();
+    scene.add(key.target);
+    const sc=key.shadow.camera; sc.left=-W;sc.right=W;sc.top=H+4;sc.bottom=-4;sc.updateProjectionMatrix();
+
+    // 5 mặt carton + mặt kính (trước)
+    addWall(W/2,T,DZ/2, 0,-T,        -DZ/2, cardMat, true);   // sàn
+    addWall(W/2,T,DZ/2, 0,H+T,       -DZ/2, cardMat, true);   // trần
+    addWall(T,H/2+T,DZ/2, -W/2-T, H/2,-DZ/2, cardMat, true);  // trái
+    addWall(T,H/2+T,DZ/2,  W/2+T, H/2,-DZ/2, cardMat, true);  // phải
+    addWall(W/2,H/2+T,T, 0,H/2,      -DZ-T,  cardMat, true);   // sau
+    addWall(W/2+T,H/2+T,T, 0,H/2,     T,     glassMat, false); // KÍNH (vô hình, = màn hình)
+  }
+  buildBox();
+
+  // ---------- khối ----------
+  const CUBE=2.0, HC=CUBE/2;
   const cubeGeo=new THREE.BoxGeometry(CUBE,CUBE,CUBE);
   const cubeShape=new CANNON.Box(new CANNON.Vec3(HC,HC,HC));
-  let textures=[]; const cubes=[]; const MAX=44;
+  let textures=[]; const cubes=[]; const MAX=40;
+  const rndTex=()=>textures[Math.floor(Math.random()*textures.length)];
 
-  function rndTex(){ return textures[Math.floor(Math.random()*textures.length)]; }
   function dropOne(){
     if(!textures.length) return;
-    const mats=[];
-    for(let i=0;i<6;i++) mats.push(new THREE.MeshStandardMaterial({map:rndTex(),roughness:0.55,metalness:0.05}));
+    const mats=[]; for(let i=0;i<6;i++) mats.push(new THREE.MeshStandardMaterial({map:rndTex(),roughness:0.5,metalness:0.04}));
     const mesh=new THREE.Mesh(cubeGeo,mats); mesh.castShadow=true; mesh.receiveShadow=true; scene.add(mesh);
-    const body=new CANNON.Body({mass:1.2,material:boxMat});
-    body.addShape(cubeShape);
-    body.position.set((Math.random()*2-1)*(HX-1.2), WALL_H-1.2, (Math.random()*2-1)*(HZ-1.2));
+    const body=new CANNON.Body({mass:1.2,material:boxM}); body.addShape(cubeShape);
+    body.position.set((Math.random()*2-1)*(W/2-2), H-2, -DZ/2+(Math.random()*2-1)*(DZ/2-HC-0.3));
     body.quaternion.setFromEuler(Math.random()*3,Math.random()*3,Math.random()*3);
-    body.angularVelocity.set((Math.random()*2-1)*6,(Math.random()*2-1)*6,(Math.random()*2-1)*6);
-    body.velocity.set((Math.random()*2-1)*2,-2,(Math.random()*2-1)*2);
-    world.addBody(body);
-    cubes.push({mesh,body});
-    if(cubes.length>MAX){ const old=cubes.shift(); scene.remove(old.mesh); world.removeBody(old.body); old.mesh.material.forEach(m=>m.dispose()); }
+    body.angularVelocity.set((Math.random()*2-1)*5,(Math.random()*2-1)*5,(Math.random()*2-1)*5);
+    world.addBody(body); cubes.push({mesh,body});
+    if(cubes.length>MAX){ const o=cubes.shift(); scene.remove(o.mesh); world.removeBody(o.body); o.mesh.material.forEach(m=>m.dispose()); }
     cntEl.textContent=cubes.length;
   }
   function clearAll(){ while(cubes.length){ const c=cubes.pop(); scene.remove(c.mesh); world.removeBody(c.body); c.mesh.material.forEach(m=>m.dispose()); } cntEl.textContent=0; }
-
   document.getElementById('drop').addEventListener('click',dropOne);
   document.getElementById('burst').addEventListener('click',()=>{ for(let i=0;i<5;i++) setTimeout(dropOne,i*90); });
   document.getElementById('clear').addEventListener('click',clearAll);
 
-  // ---------- điều khiển camera ----------
-  let dragging=false,lx=0,ly=0;
-  canvas.addEventListener('pointerdown',e=>{dragging=true;lx=e.clientX;ly=e.clientY;canvas.classList.add('drag');});
-  window.addEventListener('pointerup',()=>{dragging=false;canvas.classList.remove('drag');});
-  window.addEventListener('pointermove',e=>{
-    if(!dragging)return;
-    camTheta-=(e.clientX-lx)*0.006; camPhi-=(e.clientY-ly)*0.005;
-    camPhi=Math.max(0.35,Math.min(1.45,camPhi)); lx=e.clientX;ly=e.clientY; placeCam();
+  // ---------- cầm & ném khối ----------
+  const raycaster=new THREE.Raycaster(); const ndc=new THREE.Vector2();
+  const dragPlane=new THREE.Plane(); const hitPt=new THREE.Vector3(); const tmp=new THREE.Vector3();
+  function setNDC(e){ ndc.x=(e.clientX/innerWidth)*2-1; ndc.y=-(e.clientY/innerHeight)*2+1; }
+
+  canvas.addEventListener('pointerdown',e=>{
+    setNDC(e); raycaster.setFromCamera(ndc,camera);
+    const hits=raycaster.intersectObjects(cubes.map(c=>c.mesh));
+    if(!hits.length) return;
+    const mesh=hits[0].object; const cube=cubes.find(c=>c.mesh===mesh); if(!cube) return;
+    picked=cube.body; hitPt.copy(hits[0].point);
+    const camDir=new THREE.Vector3(); camera.getWorldDirection(camDir);
+    dragPlane.setFromNormalAndCoplanarPoint(camDir,hitPt);
+    // pivot cục bộ để giữ đúng điểm cầm
+    const v=new CANNON.Vec3(hitPt.x-picked.position.x,hitPt.y-picked.position.y,hitPt.z-picked.position.z);
+    const pivot=picked.quaternion.inverse().vmult(v);
+    jointBody.position.set(hitPt.x,hitPt.y,hitPt.z);
+    joint=new CANNON.PointToPointConstraint(picked,pivot,jointBody,new CANNON.Vec3(0,0,0),60);
+    world.addConstraint(joint);
+    canvas.classList.add('grabbing');
   });
-  canvas.addEventListener('wheel',e=>{ camRadius=Math.max(11,Math.min(34,camRadius+e.deltaY*0.01)); placeCam(); },{passive:true});
-  addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight); });
+  window.addEventListener('pointermove',e=>{
+    if(!picked) return; setNDC(e); raycaster.setFromCamera(ndc,camera);
+    if(raycaster.ray.intersectPlane(dragPlane,tmp)){ jointBody.position.set(tmp.x,tmp.y,tmp.z); }
+  });
+  window.addEventListener('pointerup',()=>{
+    if(joint){ world.removeConstraint(joint); joint=null; }
+    picked=null; canvas.classList.remove('grabbing');
+  });
+
+  addEventListener('resize',buildBox);
 
   // ---------- vòng lặp ----------
-  let last=performance.now();
+  let last=performance.now(); const MAXV=60;
   function tick(now){
     const dt=Math.min((now-last)/1000,1/30); last=now;
-    world.step(1/60,dt,3);
-    for(const c of cubes){ c.mesh.position.copy(c.body.position); c.mesh.quaternion.copy(c.body.quaternion); }
+    world.step(1/60,dt,4);
+    for(const c of cubes){
+      const b=c.body, vmag=b.velocity.length();
+      if(vmag>MAXV) b.velocity.scale(MAXV/vmag,b.velocity);   // chống văng xuyên thành
+      c.mesh.position.copy(b.position); c.mesh.quaternion.copy(b.quaternion);
+    }
     renderer.render(scene,camera);
     requestAnimationFrame(tick);
   }
@@ -213,20 +251,17 @@ const IMG_RE=/\.(jpe?g|png|webp|avif)$/i;
       photos=(Array.isArray(items)?items:[]).filter(it=>it&&it.name&&IMG_RE.test(it.name)&&(!it.metadata||it.metadata.size==null||it.metadata.size>0));
     }catch(e){}
     if(!photos.length){ loaderEl.textContent='Chưa có ảnh trong album.'; return; }
-    const tl=new THREE.TextureLoader(); tl.setCrossOrigin('anonymous');
-    let done=0;
+    const tl=new THREE.TextureLoader(); tl.setCrossOrigin('anonymous'); let done=0;
     photos.forEach(p=>{
       const url=`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(p.name)}`;
-      tl.load(url,(tex)=>{ tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4; textures.push(tex); ready(++done,photos.length); },
-        undefined,()=>{ ready(++done,photos.length); });
+      tl.load(url,(tex)=>{ tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4; textures.push(tex); ready(); },undefined,()=>{ ready(); });
     });
-  }
-  function ready(done,total){
-    if(textures.length>0){
-      loaderEl.classList.add('hide');
-      document.getElementById('drop').disabled=false;
-      document.getElementById('burst').disabled=false;
-      if(textures.length>=3 && cubes.length===0){ for(let i=0;i<3;i++) setTimeout(dropOne,300+i*180); } // mồi vài khối
+    function ready(){
+      if(textures.length>0){
+        loaderEl.classList.add('hide');
+        document.getElementById('drop').disabled=false; document.getElementById('burst').disabled=false;
+        if(textures.length>=3 && cubes.length===0){ for(let i=0;i<4;i++) setTimeout(dropOne,300+i*160); }
+      }
     }
   }
   load();
