@@ -71,6 +71,7 @@
   <button class="acc" id="drop" disabled>＋ Thả khối</button>
   <button id="burst" disabled>Thả 5</button>
   <button id="clear">Dọn hộp</button>
+  <button id="tilt" style="display:none">⟂ Nghiêng máy</button>
 </div>
 
 <div class="loader" id="loader">Đang tải ảnh…</div>
@@ -194,6 +195,29 @@ const IMG_RE=/\.(jpe?g|png|webp|avif)$/i;
   document.getElementById('burst').addEventListener('click',()=>{ for(let i=0;i<5;i++) setTimeout(dropOne,i*90); });
   document.getElementById('clear').addEventListener('click',clearAll);
 
+  // ---------- nghiêng máy (mobile) điều khiển trọng lực ----------
+  const G=24; const cg={x:0,y:-G};   // trọng lực hiện tại (đã làm mượt)
+  let tgx=0, tgy=-1, tiltOn=false;    // hướng trọng lực mục tiêu (đơn vị)
+  const tiltBtn=document.getElementById('tilt');
+  function onOrient(e){
+    if(e.gamma==null||e.beta==null) return;
+    const g=e.gamma*Math.PI/180, b=e.beta*Math.PI/180;
+    tgx=Math.sin(g); tgy=-Math.sin(b);            // nghiêng phải → +x; dựng đứng → kéo xuống
+    const m=Math.hypot(tgx,tgy)||1; tgx/=Math.max(m,0.3); tgy/=Math.max(m,0.3);
+  }
+  function enableTilt(){
+    const D=window.DeviceOrientationEvent;
+    if(!D){ tiltBtn.textContent='Không hỗ trợ'; return; }
+    if(typeof D.requestPermission==='function'){
+      D.requestPermission().then(p=>{ if(p==='granted'){ window.addEventListener('deviceorientation',onOrient); tiltOn=true; tiltBtn.classList.add('acc'); tiltBtn.textContent='⟂ Nghiêng: BẬT'; } else { tiltBtn.textContent='Bị từ chối'; } }).catch(()=>{ tiltBtn.textContent='Bị từ chối'; });
+    } else { window.addEventListener('deviceorientation',onOrient); tiltOn=true; tiltBtn.classList.add('acc'); tiltBtn.textContent='⟂ Nghiêng: BẬT'; }
+  }
+  tiltBtn.addEventListener('click',()=>{
+    if(!tiltOn) enableTilt();
+    else { window.removeEventListener('deviceorientation',onOrient); tiltOn=false; tgx=0; tgy=-1; tiltBtn.classList.remove('acc'); tiltBtn.textContent='⟂ Nghiêng máy'; }
+  });
+  if(matchMedia('(pointer:coarse)').matches || ('ontouchstart' in window)) tiltBtn.style.display='inline-block';
+
   // ---------- cầm & ném khối ----------
   const raycaster=new THREE.Raycaster(); const ndc=new THREE.Vector2();
   const dragPlane=new THREE.Plane(); const hitPt=new THREE.Vector3(); const tmp=new THREE.Vector3();
@@ -230,6 +254,8 @@ const IMG_RE=/\.(jpe?g|png|webp|avif)$/i;
   let last=performance.now(); const MAXV=60;
   function tick(now){
     const dt=Math.min((now-last)/1000,1/30); last=now;
+    cg.x += (G*tgx - cg.x)*0.08; cg.y += (G*tgy - cg.y)*0.08;
+    world.gravity.set(cg.x,cg.y,0);
     world.step(1/60,dt,4);
     for(const c of cubes){
       const b=c.body, vmag=b.velocity.length();
