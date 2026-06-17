@@ -149,6 +149,7 @@ const IMG_RE=/\.(jpe?g|png|webp|avif)$/i;
 
   function buildBox(){
     clearWalls();
+    renderer.setSize(innerWidth,innerHeight);
     const aspect=innerWidth/innerHeight;
     camDist=(H/2)/Math.tan((FOV*Math.PI/180)/2);   // để mặt kính (z=0) lấp đầy chiều cao
     W=H*aspect;
