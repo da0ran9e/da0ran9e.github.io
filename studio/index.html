@@ -3,272 +3,205 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>VŨ ĐỨC AN — STUDIO</title>
-<meta name="description" content="Portfolio demo — Swiss layout, WebGL geometry, motion." />
+<title>VŨ ĐỨC AN — WEBGL GALLERY</title>
+<meta name="description" content="WebGL image gallery — Three.js shader distortion." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
 <style>
-  :root{
-    --bg:#f3f1ea;        /* off-white paper */
-    --ink:#101010;       /* near black */
-    --muted:#6b6a63;
-    --accent:#e8482b;    /* swiss red */
-    --line:rgba(16,16,16,.14);
-    --maxw:1320px;
-  }
+  :root{ --ink:#0c0c0c; --paper:#ece9e2; --accent:#e8482b; }
   *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth}
-  body{
-    background:var(--bg);color:var(--ink);
-    font-family:'Inter',Helvetica,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased;line-height:1.3;overflow-x:hidden;
-  }
-  a{color:inherit;text-decoration:none}
+  html,body{height:100%}
+  body{background:var(--ink);color:var(--paper);font-family:'Inter',Helvetica,Arial,sans-serif;
+    overflow:hidden;-webkit-font-smoothing:antialiased}
+  #gl{position:fixed;inset:0;display:block;cursor:grab}
+  #gl.drag{cursor:grabbing}
 
-  /* WebGL canvas behind content */
-  #gl{position:fixed;inset:0;z-index:0;pointer-events:none}
-  .wrap{position:relative;z-index:1}
-
-  /* thin swiss grid overlay */
-  .grid-lines{position:fixed;inset:0;z-index:0;pointer-events:none;display:grid;
-    grid-template-columns:repeat(12,1fr);max-width:var(--maxw);margin:0 auto;padding:0 24px}
-  .grid-lines span{border-left:1px solid var(--line)}
-  .grid-lines span:last-child{border-right:1px solid var(--line)}
-  @media(max-width:760px){.grid-lines{grid-template-columns:repeat(4,1fr)}}
-
-  .container{max-width:var(--maxw);margin:0 auto;padding:0 24px}
-
-  /* top bar */
-  header{position:fixed;top:0;left:0;right:0;z-index:20;mix-blend-mode:difference;color:#fff}
-  header .container{display:flex;justify-content:space-between;align-items:center;padding-top:22px;padding-bottom:22px;
-    font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:600}
-  header nav a{margin-left:26px;opacity:.85}
-  @media(max-width:620px){header nav a{margin-left:14px;font-size:11px}}
-
-  /* hero */
-  .hero{min-height:100vh;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:7vh}
-  .hero .eyebrow{font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:22px}
-  .hero h1{font-weight:900;letter-spacing:-.03em;line-height:.92;
-    font-size:clamp(54px,15vw,220px);text-transform:uppercase}
-  .hero h1 .accent{color:var(--accent)}
-  .hero .meta{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin-top:42px;
-    border-top:1px solid var(--line);padding-top:18px;font-size:14px;color:var(--muted)}
-  .hero .meta .c{grid-column:span 3}
-  .hero .meta .c b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
-  @media(max-width:760px){.hero .meta .c{grid-column:span 6}}
-
-  /* section heading */
-  .sec{padding:13vh 0}
-  .sec-head{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:baseline;
-    border-top:2px solid var(--ink);padding-top:16px;margin-bottom:48px}
-  .sec-head .idx{grid-column:span 2;font-size:14px;color:var(--muted);font-weight:600}
-  .sec-head h2{grid-column:span 7;font-size:clamp(26px,4vw,46px);font-weight:800;letter-spacing:-.02em;line-height:1.02}
-  .sec-head .note{grid-column:span 3;font-size:14px;color:var(--muted)}
-  @media(max-width:760px){.sec-head .idx{grid-column:span 12}.sec-head h2{grid-column:span 12}.sec-head .note{grid-column:span 12;margin-top:8px}}
-
-  /* intro statement */
-  .statement{font-size:clamp(22px,3.4vw,40px);font-weight:500;letter-spacing:-.01em;line-height:1.16;max-width:18ch}
-  .statement em{color:var(--accent);font-style:normal}
-
-  /* work grid */
-  .work{display:grid;grid-template-columns:repeat(12,1fr);gap:18px 18px}
-  .item{position:relative;overflow:hidden;background:#e3e0d6;border:1px solid var(--line)}
-  .item .ph{display:block;width:100%;height:100%;object-fit:cover;
-    transition:transform .9s cubic-bezier(.2,.7,.2,1),filter .9s;filter:grayscale(.15) contrast(1.02)}
-  .item:hover .ph{transform:scale(1.05);filter:grayscale(0)}
-  .item .cap{position:absolute;left:12px;bottom:12px;right:12px;display:flex;justify-content:space-between;
-    font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:#fff;mix-blend-mode:difference}
-  .item.big{grid-column:span 7;aspect-ratio:4/3}
-  .item.tall{grid-column:span 5;aspect-ratio:3/4}
-  .item.half{grid-column:span 6;aspect-ratio:3/2}
-  .item.third{grid-column:span 4;aspect-ratio:1/1}
-  @media(max-width:760px){
-    .item.big,.item.tall,.item.half,.item.third{grid-column:span 12;aspect-ratio:4/3}
-  }
-  .empty-note{grid-column:span 12;color:var(--muted);font-size:15px;padding:40px 0;text-align:center}
-
-  /* reveal */
-  .reveal{opacity:0;transform:translateY(30px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1)}
-  .reveal.show{opacity:1;transform:none}
-
-  footer{border-top:2px solid var(--ink);padding:48px 0 60px}
-  footer .container{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:end}
-  footer h3{grid-column:span 8;font-size:clamp(30px,6vw,84px);font-weight:900;letter-spacing:-.03em;text-transform:uppercase;line-height:.95}
-  footer .links{grid-column:span 4;display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
-  footer .links a:hover{color:var(--accent)}
-  @media(max-width:760px){footer h3{grid-column:span 12}footer .links{grid-column:span 12;margin-top:18px}}
-
-  .tag{position:fixed;right:18px;bottom:16px;z-index:30;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  .ui{position:fixed;inset:0;z-index:5;pointer-events:none}
+  .top{position:absolute;top:22px;left:24px;right:24px;display:flex;justify-content:space-between;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+  .top .r{color:var(--accent)}
+  .title{position:absolute;left:24px;bottom:84px;font-weight:900;letter-spacing:-.03em;line-height:.9;
+    font-size:clamp(40px,9vw,120px);text-transform:uppercase;mix-blend-mode:difference}
+  .sub{position:absolute;left:26px;bottom:54px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#9a958c}
+  .hint{position:absolute;right:24px;bottom:54px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#9a958c}
+  .caption{position:absolute;left:24px;bottom:24px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--paper)}
+  .loader{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:var(--ink);font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#9a958c;transition:opacity .6s}
+  .loader.hide{opacity:0;pointer-events:none}
+  a{color:inherit}
 </style>
 </head>
 <body>
 <canvas id="gl"></canvas>
-<div class="grid-lines" id="gridlines"></div>
 
-<header>
-  <div class="container">
-    <div>Vũ Đức An ©2026</div>
-    <nav>
-      <a href="#work">Work</a>
-      <a href="#about">About</a>
-      <a href="#contact">Contact</a>
-    </nav>
+<div class="ui">
+  <div class="top">
+    <span>Vũ Đức An · Gallery</span>
+    <span class="r">WebGL · Three.js</span>
   </div>
-</header>
-
-<div class="wrap">
-  <!-- HERO -->
-  <section class="hero">
-    <div class="container">
-      <div class="eyebrow reveal">Designer · Developer · Hà Nội</div>
-      <h1 class="reveal">Studio<br>Vũ Đức <span class="accent">An</span></h1>
-      <div class="meta reveal">
-        <div class="c"><b>Discipline</b>Web · WebGL · Motion</div>
-        <div class="c"><b>Approach</b>Swiss grid, geometry, rhythm</div>
-        <div class="c"><b>Status</b>Mở cho dự án mới</div>
-        <div class="c"><b>Year</b>2026 — ∞</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ABOUT -->
-  <section class="sec" id="about">
-    <div class="container">
-      <div class="sec-head reveal">
-        <div class="idx">01 — Về tôi</div>
-        <h2>Bố cục mạch lạc, hình khối, và chuyển động có chủ đích.</h2>
-        <div class="note">Trang demo dựng theo tinh thần Swiss + WebGL. Nội dung là mẫu — bạn thay sau.</div>
-      </div>
-      <p class="statement reveal">Tôi thiết kế và xây dựng những trải nghiệm web <em>gọn gàng</em>, có nhịp điệu — nơi hình học và typography dẫn dắt người xem.</p>
-    </div>
-  </section>
-
-  <!-- WORK -->
-  <section class="sec" id="work">
-    <div class="container">
-      <div class="sec-head reveal">
-        <div class="idx">02 — Tuyển tập</div>
-        <h2>Selected Work</h2>
-        <div class="note">Ảnh lấy trực tiếp từ kho của bạn (Supabase). Thêm ảnh là tự cập nhật.</div>
-      </div>
-      <div class="work" id="work-grid">
-        <div class="empty-note" id="work-empty">Đang tải ảnh…</div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CONTACT / FOOTER -->
-  <footer id="contact">
-    <div class="container">
-      <h3>Let's<br>work →</h3>
-      <div class="links">
-        <a href="mailto:vuducan0ran9e@gmail.com">vuducan0ran9e@gmail.com</a>
-        <a href="https://github.com/da0ran9e" target="_blank" rel="noopener">GitHub ↗</a>
-        <a href="https://vuducan.qzz.io" target="_blank" rel="noopener">vuducan.qzz.io ↗</a>
-        <span style="margin-top:14px">© 2026 — Demo gốc, phong cách Swiss/WebGL.</span>
-      </div>
-    </div>
-  </footer>
+  <div class="title">Works</div>
+  <div class="sub">Coll. 2026 — ảnh từ kho của bạn</div>
+  <div class="hint">Kéo / cuộn ↔ · Hover</div>
+  <div class="caption" id="caption">—</div>
 </div>
 
-<div class="tag">WebGL · Three.js · Static</div>
+<div class="loader" id="loader">Đang tải ảnh…</div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-  // grid overlay columns
-  (function(){
-    const gl=document.getElementById('gridlines');
-    const cols = window.matchMedia('(max-width:760px)').matches?4:12;
-    for(let i=0;i<cols;i++){const s=document.createElement('span');gl.appendChild(s);}
-  })();
+const SUPABASE_URL='https://huhzwawyysehjtofkpvb.supabase.co';
+const SUPABASE_KEY='sb_publishable_U0L64ODHeuid599c6oRgvw_5fM-2D8n';
+const BUCKET='album';
+const IMG_RE=/\.(jpe?g|png|webp|avif)$/i;
 
-  // reveal on scroll
-  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('show');io.unobserve(e.target);}})},{threshold:.12});
-  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+const VERT = `
+  uniform float uVelocity;
+  uniform float uHover;
+  uniform float uTime;
+  varying vec2 vUv;
+  void main(){
+    vUv = uv;
+    vec3 p = position;
+    // bend theo tốc độ kéo/cuộn
+    float bend = sin(uv.x * 3.14159) * uVelocity * 0.9;
+    p.z -= abs(bend);
+    p.x += bend * 0.15;
+    // hover: phồng nhẹ ra trước
+    p.z += uHover * 0.35 * sin(uv.x*3.14159) * sin(uv.y*3.14159);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0);
+  }
+`;
+const FRAG = `
+  precision highp float;
+  uniform sampler2D uTex;
+  uniform float uImageAspect;
+  uniform float uPlaneAspect;
+  uniform float uVelocity;
+  uniform float uHover;
+  uniform vec2 uMouse;
+  varying vec2 vUv;
+  void main(){
+    // cover-fit
+    float ia = uImageAspect, pa = uPlaneAspect;
+    vec2 scale = (ia > pa) ? vec2(pa/ia, 1.0) : vec2(1.0, ia/pa);
+    vec2 uv = (vUv - 0.5) * scale + 0.5;
+    // hover zoom nhẹ về phía con trỏ
+    uv = mix(uv, (uv - uMouse)*0.92 + uMouse, uHover);
+    // chromatic aberration theo tốc độ
+    float amt = clamp(abs(uVelocity)*0.6, 0.0, 0.06) + uHover*0.006;
+    float r = texture2D(uTex, uv + vec2(amt,0.0)).r;
+    float g = texture2D(uTex, uv).g;
+    float b = texture2D(uTex, uv - vec2(amt,0.0)).b;
+    vec3 col = vec3(r,g,b);
+    // viền tối nhẹ + sáng lên khi hover
+    float edge = smoothstep(0.0,0.04,uv.x)*smoothstep(1.0,0.96,uv.x)*smoothstep(0.0,0.04,uv.y)*smoothstep(1.0,0.96,uv.y);
+    col *= mix(0.82, 1.0, edge);
+    col *= mix(0.7, 1.06, uHover>0.0 ? 1.0 : 0.0);
+    // ngoài vùng ảnh -> nền
+    if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){ col = vec3(0.09); }
+    gl_FragColor = vec4(col,1.0);
+  }
+`;
 
-  // ---- Load album images from Supabase (client-side, public bucket) ----
-  const SUPABASE_URL='https://huhzwawyysehjtofkpvb.supabase.co';
-  const SUPABASE_KEY='sb_publishable_U0L64ODHeuid599c6oRgvw_5fM-2D8n';
-  const BUCKET='album';
-  const IMG_RE=/\.(jpe?g|png|webp|avif|gif)$/i;
-  const CLASSES=['big','tall','half','half','third','third','third'];
+(function(){
+  const canvas=document.getElementById('gl');
+  const loaderEl=document.getElementById('loader');
+  const capEl=document.getElementById('caption');
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  let W=innerWidth,H=innerHeight; renderer.setSize(W,H); renderer.setClearColor(0x0c0c0c,1);
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(45,W/H,0.1,100); camera.position.z=7;
 
-  async function loadWork(){
-    const grid=document.getElementById('work-grid');
-    const empty=document.getElementById('work-empty');
+  // kích thước plane theo thế giới
+  const PH=3.4, PW=2.55, GAP=0.55, STEP=PW+GAP;
+  const planeGeo=new THREE.PlaneGeometry(PW,PH,28,28);
+
+  const group=new THREE.Group(); scene.add(group);
+  const meshes=[]; const names=[];
+
+  function makeMesh(tex, name){
+    tex.minFilter=THREE.LinearFilter; tex.generateMipmaps=false;
+    const ia = (tex.image&&tex.image.width)? tex.image.width/tex.image.height : 0.75;
+    const mat=new THREE.ShaderMaterial({
+      vertexShader:VERT, fragmentShader:FRAG,
+      uniforms:{
+        uTex:{value:tex}, uImageAspect:{value:ia}, uPlaneAspect:{value:PW/PH},
+        uVelocity:{value:0}, uHover:{value:0}, uMouse:{value:new THREE.Vector2(0.5,0.5)}, uTime:{value:0}
+      }
+    });
+    const m=new THREE.Mesh(planeGeo,mat); m.userData.name=name; return m;
+  }
+
+  // ----- tương tác kéo/cuộn -----
+  let targetX=0, curX=0, velocity=0, dragging=false, lastPX=0;
+  const raycaster=new THREE.Raycaster(); const mouseNDC=new THREE.Vector2();
+  let hovered=null;
+
+  function clampTarget(){
+    const max=0; const min=-(meshes.length-1)*STEP;
+    if(targetX>max) targetX=max; if(targetX<min) targetX=min;
+  }
+  canvas.addEventListener('wheel',e=>{ targetX -= (Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY)*0.0016; clampTarget(); },{passive:true});
+  canvas.addEventListener('pointerdown',e=>{ dragging=true; lastPX=e.clientX; canvas.classList.add('drag'); });
+  window.addEventListener('pointerup',()=>{ dragging=false; canvas.classList.remove('drag'); });
+  window.addEventListener('pointermove',e=>{
+    if(dragging){ targetX += (e.clientX-lastPX)*0.006; lastPX=e.clientX; clampTarget(); }
+    mouseNDC.x=(e.clientX/innerWidth)*2-1; mouseNDC.y=-(e.clientY/innerHeight)*2+1;
+  });
+  addEventListener('resize',()=>{ W=innerWidth;H=innerHeight; camera.aspect=W/H; camera.updateProjectionMatrix(); renderer.setSize(W,H); });
+
+  function layout(){ meshes.forEach((m,i)=>{ m.position.x = i*STEP; }); }
+
+  let raf;
+  function tick(t){
+    curX += (targetX-curX)*0.085;
+    velocity = (targetX-curX);
+    group.position.x = curX;
+    // hover
+    raycaster.setFromCamera(mouseNDC,camera);
+    const hits=raycaster.intersectObjects(meshes);
+    const hit=hits.length?hits[0].object:null;
+    if(hit!==hovered){ hovered=hit; capEl.textContent = hit? (hit.userData.name||'—') : '—'; }
+    if(hit && hits[0].uv){ hit.material.uniforms.uMouse.value.set(hits[0].uv.x,hits[0].uv.y); }
+    meshes.forEach(m=>{
+      const u=m.material.uniforms;
+      u.uVelocity.value += (velocity - u.uVelocity.value)*0.2;
+      const targetHover = (m===hovered)?1:0;
+      u.uHover.value += (targetHover - u.uHover.value)*0.12;
+      u.uTime.value=t*0.001;
+    });
+    renderer.render(scene,camera);
+    raf=requestAnimationFrame(tick);
+  }
+
+  // ----- nạp ảnh từ Supabase -----
+  async function load(){
+    let photos=[];
     try{
       const r=await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET}`,{
-        method:'POST',
-        headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},
+        method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},
         body:JSON.stringify({prefix:'',limit:100,offset:0,sortBy:{column:'created_at',order:'desc'}})
       });
       const items=await r.json();
-      const photos=(Array.isArray(items)?items:[])
-        .filter(it=>it&&it.name&&IMG_RE.test(it.name)&&(!it.metadata||it.metadata.size==null||it.metadata.size>0));
-      if(!photos.length){empty.textContent='Chưa có ảnh trong album. Thêm ảnh vào Supabase để hiện ở đây.';return;}
-      grid.innerHTML='';
-      photos.forEach((p,i)=>{
-        const a=document.createElement('a');
-        a.className='item reveal '+CLASSES[i%CLASSES.length];
-        a.href=`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(p.name)}`;
-        a.target='_blank';a.rel='noopener';
-        const img=document.createElement('img');
-        img.className='ph';img.loading='lazy';img.alt=p.name;
-        img.src=a.href;
-        const cap=document.createElement('div');
-        cap.className='cap';
-        cap.innerHTML=`<span>${String(i+1).padStart(2,'0')}</span><span>Image</span>`;
-        a.appendChild(img);a.appendChild(cap);grid.appendChild(a);
-        io.observe(a);
-      });
-    }catch(e){
-      empty.textContent='Không tải được ảnh (kiểm tra Supabase).';
-    }
+      photos=(Array.isArray(items)?items:[]).filter(it=>it&&it.name&&IMG_RE.test(it.name)&&(!it.metadata||it.metadata.size==null||it.metadata.size>0));
+    }catch(e){}
+    if(!photos.length){ loaderEl.textContent='Chưa có ảnh trong album.'; return; }
+    const loader=new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
+    let done=0;
+    photos.forEach((p)=>{
+      const url=`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(p.name)}`;
+      loader.load(url,(tex)=>{
+        const m=makeMesh(tex,p.name); group.add(m); meshes.push(m); layout();
+        done++; if(done===1){ loaderEl.classList.add('hide'); if(!raf) raf=requestAnimationFrame(tick); }
+      },undefined,()=>{ done++; });
+    });
+    // fallback hiện loader ẩn sau 8s kể cả lỗi
+    setTimeout(()=>loaderEl.classList.add('hide'),8000);
   }
-  loadWork();
-
-  // ---- WebGL abstract geometry (Three.js) ----
-  (function(){
-    const SRC='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-    function start(){
-      const THREE=window.THREE;const canvas=document.getElementById('gl');
-      const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
-      let w=innerWidth,h=innerHeight;renderer.setSize(w,h);
-      const scene=new THREE.Scene();
-      const cam=new THREE.PerspectiveCamera(45,w/h,.1,100);cam.position.z=6;
-
-      const grp=new THREE.Group();scene.add(grp);
-      const geo=new THREE.IcosahedronGeometry(2.05,1);
-      const solid=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x101010,transparent:true,opacity:.04}));
-      const wire=new THREE.LineSegments(new THREE.EdgesGeometry(geo),new THREE.LineBasicMaterial({color:0x101010,transparent:true,opacity:.28}));
-      grp.add(solid);grp.add(wire);
-      // accent small shape
-      const dotGeo=new THREE.IcosahedronGeometry(.5,0);
-      const dot=new THREE.Mesh(dotGeo,new THREE.MeshBasicMaterial({color:0xe8482b}));
-      dot.position.set(2.6,1.4,1);grp.add(dot);
-
-      let mx=0,my=0,tx=0,ty=0,scrollY=0;
-      addEventListener('mousemove',e=>{mx=(e.clientX/innerWidth-.5);my=(e.clientY/innerHeight-.5);});
-      addEventListener('scroll',()=>{scrollY=window.scrollY;});
-      addEventListener('resize',()=>{w=innerWidth;h=innerHeight;cam.aspect=w/h;cam.updateProjectionMatrix();renderer.setSize(w,h);});
-
-      function tick(){
-        tx+=(mx-tx)*.05;ty+=(my-ty)*.05;
-        const s=scrollY/innerHeight;
-        grp.rotation.y+=.0024;
-        grp.rotation.x = ty*.6 + s*.5;
-        grp.rotation.z = tx*.3;
-        grp.position.x = 1.6 + tx*1.2;
-        grp.position.y = -s*1.4 - ty*1.0;
-        dot.position.x = 2.6 + Math.sin(performance.now()*0.0006)*0.4;
-        renderer.render(scene,cam);
-        requestAnimationFrame(tick);
-      }
-      tick();
-    }
-    if(window.THREE)start();else{const sc=document.createElement('script');sc.src=SRC;sc.onload=start;document.body.appendChild(sc);}
-  })();
+  load();
+})();
 </script>
 </body>
 </html>
