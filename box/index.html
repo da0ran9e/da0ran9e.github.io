@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VŨ ĐỨC AN — GRAVITY BOX</title>
+<meta name="description" content="Hộp trọng lực — thả khối lập phương ảnh, vật lý Three.js + cannon.js" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{ --ink:#0c0c0c; --paper:#ece9e2; --accent:#e8482b; --muted:#9a958c; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:radial-gradient(120% 120% at 50% 0%, #1a1a1a 0%, #0c0c0c 60%);
+    color:var(--paper);font-family:'Inter',Helvetica,Arial,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased}
+  #gl{position:fixed;inset:0;display:block;cursor:grab}
+  #gl.drag{cursor:grabbing}
+
+  .ui{position:fixed;inset:0;z-index:5;pointer-events:none}
+  .top{position:absolute;top:22px;left:24px;right:24px;display:flex;justify-content:space-between;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+  .top .r{color:var(--accent)}
+  .title{position:absolute;left:24px;top:64px;font-weight:900;letter-spacing:-.03em;line-height:.86;
+    font-size:clamp(34px,7vw,92px);text-transform:uppercase;mix-blend-mode:difference}
+  .sub{position:absolute;left:26px;top:calc(64px + clamp(34px,7vw,92px) + 6px);
+    font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);max-width:420px}
+
+  .panel{position:absolute;left:24px;bottom:24px;display:flex;gap:10px;align-items:center;pointer-events:auto}
+  button{pointer-events:auto;font-family:inherit;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+    font-size:12px;padding:14px 22px;border:1px solid #3a3a3a;background:#141414;color:var(--paper);
+    cursor:pointer;border-radius:2px;transition:.18s}
+  button:hover{background:var(--paper);color:var(--ink)}
+  button.acc{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.acc:hover{filter:brightness(1.12);background:var(--accent);color:#fff}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .count{position:absolute;right:24px;bottom:30px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+  .count b{color:var(--paper)}
+  .hint{position:absolute;right:24px;top:64px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);text-align:right}
+  .loader{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:var(--ink);font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);transition:opacity .6s}
+  .loader.hide{opacity:0;pointer-events:none}
+  a.back{position:absolute;left:24px;top:40px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);text-decoration:none;pointer-events:auto}
+  a.back:hover{color:var(--paper)}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="ui">
+  <div class="top"><span>Vũ Đức An · Lab</span><span class="r">Physics · Three.js + Cannon</span></div>
+  <a class="back" href="/#apps">← apps</a>
+  <h1 class="title">Gravity<br>Box</h1>
+  <div class="sub">Nhấn nút để thả một khối lập phương vào hộp. Mỗi mặt khối là một ảnh ngẫu nhiên từ album của bạn.</div>
+  <div class="hint">Kéo để xoay góc nhìn<br>Cuộn để zoom</div>
+  <div class="count">Khối: <b id="cnt">0</b></div>
+</div>
+
+<div class="panel">
+  <button class="acc" id="drop" disabled>＋ Thả khối</button>
+  <button id="burst" disabled>Thả 5</button>
+  <button id="clear">Dọn hộp</button>
+</div>
+
+<div class="loader" id="loader">Đang tải ảnh…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+const SUPABASE_URL='https://huhzwawyysehjtofkpvb.supabase.co';
+const SUPABASE_KEY='sb_publishable_U0L64ODHeuid599c6oRgvw_5fM-2D8n';
+const BUCKET='album';
+const IMG_RE=/\.(jpe?g|png|webp|avif)$/i;
+
+(function(){
+  const canvas=document.getElementById('gl');
+  const loaderEl=document.getElementById('loader');
+  const cntEl=document.getElementById('cnt');
+
+  // ---------- THREE ----------
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.outputEncoding=THREE.sRGBEncoding;
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,200);
+
+  // orbit đơn giản quanh tâm hộp
+  let camTheta=0.0, camPhi=1.12, camRadius=20; const camTarget=new THREE.Vector3(0,4,0);
+  function placeCam(){
+    camera.position.set(
+      camTarget.x + camRadius*Math.sin(camPhi)*Math.sin(camTheta),
+      camTarget.y + camRadius*Math.cos(camPhi),
+      camTarget.z + camRadius*Math.sin(camPhi)*Math.cos(camTheta)
+    );
+    camera.lookAt(camTarget);
+  }
+  placeCam();
+
+  scene.add(new THREE.AmbientLight(0xffffff,0.55));
+  const key=new THREE.DirectionalLight(0xffffff,1.15); key.position.set(6,18,10);
+  key.castShadow=true; key.shadow.mapSize.set(1024,1024);
+  key.shadow.camera.left=-14;key.shadow.camera.right=14;key.shadow.camera.top=14;key.shadow.camera.bottom=-14;
+  key.shadow.camera.near=1;key.shadow.camera.far=60; scene.add(key);
+  const fill=new THREE.DirectionalLight(0xe8482b,0.25); fill.position.set(-8,4,-6); scene.add(fill);
+
+  // ---------- kích thước hộp ----------
+  const HX=4, HZ=4, WALL_H=11, T=0.3; // nửa rộng x/z, cao tường
+  const FLOOR_Y=0;
+
+  // sàn hiển thị
+  const floorMat=new THREE.MeshStandardMaterial({color:0x161616,roughness:0.95,metalness:0.0});
+  const floor=new THREE.Mesh(new THREE.BoxGeometry(HX*2,0.4,HZ*2),floorMat);
+  floor.position.set(0,FLOOR_Y-0.2,0); floor.receiveShadow=true; scene.add(floor);
+
+  // tường kính mờ (3 mặt: trái, phải, sau) + viền
+  const glass=new THREE.MeshStandardMaterial({color:0x9fb4c8,transparent:true,opacity:0.06,roughness:0.1,metalness:0,side:THREE.DoubleSide});
+  function wallMesh(w,h,d,x,y,z){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),glass);m.position.set(x,y,z);scene.add(m);}
+  wallMesh(0.06,WALL_H,HZ*2,-HX,WALL_H/2,0);
+  wallMesh(0.06,WALL_H,HZ*2, HX,WALL_H/2,0);
+  wallMesh(HX*2,WALL_H,0.06,0,WALL_H/2,-HZ);
+  // viền khung
+  const edges=new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(HX*2,WALL_H,HZ*2)),
+    new THREE.LineBasicMaterial({color:0x3a3a3a}));
+  edges.position.set(0,WALL_H/2,0); scene.add(edges);
+  // viền accent ở miệng hộp
+  const rim=new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(HX*2,0.02,HZ*2)),
+    new THREE.LineBasicMaterial({color:0xe8482b}));
+  rim.position.set(0,WALL_H,0); scene.add(rim);
+
+  // ---------- CANNON ----------
+  const world=new CANNON.World(); world.gravity.set(0,-26,0);
+  world.broadphase=new CANNON.NaiveBroadphase(); world.solver.iterations=12;
+  const boxMat=new CANNON.Material('box');
+  const groundMat=new CANNON.Material('ground');
+  world.addContactMaterial(new CANNON.ContactMaterial(boxMat,groundMat,{friction:0.35,restitution:0.35}));
+  world.addContactMaterial(new CANNON.ContactMaterial(boxMat,boxMat,{friction:0.4,restitution:0.2}));
+
+  function addStatic(hx,hy,hz,x,y,z){
+    const b=new CANNON.Body({mass:0,material:groundMat});
+    b.addShape(new CANNON.Box(new CANNON.Vec3(hx,hy,hz)));
+    b.position.set(x,y,z); world.addBody(b); return b;
+  }
+  addStatic(HX,0.2,HZ,0,FLOOR_Y-0.2,0);          // sàn
+  addStatic(T,WALL_H,HZ,-HX-T,WALL_H/2,0);        // trái
+  addStatic(T,WALL_H,HZ, HX+T,WALL_H/2,0);        // phải
+  addStatic(HX+T,WALL_H,T,0,WALL_H/2,-HZ-T);      // sau
+  addStatic(HX+T,WALL_H,T,0,WALL_H/2, HZ+T);      // trước (vô hình)
+
+  // ---------- khối lập phương ----------
+  const CUBE=1.7, HC=CUBE/2;
+  const cubeGeo=new THREE.BoxGeometry(CUBE,CUBE,CUBE);
+  const cubeShape=new CANNON.Box(new CANNON.Vec3(HC,HC,HC));
+  let textures=[]; const cubes=[]; const MAX=44;
+
+  function rndTex(){ return textures[Math.floor(Math.random()*textures.length)]; }
+  function dropOne(){
+    if(!textures.length) return;
+    const mats=[];
+    for(let i=0;i<6;i++) mats.push(new THREE.MeshStandardMaterial({map:rndTex(),roughness:0.55,metalness:0.05}));
+    const mesh=new THREE.Mesh(cubeGeo,mats); mesh.castShadow=true; mesh.receiveShadow=true; scene.add(mesh);
+    const body=new CANNON.Body({mass:1.2,material:boxMat});
+    body.addShape(cubeShape);
+    body.position.set((Math.random()*2-1)*(HX-1.2), WALL_H-1.2, (Math.random()*2-1)*(HZ-1.2));
+    body.quaternion.setFromEuler(Math.random()*3,Math.random()*3,Math.random()*3);
+    body.angularVelocity.set((Math.random()*2-1)*6,(Math.random()*2-1)*6,(Math.random()*2-1)*6);
+    body.velocity.set((Math.random()*2-1)*2,-2,(Math.random()*2-1)*2);
+    world.addBody(body);
+    cubes.push({mesh,body});
+    if(cubes.length>MAX){ const old=cubes.shift(); scene.remove(old.mesh); world.removeBody(old.body); old.mesh.material.forEach(m=>m.dispose()); }
+    cntEl.textContent=cubes.length;
+  }
+  function clearAll(){ while(cubes.length){ const c=cubes.pop(); scene.remove(c.mesh); world.removeBody(c.body); c.mesh.material.forEach(m=>m.dispose()); } cntEl.textContent=0; }
+
+  document.getElementById('drop').addEventListener('click',dropOne);
+  document.getElementById('burst').addEventListener('click',()=>{ for(let i=0;i<5;i++) setTimeout(dropOne,i*90); });
+  document.getElementById('clear').addEventListener('click',clearAll);
+
+  // ---------- điều khiển camera ----------
+  let dragging=false,lx=0,ly=0;
+  canvas.addEventListener('pointerdown',e=>{dragging=true;lx=e.clientX;ly=e.clientY;canvas.classList.add('drag');});
+  window.addEventListener('pointerup',()=>{dragging=false;canvas.classList.remove('drag');});
+  window.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    camTheta-=(e.clientX-lx)*0.006; camPhi-=(e.clientY-ly)*0.005;
+    camPhi=Math.max(0.35,Math.min(1.45,camPhi)); lx=e.clientX;ly=e.clientY; placeCam();
+  });
+  canvas.addEventListener('wheel',e=>{ camRadius=Math.max(11,Math.min(34,camRadius+e.deltaY*0.01)); placeCam(); },{passive:true});
+  addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight); });
+
+  // ---------- vòng lặp ----------
+  let last=performance.now();
+  function tick(now){
+    const dt=Math.min((now-last)/1000,1/30); last=now;
+    world.step(1/60,dt,3);
+    for(const c of cubes){ c.mesh.position.copy(c.body.position); c.mesh.quaternion.copy(c.body.quaternion); }
+    renderer.render(scene,camera);
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ---------- nạp ảnh ----------
+  async function load(){
+    let photos=[];
+    try{
+      const r=await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET}`,{method:'POST',
+        headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},
+        body:JSON.stringify({prefix:'',limit:100,offset:0,sortBy:{column:'created_at',order:'desc'}})});
+      const items=await r.json();
+      photos=(Array.isArray(items)?items:[]).filter(it=>it&&it.name&&IMG_RE.test(it.name)&&(!it.metadata||it.metadata.size==null||it.metadata.size>0));
+    }catch(e){}
+    if(!photos.length){ loaderEl.textContent='Chưa có ảnh trong album.'; return; }
+    const tl=new THREE.TextureLoader(); tl.setCrossOrigin('anonymous');
+    let done=0;
+    photos.forEach(p=>{
+      const url=`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(p.name)}`;
+      tl.load(url,(tex)=>{ tex.encoding=THREE.sRGBEncoding; tex.anisotropy=4; textures.push(tex); ready(++done,photos.length); },
+        undefined,()=>{ ready(++done,photos.length); });
+    });
+  }
+  function ready(done,total){
+    if(textures.length>0){
+      loaderEl.classList.add('hide');
+      document.getElementById('drop').disabled=false;
+      document.getElementById('burst').disabled=false;
+      if(textures.length>=3 && cubes.length===0){ for(let i=0;i<3;i++) setTimeout(dropOne,300+i*180); } // mồi vài khối
+    }
+  }
+  load();
+})();
+</script>
+</body>
+</html>
