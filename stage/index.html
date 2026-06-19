@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VŨ ĐỨC AN — PINK STAGE</title>
+<meta name="description" content="Sân khấu hồng + 2 figures + canvas — dựng cảnh Three.js từ model glTF." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{ --ink:#2a1620; --paper:#fff; --accent:#ec4899; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Inter',Helvetica,Arial,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased;color:var(--ink);
+    background:radial-gradient(120% 100% at 50% 18%, #ffe3f1 0%, #ffd0e6 45%, #f7b6d6 100%)}
+  #gl{position:fixed;inset:0;display:block;cursor:grab}
+  #gl:active{cursor:grabbing}
+
+  .ui{position:fixed;inset:0;z-index:5;pointer-events:none}
+  .top{position:absolute;top:24px;left:28px;right:28px;display:flex;justify-content:space-between;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+  .top .r{color:var(--accent)}
+  a.back{position:absolute;left:28px;top:46px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#9a6b80;text-decoration:none;pointer-events:auto}
+  a.back:hover{color:var(--ink)}
+  .title{position:absolute;left:28px;bottom:74px;font-weight:900;letter-spacing:-.03em;line-height:.88;
+    font-size:clamp(34px,7vw,86px);text-transform:uppercase;color:#fff;text-shadow:0 2px 24px rgba(180,40,110,.35)}
+  .sub{position:absolute;left:30px;bottom:50px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#a85c82}
+  .hint{position:absolute;right:28px;bottom:50px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#a85c82;text-align:right}
+
+  .panel{position:absolute;right:28px;bottom:80px;display:flex;gap:10px;pointer-events:auto}
+  button{pointer-events:auto;font-family:inherit;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    font-size:12px;padding:12px 18px;border:1px solid rgba(180,40,110,.25);background:rgba(255,255,255,.6);color:var(--ink);
+    cursor:pointer;border-radius:999px;transition:.18s;backdrop-filter:blur(6px)}
+  button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  .loader{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
+    background:radial-gradient(120% 100% at 50% 30%, #ffe3f1, #f7b6d6);transition:opacity .6s}
+  .loader.hide{opacity:0;pointer-events:none}
+  .loader .lbl{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:#a85c82}
+  .bar{width:220px;height:3px;background:rgba(180,40,110,.18);border-radius:2px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="ui">
+  <div class="top"><span>Vũ Đức An · Lab</span><span class="r">Three.js · glTF</span></div>
+  <a class="back" href="/#apps">← apps</a>
+  <h1 class="title">Pink<br>Stage</h1>
+  <div class="sub">Product showcase · podium + figures + canvas</div>
+  <div class="hint">Kéo để xoay · cuộn để zoom</div>
+</div>
+
+<div class="panel">
+  <button id="rotate" class="on">Tự xoay: bật</button>
+  <button id="reset">Về giữa</button>
+</div>
+
+<div class="loader" id="loader">
+  <div class="lbl" id="lbl">Đang tải mô hình… 0/3</div>
+  <div class="bar"><i id="barfill"></i></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from "three"
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { OrbitControls } from "three/addons/controls/OrbitControls.js"
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js"
+
+const canvasEl = document.getElementById("gl")
+const loaderEl = document.getElementById("loader")
+const lbl = document.getElementById("lbl")
+const barfill = document.getElementById("barfill")
+
+const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, alpha: true })
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+renderer.setSize(innerWidth, innerHeight)
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.1
+renderer.outputColorSpace = THREE.SRGBColorSpace
+
+const scene = new THREE.Scene()
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 200)
+camera.position.set(0, 2, 6)
+
+const pmrem = new THREE.PMREMGenerator(renderer)
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.03).texture
+
+// ánh sáng studio hồng
+scene.add(new THREE.HemisphereLight(0xffffff, 0xf2b8d6, 0.6))
+const key = new THREE.DirectionalLight(0xffffff, 2.4)
+key.position.set(3, 6, 5)
+key.castShadow = true
+key.shadow.mapSize.set(2048, 2048)
+key.shadow.bias = -0.0003
+key.shadow.camera.left = -6; key.shadow.camera.right = 6
+key.shadow.camera.top = 6; key.shadow.camera.bottom = -6
+key.shadow.camera.near = 0.5; key.shadow.camera.far = 30
+scene.add(key)
+const rimL = new THREE.PointLight(0xff5fa8, 18, 25); rimL.position.set(-4, 3, -2); scene.add(rimL)
+const rimR = new THREE.PointLight(0xffa0cf, 14, 25); rimR.position.set(4, 2, -3); scene.add(rimR)
+
+// sàn hồng bóng nhẹ + nhận bóng
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(14, 64),
+  new THREE.MeshStandardMaterial({ color: 0xf9cfe2, roughness: 0.45, metalness: 0.12 })
+)
+floor.rotation.x = -Math.PI / 2
+floor.receiveShadow = true
+scene.add(floor)
+
+const controls = new OrbitControls(camera, canvasEl)
+controls.enableDamping = true
+controls.dampingFactor = 0.07
+controls.autoRotate = true
+controls.autoRotateSpeed = 0.8
+controls.maxPolarAngle = Math.PI / 2.02
+controls.minDistance = 2
+controls.maxDistance = 14
+
+// ---- helpers căn tỉ lệ / vị trí theo bbox ----
+function fitMax(obj, target, axis) {
+  const box = new THREE.Box3().setFromObject(obj)
+  const s = box.getSize(new THREE.Vector3())
+  const cur = axis === "y" ? s.y : Math.max(s.x, s.z)
+  const k = target / (cur || 1)
+  obj.scale.multiplyScalar(k)
+  return k
+}
+function placeBase(obj, x, z, baseY) {
+  const box = new THREE.Box3().setFromObject(obj)
+  const c = box.getCenter(new THREE.Vector3())
+  obj.position.x += x - c.x
+  obj.position.z += z - c.z
+  obj.position.y += baseY - box.min.y
+}
+function enableShadows(obj) {
+  obj.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true } })
+}
+
+const loader = new GLTFLoader()
+function load(url) { return loader.loadAsync(url) }
+
+let done = 0
+function step() { done++; lbl.textContent = "Đang tải mô hình… " + done + "/3"; barfill.style.width = (done / 3 * 100) + "%" }
+
+const home = { pos: new THREE.Vector3(0, 2, 6), target: new THREE.Vector3(0, 1, 0) }
+
+Promise.all([
+  load("podium.glb").then((g) => { step(); return g }),
+  load("figure.glb").then((g) => { step(); return g }),
+  load("canvas.glb").then((g) => { step(); return g }),
+]).then(([pod, fig, can]) => {
+  // PODIUM
+  const podium = pod.scene
+  enableShadows(podium)
+  fitMax(podium, 3.2)
+  placeBase(podium, 0, 0, 0)
+  scene.add(podium)
+  const podBox = new THREE.Box3().setFromObject(podium)
+  const topY = podBox.max.y
+
+  // FIGURES (2 bản)
+  const figA = fig.scene
+  const figB = fig.scene.clone(true)
+  ;[figA, figB].forEach((f, i) => {
+    enableShadows(f)
+    fitMax(f, 1.7, "y")
+    placeBase(f, i === 0 ? -0.55 : 0.55, 0.25, topY)
+    f.rotation.y = Math.PI // quay mặt về phía camera (+Z); chỉnh nếu ngược
+    scene.add(f)
+  })
+
+  // CANVAS (phông phía sau)
+  const cv = can.scene
+  enableShadows(cv)
+  // tự dựng đứng nếu model đang nằm ngang
+  let cb = new THREE.Box3().setFromObject(cv)
+  let cs = cb.getSize(new THREE.Vector3())
+  if (cs.y < cs.x * 0.4 && cs.y < cs.z * 0.4) cv.rotation.x = -Math.PI / 2
+  fitMax(cv, 3.2, "y")
+  placeBase(cv, 0, -1.5, 0)
+  scene.add(cv)
+
+  // khung camera
+  controls.target.set(0, topY + 0.7, 0)
+  camera.position.set(0, topY + 1.4, 5.2)
+  home.pos.copy(camera.position); home.target.copy(controls.target)
+  controls.update()
+
+  loaderEl.classList.add("hide")
+}).catch((e) => { lbl.textContent = "Lỗi tải mô hình."; console.error(e) })
+
+// UI
+const rotateBtn = document.getElementById("rotate")
+rotateBtn.addEventListener("click", () => {
+  controls.autoRotate = !controls.autoRotate
+  rotateBtn.classList.toggle("on", controls.autoRotate)
+  rotateBtn.textContent = "Tự xoay: " + (controls.autoRotate ? "bật" : "tắt")
+})
+document.getElementById("reset").addEventListener("click", () => {
+  camera.position.copy(home.pos); controls.target.copy(home.target); controls.update()
+})
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(innerWidth, innerHeight)
+})
+
+function tick() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(tick) }
+tick()
+</script>
+</body>
+</html>
