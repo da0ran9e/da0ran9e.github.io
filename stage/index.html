@@ -195,7 +195,7 @@ Promise.all([
   enableShadows(figure)
   figure.rotation.y = 0 // quay mặt ra trước; đổi Math.PI nếu quay lưng
   fitMax(figure, 1.1, "y")
-  placeBase(figure, 0, 0, standY)
+  placeBase(figure, 0, 0, standY + 0.06)
   scene.add(figure)
   const figTop = new THREE.Box3().setFromObject(figure).max.y
 
