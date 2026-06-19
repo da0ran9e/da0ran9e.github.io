@@ -164,42 +164,53 @@ Promise.all([
   load("figure.glb").then((g) => { step(); return g }),
   load("canvas.glb").then((g) => { step(); return g }),
 ]).then(([pod, fig, can]) => {
-  // FIGURE — model này VỐN đã là 2 người, chỉ tải 1 bản
-  const figure = fig.scene
-  enableShadows(figure)
-  figure.rotation.y = 0 // quay mặt ra trước (+Z); đổi Math.PI nếu quay lưng
-  fitMax(figure, 1.7, "y")
-  const fsz = new THREE.Box3().setFromObject(figure).getSize(new THREE.Vector3())
-  const footprint = Math.max(fsz.x, fsz.z)
+  // tìm MẶT BỤC thật: bỏ qua mesh cao nhất (tường phông cong), lấy đỉnh cao nhất còn lại
+  function standingSurface(obj) {
+    const boxes = []
+    obj.traverse((o) => { if (o.isMesh) boxes.push(new THREE.Box3().setFromObject(o)) })
+    let th = -1, ti = -1
+    boxes.forEach((b, i) => { const h = b.max.y - b.min.y; if (h > th) { th = h; ti = i } })
+    let y = -Infinity, fp = 0
+    boxes.forEach((b, i) => {
+      if (i !== ti && b.max.y > y) { y = b.max.y; fp = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) }
+    })
+    return { y, fp }
+  }
 
-  // PODIUM — to hơn chân người để cả 2 đứng vừa
+  // PODIUM làm chuẩn — chỉnh sao cho mặt bục rộng ~3.0
   const podium = pod.scene
   enableShadows(podium)
-  fitMax(podium, Math.max(footprint * 1.7, 2.2))
+  placeBase(podium, 0, 0, 0)
+  let surf = standingSurface(podium)
+  const PLATFORM_W = 3.0
+  podium.scale.multiplyScalar(PLATFORM_W / (surf.fp || 1))
   placeBase(podium, 0, 0, 0)
   scene.add(podium)
-  const topY = new THREE.Box3().setFromObject(podium).max.y
+  surf = standingSurface(podium)
+  const standY = surf.y
 
-  // đứng trên mặt podium
-  placeBase(figure, 0, 0.05, topY)
+  // FIGURE (đã là 2 người) đứng TRÊN mặt bục, nhỏ lại
+  const figure = fig.scene
+  enableShadows(figure)
+  figure.rotation.y = 0 // quay mặt ra trước; đổi Math.PI nếu quay lưng
+  fitMax(figure, 1.25, "y")
+  placeBase(figure, 0, 0, standY - 0.02)
   scene.add(figure)
   const figTop = new THREE.Box3().setFromObject(figure).max.y
 
-  // CANVAS — phông phía sau
+  // CANVAS phía sau, đứng trên bục
   const cv = can.scene
   enableShadows(cv)
   const cs0 = new THREE.Box3().setFromObject(cv).getSize(new THREE.Vector3())
   if (cs0.y < cs0.x * 0.4 && cs0.y < cs0.z * 0.4) cv.rotation.x = -Math.PI / 2
-  fitMax(cv, Math.max(figTop * 1.15, 2.6), "y")
-  const cw = new THREE.Box3().setFromObject(cv).getSize(new THREE.Vector3())
-  placeBase(cv, 0, -(footprint * 0.5 + 0.4), 0)
+  fitMax(cv, 1.5, "y")
+  placeBase(cv, 0, -0.7, standY - 0.02)
   scene.add(cv)
 
-  // khung camera bao cả cảnh
-  const focusY = (topY + figTop) * 0.5
+  // khung camera
+  const focusY = standY + (figTop - standY) * 0.5
   controls.target.set(0, focusY, 0)
-  const reach = Math.max(figTop, cw.x)
-  camera.position.set(0, focusY + 0.4, reach * 1.8 + 2)
+  camera.position.set(0, focusY + 0.7, 6.0)
   home.pos.copy(camera.position); home.target.copy(controls.target)
   controls.update()
 
