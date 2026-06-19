@@ -188,38 +188,29 @@ Promise.all([
   podium.scale.multiplyScalar(STAGE_W / Math.max(allSize.x, allSize.z))
   placeBase(podium, 0, 0, 0)
   scene.add(podium)
+  // mặt đĩa trắng cao hơn mép platformTop một chút -> bù thêm để chân chạm đúng
+  const standY = platformTop(podium) + 0.16
 
-  // Bắn tia thẳng xuống để tìm ĐÚNG mặt bục ngay dưới một điểm (x,z)
-  const downRay = new THREE.Raycaster()
-  function surfaceY(x, z) {
-    downRay.set(new THREE.Vector3(x, 100, z), new THREE.Vector3(0, -1, 0))
-    const hits = downRay.intersectObject(podium, true)
-    return hits.length ? hits[0].point.y : 0
-  }
-
-  // FIGURE (đã là 2 người) — đặt chân chạm đúng mặt bục
+  // FIGURE (đã là 2 người) — chân chạm mặt đĩa
   const figure = fig.scene
   enableShadows(figure)
   figure.rotation.y = 0 // quay mặt ra trước; đổi Math.PI nếu quay lưng
   fitMax(figure, 1.1, "y")
-  const FZ = 0.1
-  placeBase(figure, 0, FZ, surfaceY(0, FZ))
+  placeBase(figure, 0, 0.1, standY)
   scene.add(figure)
   const figTop = new THREE.Box3().setFromObject(figure).max.y
 
-  // CANVAS phía sau — chân giá vẽ cũng chạm mặt bục
+  // CANVAS phía sau — chân giá vẽ cũng đứng trên đĩa
   const cv = can.scene
   enableShadows(cv)
   const cs0 = new THREE.Box3().setFromObject(cv).getSize(new THREE.Vector3())
   if (cs0.y < cs0.x * 0.4 && cs0.y < cs0.z * 0.4) cv.rotation.x = -Math.PI / 2
   fitMax(cv, 1.05, "y")
-  const CZ = -0.3
-  placeBase(cv, 0, CZ, surfaceY(0, CZ))
+  placeBase(cv, 0, -0.25, standY)
   scene.add(cv)
 
   // khung camera
-  const groundY = surfaceY(0, 0)
-  const focusY = groundY + (figTop - groundY) * 0.5
+  const focusY = standY + (figTop - standY) * 0.5
   controls.target.set(0, focusY, 0)
   camera.position.set(0, focusY + 0.6, 5.0)
   home.pos.copy(camera.position); home.target.copy(controls.target)
