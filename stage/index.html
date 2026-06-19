@@ -164,37 +164,38 @@ Promise.all([
   load("figure.glb").then((g) => { step(); return g }),
   load("canvas.glb").then((g) => { step(); return g }),
 ]).then(([pod, fig, can]) => {
-  // tìm MẶT BỤC thật: bỏ qua mesh cao nhất (tường phông cong), lấy đỉnh cao nhất còn lại
-  function standingSurface(obj) {
-    const boxes = []
-    obj.traverse((o) => { if (o.isMesh) boxes.push(new THREE.Box3().setFromObject(o)) })
-    let th = -1, ti = -1
-    boxes.forEach((b, i) => { const h = b.max.y - b.min.y; if (h > th) { th = h; ti = i } })
-    let y = -Infinity, fp = 0
-    boxes.forEach((b, i) => {
-      if (i !== ti && b.max.y > y) { y = b.max.y; fp = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) }
+  // mặt bục = ĐĨA PHẲNG rộng nhất (tỉ lệ rộng/dày lớn nhất), không phải tường phông
+  function platformTop(obj) {
+    const all = new THREE.Box3().setFromObject(obj)
+    const aw = Math.max(all.max.x - all.min.x, all.max.z - all.min.z)
+    let best = -1, top = all.min.y
+    obj.traverse((o) => {
+      if (!o.isMesh) return
+      const b = new THREE.Box3().setFromObject(o)
+      const s = b.getSize(new THREE.Vector3())
+      const fp = Math.max(s.x, s.z), h = Math.max(s.y, 1e-4), score = fp / h
+      if (fp > aw * 0.08 && score > best) { best = score; top = b.max.y }
     })
-    return { y, fp }
+    return top
   }
 
-  // PODIUM làm chuẩn — chỉnh sao cho mặt bục rộng ~3.0
+  // PODIUM — scale theo TỔNG THỂ để phông không phình to
   const podium = pod.scene
   enableShadows(podium)
   placeBase(podium, 0, 0, 0)
-  let surf = standingSurface(podium)
-  const PLATFORM_W = 3.0
-  podium.scale.multiplyScalar(PLATFORM_W / (surf.fp || 1))
+  const allSize = new THREE.Box3().setFromObject(podium).getSize(new THREE.Vector3())
+  const STAGE_W = 8.0
+  podium.scale.multiplyScalar(STAGE_W / Math.max(allSize.x, allSize.z))
   placeBase(podium, 0, 0, 0)
   scene.add(podium)
-  surf = standingSurface(podium)
-  const standY = surf.y
+  const standY = platformTop(podium)
 
-  // FIGURE (đã là 2 người) đứng TRÊN mặt bục, nhỏ lại
+  // FIGURE (đã là 2 người) đứng TRÊN đĩa bục
   const figure = fig.scene
   enableShadows(figure)
   figure.rotation.y = 0 // quay mặt ra trước; đổi Math.PI nếu quay lưng
-  fitMax(figure, 1.25, "y")
-  placeBase(figure, 0, 0, standY - 0.02)
+  fitMax(figure, 1.1, "y")
+  placeBase(figure, 0, 0, standY)
   scene.add(figure)
   const figTop = new THREE.Box3().setFromObject(figure).max.y
 
@@ -203,14 +204,14 @@ Promise.all([
   enableShadows(cv)
   const cs0 = new THREE.Box3().setFromObject(cv).getSize(new THREE.Vector3())
   if (cs0.y < cs0.x * 0.4 && cs0.y < cs0.z * 0.4) cv.rotation.x = -Math.PI / 2
-  fitMax(cv, 1.5, "y")
-  placeBase(cv, 0, -0.7, standY - 0.02)
+  fitMax(cv, 1.4, "y")
+  placeBase(cv, 0, -0.6, standY)
   scene.add(cv)
 
   // khung camera
   const focusY = standY + (figTop - standY) * 0.5
   controls.target.set(0, focusY, 0)
-  camera.position.set(0, focusY + 0.7, 6.0)
+  camera.position.set(0, focusY + 0.6, 5.0)
   home.pos.copy(camera.position); home.target.copy(controls.target)
   controls.update()
 
