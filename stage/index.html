@@ -155,7 +155,7 @@ const loader = new GLTFLoader()
 function load(url) { return loader.loadAsync(url) }
 
 let done = 0
-function step() { done++; lbl.textContent = "Đang tải mô hình… " + done + "/3"; barfill.style.width = (done / 3 * 100) + "%" }
+function step() { done++; lbl.textContent = "Đang tải mô hình… " + done + "/4"; barfill.style.width = (done / 4 * 100) + "%" }
 
 const home = { pos: new THREE.Vector3(0, 2, 6), target: new THREE.Vector3(0, 1, 0) }
 
@@ -163,7 +163,8 @@ Promise.all([
   load("podium.glb").then((g) => { step(); return g }),
   load("figure.glb").then((g) => { step(); return g }),
   load("canvas.glb").then((g) => { step(); return g }),
-]).then(([pod, fig, can]) => {
+  load("figure2.glb").then((g) => { step(); return g }),
+]).then(([pod, fig, can, fig2]) => {
   // mặt bục = ĐĨA PHẲNG rộng nhất (tỉ lệ rộng/dày lớn nhất), không phải tường phông
   function platformTop(obj) {
     const all = new THREE.Box3().setFromObject(obj)
@@ -191,22 +192,28 @@ Promise.all([
   // mặt đĩa trắng cao hơn mép platformTop một chút -> bù thêm để chân chạm đúng
   const standY = platformTop(podium) + 0.16
 
-  // FIGURE (đã là 2 người) — chân chạm mặt đĩa
-  const figure = fig.scene
-  enableShadows(figure)
-  figure.rotation.y = 0 // quay mặt ra trước; đổi Math.PI nếu quay lưng
-  fitMax(figure, 1.1, "y")
-  placeBase(figure, 0, 0.1, standY)
-  scene.add(figure)
-  const figTop = new THREE.Box3().setFromObject(figure).max.y
+  // đặt một cặp figure: xoay trước, scale, rồi đặt chân chạm đĩa
+  function placeCouple(s, x, z, ry, h) {
+    enableShadows(s)
+    s.rotation.y = ry
+    fitMax(s, h, "y")
+    placeBase(s, x, z, standY)
+    scene.add(s)
+    return new THREE.Box3().setFromObject(s).max.y
+  }
+  // HAI CẶP đứng chéo hình chữ V (mở về phía camera)
+  const FH = 0.78
+  const t1 = placeCouple(fig.scene, -0.24, 0.16, 0.42, FH)   // trước-trái, xoay vào giữa
+  const t2 = placeCouple(fig2.scene, 0.24, 0.16, -0.42, FH)  // trước-phải, xoay vào giữa
+  const figTop = Math.max(t1, t2)
 
-  // CANVAS phía sau — chân giá vẽ cũng đứng trên đĩa
+  // CANVAS ở CHÍNH GIỮA phía sau (đỉnh chữ V), nhỏ lại
   const cv = can.scene
   enableShadows(cv)
   const cs0 = new THREE.Box3().setFromObject(cv).getSize(new THREE.Vector3())
   if (cs0.y < cs0.x * 0.4 && cs0.y < cs0.z * 0.4) cv.rotation.x = -Math.PI / 2
-  fitMax(cv, 1.05, "y")
-  placeBase(cv, 0, -0.25, standY)
+  fitMax(cv, 0.92, "y")
+  placeBase(cv, 0, -0.32, standY)
   scene.add(cv)
 
   // khung camera
