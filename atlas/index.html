@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
-<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet" />
 <style>
   :root{ --ink:#0c1216; --accent:#2f9e8f; }
   *{box-sizing:border-box;margin:0;padding:0}
@@ -43,17 +43,20 @@
 <div class="hint">Kéo để di chuyển · cuộn zoom · giữ chuột phải để nghiêng/xoay</div>
 <div class="panel" id="panel"></div>
 
-<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
 <script>
 const map = new maplibregl.Map({
   container: "map",
   style: "https://tiles.openfreemap.org/styles/liberty",
-  center: [105.85, 21.03],
-  zoom: 4.4,
+  center: [108, 16],
+  zoom: 2.2,
   pitch: 0,
   maxPitch: 85,
   attributionControl: { compact: true },
 })
+// chế độ ĐỊA CẦU: zoom ra là quả cầu xoay được, zoom vào mượt thành bản đồ tile chi tiết
+map.on("style.load", () => { try { map.setProjection({ type: "globe" }) } catch (e) {} })
+map.addControl(new maplibregl.GlobeControl(), "top-right")
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right")
 map.addControl(new maplibregl.ScaleControl({ maxWidth: 120 }), "bottom-right")
 
