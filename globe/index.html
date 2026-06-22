@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VŨ ĐỨC AN — EARTH GLOBE</title>
+<meta name="description" content="Quả địa cầu Trái Đất thật (NASA Blue Marble) — xoay, zoom, địa hình nổi lên. Three.js." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{ --ink:#05070d; --paper:#eaf1ff; --accent:#4ea8ff; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Inter',Helvetica,Arial,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased;color:var(--paper);background:#05070d}
+  #gl{position:fixed;inset:0;display:block;cursor:grab}
+  #gl:active{cursor:grabbing}
+
+  .ui{position:fixed;inset:0;z-index:5;pointer-events:none}
+  .top{position:absolute;top:24px;left:28px;right:28px;display:flex;justify-content:space-between;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+  .top .r{color:var(--accent)}
+  a.back{position:absolute;left:28px;top:46px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#7f93b8;text-decoration:none;pointer-events:auto}
+  a.back:hover{color:var(--paper)}
+  .title{position:absolute;left:28px;bottom:78px;font-weight:900;letter-spacing:-.03em;line-height:.88;
+    font-size:clamp(34px,7vw,84px);text-transform:uppercase}
+  .sub{position:absolute;left:30px;bottom:54px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#8fa3c8}
+  .hint{position:absolute;right:28px;bottom:54px;font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:#8fa3c8;text-align:right}
+  .zoom{position:absolute;right:28px;top:70px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#8fa3c8;text-align:right}
+  .zoom b{color:var(--accent)}
+  .credit{position:absolute;left:28px;bottom:24px;font-size:10px;letter-spacing:.1em;color:#5b6c8c}
+  .loader{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#05070d;
+    font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#7f93b8;transition:opacity .6s}
+  .loader.hide{opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="ui">
+  <div class="top"><span>Vũ Đức An · Lab</span><span class="r">Three.js · NASA</span></div>
+  <a class="back" href="/#apps">← apps</a>
+  <h1 class="title">Earth<br>Globe</h1>
+  <div class="sub">Quả địa cầu thật · xoay & zoom</div>
+  <div class="hint">Kéo để xoay · cuộn để zoom</div>
+  <div class="zoom">Độ nổi địa hình: <b id="lvl">0%</b></div>
+  <div class="credit">Texture: NASA Blue Marble / Topography (public domain)</div>
+</div>
+
+<div class="loader" id="loader">Đang tải Trái Đất…</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from "three"
+import { OrbitControls } from "three/addons/controls/OrbitControls.js"
+
+const IMG = "https://unpkg.com/three-globe/example/img/"
+const canvas = document.getElementById("gl")
+const lvlEl = document.getElementById("lvl")
+const loaderEl = document.getElementById("loader")
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+renderer.setSize(innerWidth, innerHeight)
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.05
+renderer.outputColorSpace = THREE.SRGBColorSpace
+
+const scene = new THREE.Scene()
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 6000)
+camera.position.set(0, 90, 300)
+
+const R = 100
+const MAXREL = 3.4
+const NEARD = 135, FARD = 420
+
+const controls = new OrbitControls(camera, canvas)
+controls.enableDamping = true
+controls.dampingFactor = 0.06
+controls.minDistance = R * 1.13
+controls.maxDistance = R * 4.5
+controls.autoRotate = true
+controls.autoRotateSpeed = 0.25
+
+// ánh sáng
+scene.add(new THREE.AmbientLight(0xffffff, 0.55))
+const sun = new THREE.DirectionalLight(0xffffff, 1.7)
+sun.position.set(250, 140, 180)
+scene.add(sun)
+
+const manager = new THREE.LoadingManager(() => loaderEl.classList.add("hide"))
+const tl = new THREE.TextureLoader(manager)
+tl.setCrossOrigin("anonymous")
+
+// nền sao
+const sky = tl.load(IMG + "night-sky.png")
+sky.mapping = THREE.EquirectangularReflectionMapping
+sky.colorSpace = THREE.SRGBColorSpace
+scene.background = sky
+
+// Trái Đất
+const colorT = tl.load(IMG + "earth-blue-marble.jpg"); colorT.colorSpace = THREE.SRGBColorSpace
+const topoT = tl.load(IMG + "earth-topology.png")
+const waterT = tl.load(IMG + "earth-water.png")
+
+const earthMat = new THREE.MeshStandardMaterial({
+  map: colorT,
+  bumpMap: topoT,
+  bumpScale: 2.5,
+  displacementMap: topoT,
+  displacementScale: 0,
+  roughness: 0.92,
+  metalness: 0.0,
+  roughnessMap: waterT,
+})
+const earth = new THREE.Mesh(new THREE.SphereGeometry(R, 256, 256), earthMat)
+scene.add(earth)
+
+// khí quyển (rim glow)
+const atmoMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  vertexShader: `varying vec3 vN; void main(){ vN=normalize(normalMatrix*normal); gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+  fragmentShader: `varying vec3 vN; void main(){ float i=pow(0.62 - dot(vN, vec3(0.0,0.0,1.0)), 2.2); i=clamp(i,0.0,1.0); gl_FragColor=vec4(0.30,0.58,1.0,1.0)*i; }`,
+})
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(R * 1.025, 64, 64), atmoMat))
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(innerWidth, innerHeight)
+})
+
+let curRel = 0
+function tick() {
+  controls.update()
+  const dist = camera.position.distanceTo(controls.target)
+  // xa -> địa cầu mượt (ảnh thật); gần -> địa hình đùn lên
+  const t = THREE.MathUtils.clamp((FARD - dist) / (FARD - NEARD), 0, 1)
+  const target = t * t * MAXREL
+  curRel += (target - curRel) * 0.08
+  earthMat.displacementScale = curRel
+  lvlEl.textContent = Math.round((curRel / MAXREL) * 100) + "%"
+  renderer.render(scene, camera)
+  requestAnimationFrame(tick)
+}
+tick()
+</script>
+</body>
+</html>
