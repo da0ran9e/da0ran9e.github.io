@@ -29,6 +29,9 @@
   .zoom{position:absolute;right:28px;top:70px;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#8fa3c8;text-align:right}
   .zoom b{color:var(--accent)}
   .credit{position:absolute;left:28px;bottom:24px;font-size:10px;letter-spacing:.1em;color:#5b6c8c}
+  .places{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:80vw;z-index:6}
+  .places button{font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:9px 14px;border:1px solid rgba(120,150,200,.3);background:rgba(10,16,30,.55);color:#cfe0ff;border-radius:999px;cursor:pointer;backdrop-filter:blur(6px);transition:.16s}
+  .places button:hover{background:var(--accent);color:#03142a;border-color:var(--accent)}
   .loader{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#05070d;
     font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#7f93b8;transition:opacity .6s}
   .loader.hide{opacity:0;pointer-events:none}
@@ -46,6 +49,8 @@
   <div class="zoom">Độ nổi địa hình: <b id="lvl">0%</b></div>
   <div class="credit">Texture: NASA Blue Marble / Topography (public domain)</div>
 </div>
+
+<div class="places" id="places"></div>
 
 <div class="loader" id="loader">Đang tải Trái Đất…</div>
 
@@ -84,7 +89,7 @@ const NEARD = 135, FARD = 420
 const controls = new OrbitControls(camera, canvas)
 controls.enableDamping = true
 controls.dampingFactor = 0.06
-controls.minDistance = R * 1.13
+controls.minDistance = R * 1.02
 controls.maxDistance = R * 4.5
 controls.autoRotate = true
 controls.autoRotateSpeed = 0.25
@@ -131,6 +136,44 @@ const atmoMat = new THREE.ShaderMaterial({
 })
 scene.add(new THREE.Mesh(new THREE.SphereGeometry(R * 1.025, 64, 64), atmoMat))
 
+// ---- địa điểm + bay tới ----
+function latLngToVec(lat, lng, r) {
+  const phi = (90 - lat) * Math.PI / 180
+  const theta = (lng + 180) * Math.PI / 180
+  return new THREE.Vector3(
+    -r * Math.sin(phi) * Math.cos(theta),
+    r * Math.cos(phi),
+    r * Math.sin(phi) * Math.sin(theta)
+  )
+}
+const LOCATIONS = [
+  { name: "Hà Nội", lat: 21.03, lng: 105.85 },
+  { name: "TP.HCM", lat: 10.82, lng: 106.63 },
+  { name: "Tokyo", lat: 35.68, lng: 139.65 },
+  { name: "Paris", lat: 48.85, lng: 2.35 },
+  { name: "New York", lat: 40.71, lng: -74.0 },
+  { name: "Sydney", lat: -33.87, lng: 151.21 },
+]
+const markerMat = new THREE.MeshBasicMaterial({ color: 0x4ea8ff })
+LOCATIONS.forEach((L) => {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(R * 0.012, 12, 12), markerMat)
+  m.position.copy(latLngToVec(L.lat, L.lng, R * 1.004))
+  scene.add(m)
+})
+let fly = null
+function flyTo(L) {
+  controls.autoRotate = false
+  fly = { from: camera.position.clone(), toDir: latLngToVec(L.lat, L.lng, 1), toR: R * 1.12, t: 0 }
+}
+const placesEl = document.getElementById("places")
+LOCATIONS.forEach((L) => {
+  const b = document.createElement("button")
+  b.textContent = L.name
+  b.addEventListener("click", () => flyTo(L))
+  placesEl.appendChild(b)
+})
+canvas.addEventListener("pointerdown", () => { controls.autoRotate = false; fly = null })
+
 addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight
   camera.updateProjectionMatrix()
@@ -138,7 +181,17 @@ addEventListener("resize", () => {
 })
 
 let curRel = 0
+const clock = new THREE.Clock()
 function tick() {
+  const dt = clock.getDelta()
+  if (fly) {
+    fly.t = Math.min(1, fly.t + dt / 1.6)
+    const e = fly.t < 0.5 ? 2 * fly.t * fly.t : 1 - Math.pow(-2 * fly.t + 2, 2) / 2
+    const dir = fly.from.clone().normalize().lerp(fly.toDir, e).normalize()
+    const radius = THREE.MathUtils.lerp(fly.from.length(), fly.toR, e)
+    camera.position.copy(dir.multiplyScalar(radius))
+    if (fly.t >= 1) fly = null
+  }
   controls.update()
   const dist = camera.position.distanceTo(controls.target)
   // xa -> địa cầu mượt (ảnh thật); gần -> địa hình đùn lên
