@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VŨ ĐỨC AN — ATLAS</title>
+<meta name="description" content="Bản đồ tile thật + địa hình 3D, tải theo vùng. MapLibre GL." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<style>
+  :root{ --ink:#0c1216; --accent:#2f9e8f; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Inter',Helvetica,Arial,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased;color:var(--ink)}
+  #map{position:fixed;inset:0}
+
+  .top{position:absolute;top:20px;left:24px;right:24px;display:flex;justify-content:space-between;z-index:6;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;pointer-events:none;color:#0c1216;
+    text-shadow:0 1px 6px rgba(255,255,255,.6)}
+  .top .r{color:var(--accent)}
+  a.back{position:absolute;left:24px;top:42px;z-index:6;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#37524d;text-decoration:none;text-shadow:0 1px 6px rgba(255,255,255,.6)}
+  a.back:hover{color:#0c1216}
+
+  .panel{position:absolute;left:50%;bottom:20px;transform:translateX(-50%);display:flex;gap:8px;flex-wrap:wrap;
+    justify-content:center;max-width:92vw;z-index:6}
+  .panel button{font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    padding:9px 14px;border:1px solid rgba(0,0,0,.12);background:rgba(255,255,255,.82);color:#0c1216;border-radius:999px;
+    cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 4px 14px rgba(0,0,0,.12);transition:.15s}
+  .panel button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .panel button.t{background:#0c1216;color:#fff;border-color:#0c1216}
+  .panel button.t.on{background:var(--accent);border-color:var(--accent)}
+
+  .hint{position:absolute;right:24px;bottom:64px;z-index:6;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:#37524d;text-align:right;text-shadow:0 1px 6px rgba(255,255,255,.6);pointer-events:none}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="top"><span>Vũ Đức An · Lab</span><span class="r">MapLibre · OSM</span></div>
+<a class="back" href="/#apps">← apps</a>
+<div class="hint">Kéo để di chuyển · cuộn zoom · giữ chuột phải để nghiêng/xoay</div>
+<div class="panel" id="panel"></div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const map = new maplibregl.Map({
+  container: "map",
+  style: "https://tiles.openfreemap.org/styles/liberty",
+  center: [105.85, 21.03],
+  zoom: 4.4,
+  pitch: 0,
+  maxPitch: 85,
+  attributionControl: { compact: true },
+})
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right")
+map.addControl(new maplibregl.ScaleControl({ maxWidth: 120 }), "bottom-right")
+
+let terrainOn = true
+map.on("load", () => {
+  // DEM độ cao thật (AWS terrarium, public domain) -> địa hình 3D
+  map.addSource("dem", {
+    type: "raster-dem",
+    tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+    encoding: "terrarium",
+    tileSize: 256,
+    maxzoom: 13,
+    attribution: "Terrain: Tilezen / AWS Open Data (public domain)",
+  })
+  map.setTerrain({ source: "dem", exaggeration: 1.6 })
+  // đổ bóng địa hình
+  map.addLayer({
+    id: "hills",
+    type: "hillshade",
+    source: "dem",
+    paint: { "hillshade-exaggeration": 0.5 },
+  })
+})
+
+// ---- địa điểm bay tới ----
+const PLACES = [
+  { name: "Hà Nội", c: [105.8542, 21.0285], z: 12, p: 55 },
+  { name: "Sa Pa", c: [103.844, 22.336], z: 12.5, p: 70 },
+  { name: "Hạ Long", c: [107.08, 20.91], z: 11.5, p: 65 },
+  { name: "Đà Nẵng", c: [108.221, 16.067], z: 12, p: 60 },
+  { name: "TP.HCM", c: [106.700, 10.776], z: 12, p: 55 },
+  { name: "Phú Sĩ", c: [138.731, 35.363], z: 12, p: 72 },
+  { name: "Everest", c: [86.925, 27.988], z: 11.5, p: 75 },
+]
+const panel = document.getElementById("panel")
+PLACES.forEach((P) => {
+  const b = document.createElement("button")
+  b.textContent = P.name
+  b.addEventListener("click", () => map.flyTo({ center: P.c, zoom: P.z, pitch: P.p, bearing: -15, duration: 2600, essential: true }))
+  panel.appendChild(b)
+})
+// nút bật/tắt địa hình 3D
+const tb = document.createElement("button")
+tb.className = "t on"
+tb.textContent = "Địa hình 3D: bật"
+tb.addEventListener("click", () => {
+  terrainOn = !terrainOn
+  map.setTerrain(terrainOn ? { source: "dem", exaggeration: 1.6 } : null)
+  if (!terrainOn) map.easeTo({ pitch: 0 })
+  tb.classList.toggle("on", terrainOn)
+  tb.textContent = "Địa hình 3D: " + (terrainOn ? "bật" : "tắt")
+})
+panel.appendChild(tb)
+</script>
+</body>
+</html>
