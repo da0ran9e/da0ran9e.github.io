@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>VŨ ĐỨC AN — ATLAS</title>
-<meta name="description" content="Bản đồ địa cầu + tile thật + ghim ảnh album theo toạ độ. MapLibre GL." />
+<meta name="description" content="Bản đồ địa cầu + ảnh album theo toạ độ, gom cụm khi thu nhỏ. MapLibre GL." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
@@ -22,32 +22,41 @@
   a.back{position:absolute;left:24px;top:40px;z-index:6;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#37524d;text-decoration:none;text-shadow:0 1px 6px rgba(255,255,255,.6)}
   a.back:hover{color:#0c1216}
 
-  .tools{position:absolute;left:24px;top:74px;z-index:6;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
-  .tools button{font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:8px 12px;
+  .tools{position:absolute;left:24px;top:72px;z-index:6;display:flex;gap:8px;flex-wrap:wrap}
+  .tools button{font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:7px 11px;
     border:1px solid rgba(0,0,0,.12);background:rgba(255,255,255,.85);color:#0c1216;border-radius:999px;cursor:pointer;backdrop-filter:blur(6px);box-shadow:0 3px 12px rgba(0,0,0,.12);transition:.15s}
   .tools button:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
   .tools button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 
   .banner{position:absolute;top:18px;left:50%;transform:translateX(-50%);z-index:7;display:none;
-    background:var(--accent);color:#fff;font-size:12px;font-weight:700;letter-spacing:.04em;padding:9px 16px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+    background:var(--accent);color:#fff;font-size:12px;font-weight:700;padding:9px 16px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.2)}
   .banner.show{display:block}
 
-  /* dải ảnh */
-  .tray{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;gap:10px;overflow-x:auto;padding:14px 18px 16px;
-    background:linear-gradient(0deg, rgba(255,255,255,.92), rgba(255,255,255,0));}
-  .tray::-webkit-scrollbar{height:6px}
-  .tray::-webkit-scrollbar-thumb{background:rgba(0,0,0,.2);border-radius:3px}
-  .thumb{position:relative;flex:0 0 auto;width:72px;height:72px;border-radius:10px;overflow:hidden;cursor:pointer;
-    border:2px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.18);transition:.15s;background:#e7ecec}
+  /* thẻ ảnh lớn góc trái */
+  .card{position:absolute;left:24px;top:118px;width:300px;max-width:44vw;z-index:8;background:rgba(255,255,255,.97);
+    border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.28);overflow:hidden;display:none}
+  .card.show{display:block}
+  .card .big{width:100%;display:block;aspect-ratio:4/3;object-fit:cover;background:#e7ecec}
+  .card .meta{padding:12px 14px}
+  .card .meta .t{font-size:13px;font-weight:700;letter-spacing:.03em;margin-bottom:6px}
+  .card .meta .row{font-size:12px;color:#46615b;line-height:1.5}
+  .card .close{position:absolute;top:9px;right:9px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,.5);color:#fff;cursor:pointer;font-size:15px;line-height:28px}
+
+  /* dải ảnh để gắn thẻ ảnh chưa có toạ độ */
+  .tray{position:absolute;left:0;right:0;bottom:0;z-index:6;display:flex;gap:8px;overflow-x:auto;padding:12px 16px 14px;
+    background:linear-gradient(0deg, rgba(255,255,255,.9), rgba(255,255,255,0))}
+  .tray::-webkit-scrollbar{height:6px}.tray::-webkit-scrollbar-thumb{background:rgba(0,0,0,.2);border-radius:3px}
+  .thumb{position:relative;flex:0 0 auto;width:60px;height:60px;border-radius:9px;overflow:hidden;cursor:pointer;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.18);transition:.15s;background:#e7ecec}
   .thumb:hover{transform:translateY(-3px)}
   .thumb.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,158,143,.5)}
   .thumb img{width:100%;height:100%;object-fit:cover;display:block}
-  .thumb .pin{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:var(--accent);color:#fff;
-    font-size:11px;line-height:18px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.3)}
-  .marker{width:46px;height:46px;border-radius:50%;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35);
-    background-size:cover;background-position:center;cursor:pointer}
-  .maplibregl-popup-content{padding:6px;border-radius:10px}
-  .maplibregl-popup-content img{width:240px;max-width:60vw;display:block;border-radius:6px}
+  .thumb .pin{position:absolute;top:2px;right:2px;width:16px;height:16px;border-radius:50%;background:var(--accent);color:#fff;font-size:10px;line-height:16px;text-align:center}
+
+  /* ghim đang chọn: ảnh tròn + đuôi nhọn chỉ xuống */
+  .sel-pin{position:relative;width:62px;height:62px;cursor:pointer}
+  .sel-pin .ph{width:62px;height:62px;border-radius:50%;border:3px solid #fff;box-shadow:0 5px 16px rgba(0,0,0,.45);background-size:cover;background-position:center}
+  .sel-pin .tail{position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-top:13px solid #fff;filter:drop-shadow(0 3px 2px rgba(0,0,0,.3))}
+  .maplibregl-popup{display:none}
 </style>
 </head>
 <body>
@@ -56,10 +65,21 @@
 <a class="back" href="/#apps">← apps</a>
 <div class="banner" id="banner"></div>
 <div class="tools">
-  <button id="terrain" class="on">Địa hình 3D: bật</button>
+  <button id="terrain" class="on">Địa hình 3D</button>
   <button id="export">Xuất toạ độ</button>
   <button id="clear">Xoá ghim</button>
 </div>
+
+<div class="card" id="card">
+  <button class="close" id="cardClose">×</button>
+  <img class="big" id="cardImg" alt="" />
+  <div class="meta">
+    <div class="t" id="cardName">—</div>
+    <div class="row" id="cardDate"></div>
+    <div class="row" id="cardCoord"></div>
+  </div>
+</div>
+
 <div class="tray" id="tray"></div>
 
 <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
@@ -69,179 +89,178 @@ const SUPABASE_KEY = "sb_publishable_U0L64ODHeuid599c6oRgvw_5fM-2D8n"
 const BUCKET = "album"
 const IMG_RE = /\.(jpe?g|png|webp|avif)$/i
 const LS_KEY = "atlasPhotoCoords"
+const urlOf = (name) => `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(name)}`
 
 const map = new maplibregl.Map({
-  container: "map",
-  style: "https://tiles.openfreemap.org/styles/liberty",
-  center: [108, 16],
-  zoom: 2.2,
-  pitch: 0,
-  maxPitch: 85,
-  attributionControl: { compact: true },
+  container: "map", style: "https://tiles.openfreemap.org/styles/liberty",
+  center: [108, 16], zoom: 2.2, pitch: 0, maxPitch: 85, attributionControl: { compact: true },
 })
 map.on("style.load", () => { try { map.setProjection({ type: "globe" }) } catch (e) {} })
 map.addControl(new maplibregl.GlobeControl(), "top-right")
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right")
 
 let terrainOn = true
-map.on("load", () => {
-  map.addSource("dem", {
-    type: "raster-dem",
-    tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
-    encoding: "terrarium", tileSize: 256, maxzoom: 13,
-    attribution: "Terrain: Tilezen / AWS Open Data (public domain)",
-  })
-  map.setTerrain({ source: "dem", exaggeration: 1.6 })
-  map.addLayer({ id: "hills", type: "hillshade", source: "dem", paint: { "hillshade-exaggeration": 0.5 } })
-})
-
-// ---- toạ độ ảnh (localStorage + photos.json nếu có) ----
 let coords = {}
 try { coords = JSON.parse(localStorage.getItem(LS_KEY) || "{}") } catch (e) { coords = {} }
 function saveCoords() { localStorage.setItem(LS_KEY, JSON.stringify(coords)) }
 
-const urlOf = (name) => `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(name)}`
-
-// đọc GPS từ EXIF của ảnh (nếu có) -> {lng,lat} hoặc null
-function gpsFromBuffer(buf) {
-  try {
-    const dv = new DataView(buf)
-    if (dv.getUint16(0) !== 0xFFD8) return null
-    let off = 2, exif = -1
-    while (off < dv.byteLength - 1) {
-      if (dv.getUint8(off) !== 0xFF) break
-      const marker = dv.getUint8(off + 1), size = dv.getUint16(off + 2)
-      if (marker === 0xE1) { exif = off + 4; break }
-      off += 2 + size
-      if (marker === 0xDA) break
-    }
-    if (exif < 0 || dv.getUint32(exif) !== 0x45786966) return null
-    const t = exif + 6, le = dv.getUint16(t) === 0x4949
-    const u16 = (o) => dv.getUint16(o, le), u32 = (o) => dv.getUint32(o, le)
-    const ifd0 = t + u32(t + 4), n = u16(ifd0)
-    let gps = -1
-    for (let i = 0; i < n; i++) { const e = ifd0 + 2 + i * 12; if (u16(e) === 0x8825) gps = t + u32(e + 8) }
-    if (gps < 0) return null
-    const gn = u16(gps); let latR, lngR, lat, lng; const rat = (o) => u32(o, le) / u32(o + 4, le)
-    for (let i = 0; i < gn; i++) {
-      const e = gps + 2 + i * 12, tag = u16(e), vo = t + u32(e + 8)
-      if (tag === 1) latR = String.fromCharCode(dv.getUint8(e + 8))
-      if (tag === 3) lngR = String.fromCharCode(dv.getUint8(e + 8))
-      if (tag === 2) lat = rat(vo) + rat(vo + 8) / 60 + rat(vo + 16) / 3600
-      if (tag === 4) lng = rat(vo) + rat(vo + 8) / 60 + rat(vo + 16) / 3600
-    }
-    if (lat == null || lng == null) return null
-    if (latR === "S") lat = -lat
-    if (lngR === "W") lng = -lng
-    return { lng: +lng.toFixed(6), lat: +lat.toFixed(6) }
-  } catch (e) { return null }
-}
-// tự ghim ảnh có sẵn GPS (không đè lên ghim tay/đã lưu)
-async function autoGeotag() {
-  let changed = false
-  await Promise.all(photos.map(async (p) => {
-    if (coords[p.name]) return
-    try {
-      const b = await (await fetch(urlOf(p.name), { headers: { Range: "bytes=0-262143" } })).arrayBuffer()
-      const g = gpsFromBuffer(b)
-      if (g) { coords[p.name] = [g.lng, g.lat]; changed = true }
-    } catch (e) {}
-  }))
-  if (changed) { renderMarkers(); renderTray() }
-}
 let photos = []
+const iconOf = {}        // name -> map image id
 let placing = null
-const markers = {}
+let selMarker = null
+let layersReady = false
+
 const banner = document.getElementById("banner")
 const tray = document.getElementById("tray")
+const card = document.getElementById("card")
+const cardImg = document.getElementById("cardImg")
+const cardName = document.getElementById("cardName")
+const cardDate = document.getElementById("cardDate")
+const cardCoord = document.getElementById("cardCoord")
 
-function setBanner() {
-  if (placing) { banner.textContent = "Bấm lên bản đồ để ghim: " + placing + "  ·  (Esc để huỷ)"; banner.classList.add("show") }
-  else banner.classList.remove("show")
+// ---------- EXIF GPS ----------
+function gpsFromBuffer(buf){
+  try{ const dv=new DataView(buf); if(dv.getUint16(0)!==0xFFD8) return null
+    let off=2,exif=-1
+    while(off<dv.byteLength-1){ if(dv.getUint8(off)!==0xFF) break; const m=dv.getUint8(off+1),s=dv.getUint16(off+2); if(m===0xE1){exif=off+4;break} off+=2+s; if(m===0xDA) break }
+    if(exif<0||dv.getUint32(exif)!==0x45786966) return null
+    const t=exif+6,le=dv.getUint16(t)===0x4949,u16=o=>dv.getUint16(o,le),u32=o=>dv.getUint32(o,le)
+    const ifd0=t+u32(t+4),n=u16(ifd0); let gps=-1
+    for(let i=0;i<n;i++){const e=ifd0+2+i*12; if(u16(e)===0x8825) gps=t+u32(e+8)}
+    if(gps<0) return null
+    const gn=u16(gps); let latR,lngR,lat,lng; const rat=o=>u32(o,le)/u32(o+4,le)
+    for(let i=0;i<gn;i++){const e=gps+2+i*12,tag=u16(e),vo=t+u32(e+8)
+      if(tag===1)latR=String.fromCharCode(dv.getUint8(e+8)); if(tag===3)lngR=String.fromCharCode(dv.getUint8(e+8))
+      if(tag===2)lat=rat(vo)+rat(vo+8)/60+rat(vo+16)/3600; if(tag===4)lng=rat(vo)+rat(vo+8)/60+rat(vo+16)/3600}
+    if(lat==null||lng==null) return null; if(latR==="S")lat=-lat; if(lngR==="W")lng=-lng
+    return {lng:+lng.toFixed(6),lat:+lat.toFixed(6)}
+  }catch(e){return null}
 }
-addEventListener("keydown", (e) => { if (e.key === "Escape") { placing = null; setBanner(); renderTray() } })
 
-function renderMarkers() {
-  Object.values(markers).forEach((m) => m.remove())
-  for (const k in markers) delete markers[k]
-  Object.keys(coords).forEach((name) => {
-    const ll = coords[name]
-    const el = document.createElement("div")
-    el.className = "marker"
-    el.style.backgroundImage = `url(${urlOf(name)})`
-    const popup = new maplibregl.Popup({ offset: 28, closeButton: false }).setHTML(`<img src="${urlOf(name)}" loading="lazy">`)
-    const mk = new maplibregl.Marker({ element: el }).setLngLat(ll).setPopup(popup).addTo(map)
-    el.addEventListener("click", (ev) => {
-      ev.stopPropagation()
-      map.flyTo({ center: ll, zoom: 14, pitch: 55, duration: 2200, essential: true })
-      mk.togglePopup()
-    })
-    markers[name] = mk
+// ---------- icon tròn mờ ----------
+function makeIcon(name){
+  return new Promise((res)=>{
+    const img=new Image(); img.crossOrigin="anonymous"
+    img.onload=()=>{ const S=72,c=document.createElement("canvas"); c.width=c.height=S; const x=c.getContext("2d")
+      x.save(); x.beginPath(); x.arc(S/2,S/2,S/2-3,0,Math.PI*2); x.clip(); x.filter="blur(1.3px)"
+      const ar=img.width/img.height; let dw=S,dh=S,dx=0,dy=0; if(ar>1){dw=S*ar;dx=(S-dw)/2}else{dh=S/ar;dy=(S-dh)/2}
+      x.drawImage(img,dx,dy,dw,dh); x.restore()
+      x.strokeStyle="rgba(255,255,255,.9)"; x.lineWidth=3; x.beginPath(); x.arc(S/2,S/2,S/2-3,0,Math.PI*2); x.stroke()
+      res(x.getImageData(0,0,S,S))
+    }
+    img.onerror=()=>res(null); img.src=urlOf(name)
   })
 }
 
-map.on("click", (e) => {
-  if (!placing) return
-  coords[placing] = [e.lngLat.lng, e.lngLat.lat]
-  saveCoords()
-  placing = null
-  setBanner(); renderMarkers(); renderTray()
+function buildData(){
+  return { type:"FeatureCollection", features: photos.filter(p=>coords[p.name]&&iconOf[p.name]).map(p=>({
+    type:"Feature", properties:{ name:p.name, icon:iconOf[p.name] }, geometry:{ type:"Point", coordinates:coords[p.name] } })) }
+}
+function refresh(){ const s=map.getSource("photos"); if(s) s.setData(buildData()); renderTray() }
+
+function setupLayers(){
+  map.addSource("photos",{ type:"geojson", data:buildData(), cluster:true, clusterRadius:60, clusterMaxZoom:14 })
+  map.addLayer({ id:"clusters", type:"circle", source:"photos", filter:["has","point_count"],
+    paint:{ "circle-color":"#2f9e8f", "circle-opacity":0.92, "circle-stroke-color":"#fff", "circle-stroke-width":3,
+      "circle-radius":["step",["get","point_count"],18,5,24,15,30] } })
+  map.addLayer({ id:"cluster-count", type:"symbol", source:"photos", filter:["has","point_count"],
+    layout:{ "text-field":["get","point_count_abbreviated"], "text-size":14, "text-font":["Noto Sans Regular"] }, paint:{ "text-color":"#fff" } })
+  map.addLayer({ id:"unclustered", type:"symbol", source:"photos", filter:["!",["has","point_count"]],
+    layout:{ "icon-image":["get","icon"], "icon-size":0.62, "icon-allow-overlap":true }, paint:{ "icon-opacity":0.72 } })
+  layersReady=true
+  for (const lyr of ["clusters","unclustered"]) {
+    map.on("mouseenter",lyr,()=>map.getCanvas().style.cursor="pointer")
+    map.on("mouseleave",lyr,()=>map.getCanvas().style.cursor="")
+  }
+}
+
+function selectPhoto(name,c){
+  if(selMarker) selMarker.remove()
+  const el=document.createElement("div"); el.className="sel-pin"
+  const ph=document.createElement("div"); ph.className="ph"; ph.style.backgroundImage=`url(${urlOf(name)})`
+  const tail=document.createElement("div"); tail.className="tail"
+  el.appendChild(ph); el.appendChild(tail)
+  selMarker=new maplibregl.Marker({element:el,anchor:"bottom"}).setLngLat(c).addTo(map)
+  cardImg.src=urlOf(name); cardName.textContent=name
+  const ts=parseInt(name); cardDate.textContent=(ts>1e12)?("Thời điểm: "+new Date(ts).toLocaleString("vi-VN")):""
+  cardCoord.textContent="Vĩ độ "+c[1].toFixed(5)+" · Kinh độ "+c[0].toFixed(5)
+  card.classList.add("show")
+  map.flyTo({center:c, zoom:17, pitch:50, duration:2400, essential:true})
+}
+function deselect(){ if(selMarker){selMarker.remove();selMarker=null} card.classList.remove("show") }
+document.getElementById("cardClose").addEventListener("click", deselect)
+
+map.on("click",(e)=>{
+  if(layersReady){
+    const f=map.queryRenderedFeatures(e.point,{layers:["clusters","unclustered"]})
+    if(f.length){ const ft=f[0]
+      if(ft.layer.id==="clusters"){ map.getSource("photos").getClusterExpansionZoom(ft.properties.cluster_id).then(z=>map.easeTo({center:ft.geometry.coordinates,zoom:z,duration:1200})).catch(()=>{}) }
+      else { selectPhoto(ft.properties.name, ft.geometry.coordinates.slice()) }
+      return
+    }
+  }
+  if(placing){ coords[placing]=[e.lngLat.lng,e.lngLat.lat]; saveCoords(); placing=null; setBanner(); refresh(); return }
+  deselect()
 })
 
-function renderTray() {
-  tray.innerHTML = ""
-  photos.forEach((p) => {
-    const d = document.createElement("div")
-    d.className = "thumb" + (placing === p.name ? " sel" : "")
-    const img = document.createElement("img")
-    img.loading = "lazy"; img.src = urlOf(p.name)
-    d.appendChild(img)
-    if (coords[p.name]) {
-      const b = document.createElement("div"); b.className = "pin"; b.textContent = "✓"; d.appendChild(b)
-    }
-    d.title = coords[p.name] ? "Đã ghim — bấm để đặt lại vị trí" : "Bấm rồi chọn vị trí trên bản đồ"
-    d.addEventListener("click", () => { placing = p.name; setBanner(); renderTray() })
+function setBanner(){ if(placing){banner.textContent="Bấm lên bản đồ để ghim: "+placing+"  ·  (Esc huỷ)";banner.classList.add("show")} else banner.classList.remove("show") }
+addEventListener("keydown",(e)=>{ if(e.key==="Escape"){ placing=null; setBanner(); renderTray() } })
+
+function renderTray(){
+  tray.innerHTML=""
+  photos.forEach(p=>{
+    const d=document.createElement("div"); d.className="thumb"+(placing===p.name?" sel":"")
+    const img=document.createElement("img"); img.loading="lazy"; img.src=urlOf(p.name); d.appendChild(img)
+    if(coords[p.name]){ const b=document.createElement("div"); b.className="pin"; b.textContent="✓"; d.appendChild(b) }
+    d.title=coords[p.name]?"Đã ghim — bấm để đặt lại":"Bấm rồi chọn vị trí trên bản đồ"
+    d.addEventListener("click",()=>{ placing=p.name; setBanner(); renderTray() })
     tray.appendChild(d)
   })
 }
 
-// nút công cụ
-document.getElementById("terrain").addEventListener("click", (ev) => {
-  terrainOn = !terrainOn
-  map.setTerrain(terrainOn ? { source: "dem", exaggeration: 1.6 } : null)
-  if (!terrainOn) map.easeTo({ pitch: 0 })
-  ev.target.classList.toggle("on", terrainOn)
-  ev.target.textContent = "Địa hình 3D: " + (terrainOn ? "bật" : "tắt")
+document.getElementById("terrain").addEventListener("click",(ev)=>{
+  terrainOn=!terrainOn; map.setTerrain(terrainOn?{source:"dem",exaggeration:1.6}:null); if(!terrainOn) map.easeTo({pitch:0})
+  ev.target.classList.toggle("on",terrainOn)
 })
-document.getElementById("export").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(coords, null, 2)], { type: "application/json" })
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "photos.json"; a.click()
+document.getElementById("export").addEventListener("click",()=>{
+  const blob=new Blob([JSON.stringify(coords,null,2)],{type:"application/json"})
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="photos.json"; a.click()
 })
-document.getElementById("clear").addEventListener("click", () => {
-  if (confirm("Xoá tất cả ghim ảnh?")) { coords = {}; saveCoords(); renderMarkers(); renderTray() }
+document.getElementById("clear").addEventListener("click",()=>{ if(confirm("Xoá tất cả ghim ảnh?")){ coords={}; saveCoords(); deselect(); refresh() } })
+
+map.on("load",()=>{
+  map.addSource("dem",{ type:"raster-dem", tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+    encoding:"terrarium", tileSize:256, maxzoom:13, attribution:"Terrain: Tilezen / AWS Open Data (public domain)" })
+  map.setTerrain({ source:"dem", exaggeration:1.6 })
+  map.addLayer({ id:"hills", type:"hillshade", source:"dem", paint:{ "hillshade-exaggeration":0.5 } })
+  setupLayers()
 })
 
-// ---- nạp album + photos.json ----
-async function init() {
-  // photos.json baked (toạ độ cố định) nếu có
-  try {
-    const r = await fetch("photos.json", { cache: "no-store" })
-    if (r.ok) { const baked = await r.json(); coords = Object.assign({}, baked, coords) }
-  } catch (e) {}
-  try {
-    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET}`, {
-      method: "POST",
-      headers: { apikey: SUPABASE_KEY, Authorization: "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ prefix: "", limit: 200, offset: 0, sortBy: { column: "created_at", order: "desc" } }),
-    })
-    const items = await r.json()
-    photos = (Array.isArray(items) ? items : []).filter(
-      (it) => it && it.name && !it.name.startsWith("_") && IMG_RE.test(it.name) && (!it.metadata || it.metadata.size == null || it.metadata.size > 0)
-    ).map((it) => ({ name: it.name }))
-  } catch (e) {}
+async function init(){
+  try{ const r=await fetch("photos.json",{cache:"no-store"}); if(r.ok){ const b=await r.json(); coords=Object.assign({},b,coords) } }catch(e){}
+  try{
+    const r=await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET}`,{ method:"POST",
+      headers:{apikey:SUPABASE_KEY,Authorization:"Bearer "+SUPABASE_KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({prefix:"",limit:200,offset:0,sortBy:{column:"created_at",order:"desc"}}) })
+    const items=await r.json()
+    photos=(Array.isArray(items)?items:[]).filter(it=>it&&it.name&&!it.name.startsWith("_")&&IMG_RE.test(it.name)&&(!it.metadata||it.metadata.size==null||it.metadata.size>0)).map(it=>({name:it.name}))
+  }catch(e){}
   renderTray()
-  if (map.loaded()) renderMarkers(); else map.on("load", renderMarkers)
-  autoGeotag() // tự ghim ảnh có sẵn GPS trong EXIF
+  // nạp icon tròn cho từng ảnh
+  let i=0
+  await Promise.all(photos.map(async(p)=>{
+    const id="ic"+(i++)
+    const data=await makeIcon(p.name)
+    if(data){ try{ if(!map.hasImage(id)) map.addImage(id,data) }catch(e){}; iconOf[p.name]=id }
+  }))
+  if(layersReady) refresh(); else map.on("load",()=>{ if(layersReady) refresh() })
+  // tự ghim ảnh có GPS
+  await Promise.all(photos.map(async(p)=>{
+    if(coords[p.name]) return
+    try{ const b=await(await fetch(urlOf(p.name),{headers:{Range:"bytes=0-262143"}})).arrayBuffer()
+      const g=gpsFromBuffer(b); if(g) coords[p.name]=[g.lng,g.lat] }catch(e){}
+  }))
+  refresh()
 }
 init()
 </script>
