@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script type="module" src="/auth.js"></script>
 <title>VŨ ĐỨC AN — WEBGL GALLERY</title>
 <meta name="description" content="WebGL image gallery — Three.js shader distortion." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -180,18 +181,14 @@ const FRAG = `
   async function load(){
     let photos=[];
     try{
-      const r=await fetch(`${SUPABASE_URL}/storage/v1/object/list/${BUCKET}`,{
-        method:'POST',headers:{apikey:SUPABASE_KEY,Authorization:'Bearer '+SUPABASE_KEY,'Content-Type':'application/json'},
-        body:JSON.stringify({prefix:'',limit:100,offset:0,sortBy:{column:'created_at',order:'desc'}})
-      });
-      const items=await r.json();
-      photos=(Array.isArray(items)?items:[]).filter(it=>it&&it.name&&IMG_RE.test(it.name)&&(!it.metadata||it.metadata.size==null||it.metadata.size>0));
+      const al=await window.AUTH.loadAlbum();   // cần đăng nhập; ảnh qua signed URL
+      photos=al.list;
     }catch(e){}
     if(!photos.length){ loaderEl.textContent='Chưa có ảnh trong album.'; return; }
     const loader=new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
     let done=0;
     photos.forEach((p)=>{
-      const url=`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${encodeURIComponent(p.name)}`;
+      const url=p.url;
       loader.load(url,(tex)=>{
         const m=makeMesh(tex,p.name); group.add(m); meshes.push(m); layout();
         done++; if(done===1){ loaderEl.classList.add('hide'); if(!raf) raf=requestAnimationFrame(tick); }
