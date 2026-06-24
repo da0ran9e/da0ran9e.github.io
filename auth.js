@@ -8,7 +8,22 @@ const SUPABASE_KEY = "sb_publishable_U0L64ODHeuid599c6oRgvw_5fM-2D8n"
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 let resolveReady
-window.AUTH = { client: sb, url: SUPABASE_URL, ready: new Promise((r) => (resolveReady = r)) }
+window.AUTH = { client: sb, url: SUPABASE_URL, ready: new Promise((r) => (resolveReady = r)), album: { map: {}, list: [] } }
+
+// Lấy danh sách ảnh album + signed URL (chạy sau khi đã đăng nhập).
+// Trả về { list:[{name,url}], map:{name:url} }. Dùng được kể cả khi bucket private.
+window.AUTH.loadAlbum = async function (expiry = 21600) {
+  await window.AUTH.ready
+  try {
+    const { data: files } = await sb.storage.from("album").list("", { limit: 500, sortBy: { column: "created_at", order: "desc" } })
+    const names = (files || []).filter((f) => f.name && !f.name.startsWith("_") && /\.(jpe?g|png|webp|avif)$/i.test(f.name)).map((f) => f.name)
+    const { data: signed } = await sb.storage.from("album").createSignedUrls(names, expiry)
+    const map = {}, list = []
+    ;(signed || []).forEach((s) => { if (s.signedUrl) { map[s.path] = s.signedUrl; list.push({ name: s.path, url: s.signedUrl }) } })
+    window.AUTH.album = { map, list }
+  } catch (e) { /* ignore */ }
+  return window.AUTH.album
+}
 
 // ---- overlay ----
 const style = document.createElement("style")
