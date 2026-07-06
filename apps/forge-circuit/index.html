@@ -1,0 +1,1760 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forge Circuit 3D</title>
+  <link rel="icon" href="data:," />
+  <style>
+    :root {
+      --bg: #0f1214;
+      --panel: rgba(22, 25, 27, 0.78);
+      --panel-strong: rgba(13, 16, 18, 0.9);
+      --surface: rgba(255, 255, 255, 0.08);
+      --surface-strong: rgba(255, 255, 255, 0.14);
+      --line: rgba(243, 239, 226, 0.18);
+      --line-strong: rgba(243, 239, 226, 0.32);
+      --ink: #f3efe2;
+      --muted: #bab8aa;
+      --green: #67b56e;
+      --teal: #42a7a1;
+      --amber: #d79a43;
+      --rose: #d45a6c;
+      --blue: #6d8ed8;
+      --violet: #9b7bd4;
+      --shadow: 0 18px 46px rgba(0, 0, 0, 0.28);
+      --radius: 8px;
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button {
+      border: 0;
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    .game-shell {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 50% 42%, rgba(103, 181, 110, 0.14), transparent 34%),
+        linear-gradient(180deg, #171b1d 0%, #080a0b 100%);
+    }
+
+    #stage {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    #stage canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+
+    #stage canvas:active {
+      cursor: grabbing;
+    }
+
+    .topbar,
+    .left-panel,
+    .right-panel,
+    .bottom-bar,
+    .modal,
+    .toast {
+      position: absolute;
+      z-index: 2;
+      backdrop-filter: blur(16px);
+    }
+
+    .topbar {
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      min-height: 58px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(215, 154, 67, 0.42);
+      background: rgba(215, 154, 67, 0.15);
+      color: var(--amber);
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+
+    .brand-title {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.15;
+      font-weight: 830;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand-subtitle {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .segmented,
+    .top-actions,
+    .control-row,
+    .dice-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .segmented {
+      min-height: 38px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .segment-button,
+    .icon-button,
+    .text-button,
+    .primary-button,
+    .choice-button {
+      min-height: 34px;
+      border-radius: 7px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .segment-button {
+      min-width: 42px;
+      padding: 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .segment-button.is-active {
+      background: var(--surface-strong);
+      border-color: var(--line);
+      color: var(--ink);
+    }
+
+    .icon-button {
+      width: 38px;
+      border-color: var(--line);
+      background: var(--surface);
+    }
+
+    .text-button {
+      min-height: 38px;
+      padding: 0 12px;
+      border-color: var(--line);
+      background: var(--surface);
+    }
+
+    .primary-button {
+      min-height: 44px;
+      padding: 0 15px;
+      background: #d79a43;
+      border-color: rgba(255, 255, 255, 0.14);
+      color: #17110a;
+      box-shadow: 0 12px 30px rgba(215, 154, 67, 0.24);
+    }
+
+    .primary-button.secondary {
+      background: var(--teal);
+      color: #071514;
+      box-shadow: 0 12px 30px rgba(66, 167, 161, 0.2);
+    }
+
+    .primary-button:disabled,
+    .text-button:disabled,
+    .choice-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.45;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .segment-button:hover,
+    .icon-button:hover,
+    .text-button:hover,
+    .primary-button:hover,
+    .choice-button:hover {
+      transform: translateY(-1px);
+      border-color: var(--line-strong);
+    }
+
+    .icon-button svg,
+    .brand-mark svg,
+    .text-button svg,
+    .primary-button svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+      stroke-width: 2;
+    }
+
+    .left-panel,
+    .right-panel {
+      top: 88px;
+      width: 306px;
+      max-height: calc(100vh - 178px);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: grid;
+      align-content: start;
+    }
+
+    .left-panel {
+      left: 14px;
+    }
+
+    .right-panel {
+      right: 14px;
+    }
+
+    .panel-section {
+      padding: 13px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 11px;
+    }
+
+    .panel-section:last-child {
+      border-bottom: 0;
+    }
+
+    .section-title {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .turn-card {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+    }
+
+    .player-token {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.28);
+      background: var(--player-color);
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+      display: grid;
+      place-items: center;
+      color: #0b0d0f;
+      font-weight: 900;
+    }
+
+    .turn-main {
+      min-width: 0;
+    }
+
+    .turn-name {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.15;
+      font-weight: 850;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .turn-state {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .money-row,
+    .tile-stat,
+    .player-row {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .money-row {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .money-item {
+      min-width: 0;
+      display: grid;
+      gap: 3px;
+    }
+
+    .money-label,
+    .tile-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .money-value,
+    .tile-value {
+      font-size: 16px;
+      font-weight: 850;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .player-list,
+    .journal-list {
+      display: grid;
+      gap: 8px;
+      overflow: auto;
+      scrollbar-width: thin;
+    }
+
+    .player-list {
+      max-height: 220px;
+    }
+
+    .journal-list {
+      max-height: 260px;
+    }
+
+    .player-row {
+      min-height: 55px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .player-row.is-active {
+      border-color: rgba(215, 154, 67, 0.54);
+      background: rgba(215, 154, 67, 0.12);
+    }
+
+    .player-bar {
+      width: 10px;
+      height: 34px;
+      border-radius: 999px;
+      background: var(--player-color);
+    }
+
+    .row-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 820;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .row-meta {
+      margin: 3px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .row-cash {
+      font-size: 13px;
+      font-weight: 840;
+      color: var(--green);
+    }
+
+    .tile-title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      font-weight: 880;
+    }
+
+    .tile-type {
+      min-height: 24px;
+      width: fit-content;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--tile-color);
+      color: #0b0d0f;
+      display: inline-flex;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .tile-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .tile-stat {
+      min-height: 56px;
+      padding: 9px;
+      display: grid;
+      align-content: center;
+      gap: 4px;
+    }
+
+    .tile-copy,
+    .journal-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.48;
+    }
+
+    .journal-item {
+      padding: 8px 9px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .journal-copy strong {
+      color: var(--ink);
+    }
+
+    .bottom-bar {
+      left: 50%;
+      bottom: 14px;
+      transform: translateX(-50%);
+      max-width: calc(100vw - 28px);
+      min-height: 70px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-strong);
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+
+    .dice-row {
+      min-height: 50px;
+      padding: 7px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .die {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      background: #f6f0dc;
+      box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.16);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: 2px;
+      padding: 6px;
+    }
+
+    .pip {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #16191b;
+      align-self: center;
+      justify-self: center;
+    }
+
+    .dice-total {
+      min-width: 40px;
+      color: var(--ink);
+      font-size: 20px;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .modal {
+      inset: 0;
+      z-index: 5;
+      display: none;
+      place-items: center;
+      padding: 18px;
+      background: rgba(5, 7, 8, 0.5);
+    }
+
+    .modal.is-open {
+      display: grid;
+    }
+
+    .quiz-panel {
+      width: min(560px, 100%);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      background: rgba(18, 22, 24, 0.96);
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+      display: grid;
+      gap: 13px;
+      padding: 16px;
+    }
+
+    .quiz-top {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .quiz-title {
+      margin: 0;
+      color: var(--amber);
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+
+    .quiz-question {
+      margin: 6px 0 0;
+      font-size: 20px;
+      line-height: 1.25;
+      font-weight: 840;
+    }
+
+    .hint-box {
+      min-height: 38px;
+      padding: 9px 10px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(215, 154, 67, 0.28);
+      background: rgba(215, 154, 67, 0.1);
+      color: #f7d7a8;
+      font-size: 13px;
+      line-height: 1.4;
+      display: none;
+    }
+
+    .hint-box.is-visible {
+      display: block;
+    }
+
+    .choice-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .choice-button {
+      min-height: 46px;
+      width: 100%;
+      padding: 9px 11px;
+      border-color: var(--line);
+      background: rgba(255, 255, 255, 0.07);
+      justify-content: flex-start;
+      text-align: left;
+      white-space: normal;
+      line-height: 1.3;
+    }
+
+    .choice-button.is-correct {
+      background: rgba(103, 181, 110, 0.18);
+      border-color: rgba(103, 181, 110, 0.54);
+    }
+
+    .choice-button.is-wrong {
+      background: rgba(212, 90, 108, 0.16);
+      border-color: rgba(212, 90, 108, 0.52);
+    }
+
+    .quiz-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .toast {
+      left: 50%;
+      top: 86px;
+      transform: translateX(-50%);
+      width: min(520px, calc(100vw - 28px));
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-strong);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 760;
+    }
+
+    .toast.is-visible {
+      display: flex;
+    }
+
+    @media (max-width: 1120px) {
+      .right-panel {
+        display: none;
+      }
+    }
+
+    @media (max-width: 860px) {
+      html,
+      body {
+        overflow: auto;
+      }
+
+      .game-shell {
+        min-height: 100vh;
+      }
+
+      .topbar {
+        grid-template-columns: 1fr;
+        align-items: stretch;
+      }
+
+      .segmented,
+      .top-actions {
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .segmented::-webkit-scrollbar,
+      .top-actions::-webkit-scrollbar {
+        display: none;
+      }
+
+      .left-panel {
+        top: 151px;
+        left: 10px;
+        right: 10px;
+        width: auto;
+        max-height: 31vh;
+      }
+
+      .player-list {
+        max-height: 98px;
+      }
+
+      .money-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .bottom-bar {
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        transform: none;
+        align-items: stretch;
+        flex-wrap: wrap;
+      }
+
+      .control-row {
+        flex: 1 1 260px;
+        flex-wrap: wrap;
+      }
+
+      .primary-button,
+      .text-button {
+        flex: 1 1 118px;
+      }
+
+      .toast {
+        top: 186px;
+        bottom: auto;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .brand-title {
+        font-size: 15px;
+      }
+
+      .brand-subtitle {
+        max-width: 250px;
+      }
+
+      .left-panel {
+        display: none;
+      }
+
+      .bottom-bar {
+        min-height: 116px;
+      }
+
+      .dice-row {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .quiz-question {
+        font-size: 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="game-shell">
+    <div id="stage" aria-label="Forge Circuit 3D board"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 17h16" />
+            <path d="M6 17V9l4 3V9l4 3V8l4 3v6" />
+            <path d="M8 7V4h3v5" />
+            <path d="M16 8V4h2v5" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">Forge Circuit 3D</h1>
+          <p id="roundMeta" class="brand-subtitle">Vòng 1 · Hot-seat local</p>
+        </div>
+      </div>
+
+      <div class="segmented" aria-label="Số người chơi">
+        <button class="segment-button is-active" type="button" data-player-count="2">2P</button>
+        <button class="segment-button" type="button" data-player-count="3">3P</button>
+        <button class="segment-button" type="button" data-player-count="4">4P</button>
+      </div>
+
+      <div class="top-actions">
+        <a class="text-button" href="../../" aria-label="Về Portfolio">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m12 19-7-7 7-7" />
+            <path d="M19 12H5" />
+          </svg>
+          Portfolio
+        </a>
+        <button id="newGame" class="text-button" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 1 1-2.6-6.4" />
+            <path d="M21 3v6h-6" />
+          </svg>
+          New
+        </button>
+        <button id="fullscreen" class="icon-button" type="button" aria-label="Toàn màn hình">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+            <path d="M16 3h3a2 2 0 0 1 2 2v3" />
+            <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
+            <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <aside class="left-panel" aria-label="Lượt chơi">
+      <section class="panel-section">
+        <p class="section-title">Lượt hiện tại</p>
+        <div class="turn-card">
+          <div id="turnToken" class="player-token" style="--player-color: #67b56e">A</div>
+          <div class="turn-main">
+            <p id="turnName" class="turn-name">An</p>
+            <p id="turnState" class="turn-state">Sẵn sàng gieo xúc xắc.</p>
+          </div>
+        </div>
+        <div class="money-row">
+          <div class="money-item">
+            <span class="money-label">Tín dụng</span>
+            <span id="currentCash" class="money-value">1500</span>
+          </div>
+          <div class="money-item">
+            <span class="money-label">Tài sản</span>
+            <span id="currentOwned" class="money-value">0</span>
+          </div>
+          <div class="money-item">
+            <span class="money-label">Vị trí</span>
+            <span id="currentPosition" class="money-value">Start</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <p class="section-title">Người chơi</p>
+        <div id="playerList" class="player-list"></div>
+      </section>
+    </aside>
+
+    <aside class="right-panel" aria-label="Thông tin ô">
+      <section class="panel-section">
+        <p class="section-title">Ô đang đứng</p>
+        <div>
+          <p id="tileType" class="tile-type" style="--tile-color: #67b56e">Start</p>
+          <h2 id="tileName" class="tile-title">Launch Gate</h2>
+        </div>
+        <div class="tile-grid">
+          <div class="tile-stat">
+            <span class="tile-label">Giá</span>
+            <span id="tileCost" class="tile-value">-</span>
+          </div>
+          <div class="tile-stat">
+            <span class="tile-label">Thuê</span>
+            <span id="tileRent" class="tile-value">-</span>
+          </div>
+          <div class="tile-stat">
+            <span class="tile-label">Chủ sở hữu</span>
+            <span id="tileOwner" class="tile-value">-</span>
+          </div>
+          <div class="tile-stat">
+            <span class="tile-label">Nhóm</span>
+            <span id="tileGroup" class="tile-value">-</span>
+          </div>
+        </div>
+        <p id="tileBlurb" class="tile-copy">Nhận 200 tín dụng khi đi qua cổng khởi động.</p>
+      </section>
+
+      <section class="panel-section">
+        <p class="section-title">Nhật ký</p>
+        <div id="journalList" class="journal-list"></div>
+      </section>
+    </aside>
+
+    <div class="bottom-bar" aria-label="Điều khiển lượt">
+      <div class="dice-row" aria-label="Xúc xắc">
+        <div id="dieOne" class="die" aria-hidden="true"></div>
+        <div id="dieTwo" class="die" aria-hidden="true"></div>
+        <span id="diceTotal" class="dice-total">0</span>
+      </div>
+      <div class="control-row">
+        <button id="rollDice" class="primary-button" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect width="16" height="16" x="4" y="4" rx="3" />
+            <circle cx="9" cy="9" r="1" />
+            <circle cx="15" cy="15" r="1" />
+          </svg>
+          Roll
+        </button>
+        <button id="buyTile" class="primary-button secondary" type="button" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 2v20" />
+            <path d="M18 2v20" />
+            <path d="M6 7h12" />
+            <path d="M6 17h12" />
+          </svg>
+          Buy
+        </button>
+        <button id="endTurn" class="text-button" type="button" disabled>End turn</button>
+      </div>
+    </div>
+
+    <div id="quizModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="quizQuestion">
+      <div class="quiz-panel">
+        <div class="quiz-top">
+          <div>
+            <p id="quizTile" class="quiz-title">Quiz Gate</p>
+            <h2 id="quizQuestion" class="quiz-question"></h2>
+          </div>
+          <button id="hintButton" class="text-button" type="button">Hint 30</button>
+        </div>
+        <div id="hintBox" class="hint-box"></div>
+        <div id="choiceList" class="choice-list"></div>
+        <p id="quizNote" class="quiz-note"></p>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const stage = document.querySelector("#stage");
+    const roundMeta = document.querySelector("#roundMeta");
+    const turnToken = document.querySelector("#turnToken");
+    const turnName = document.querySelector("#turnName");
+    const turnState = document.querySelector("#turnState");
+    const currentCash = document.querySelector("#currentCash");
+    const currentOwned = document.querySelector("#currentOwned");
+    const currentPosition = document.querySelector("#currentPosition");
+    const playerList = document.querySelector("#playerList");
+    const tileType = document.querySelector("#tileType");
+    const tileName = document.querySelector("#tileName");
+    const tileCost = document.querySelector("#tileCost");
+    const tileRent = document.querySelector("#tileRent");
+    const tileOwner = document.querySelector("#tileOwner");
+    const tileGroup = document.querySelector("#tileGroup");
+    const tileBlurb = document.querySelector("#tileBlurb");
+    const journalList = document.querySelector("#journalList");
+    const dieOne = document.querySelector("#dieOne");
+    const dieTwo = document.querySelector("#dieTwo");
+    const diceTotal = document.querySelector("#diceTotal");
+    const rollDiceButton = document.querySelector("#rollDice");
+    const buyTileButton = document.querySelector("#buyTile");
+    const endTurnButton = document.querySelector("#endTurn");
+    const newGameButton = document.querySelector("#newGame");
+    const fullscreenButton = document.querySelector("#fullscreen");
+    const countButtons = Array.from(document.querySelectorAll("[data-player-count]"));
+    const quizModal = document.querySelector("#quizModal");
+    const quizTile = document.querySelector("#quizTile");
+    const quizQuestion = document.querySelector("#quizQuestion");
+    const choiceList = document.querySelector("#choiceList");
+    const hintButton = document.querySelector("#hintButton");
+    const hintBox = document.querySelector("#hintBox");
+    const quizNote = document.querySelector("#quizNote");
+    const toast = document.querySelector("#toast");
+
+    const playerTemplates = [
+      { id: "an", name: "An", short: "A", color: "#67b56e" },
+      { id: "binh", name: "Bình", short: "B", color: "#42a7a1" },
+      { id: "chi", name: "Chi", short: "C", color: "#d79a43" },
+      { id: "dao", name: "Đào", short: "D", color: "#d45a6c" },
+    ];
+
+    const tileThemes = {
+      start: { label: "Start", color: "#67b56e" },
+      industry: { label: "Xưởng", color: "#d79a43" },
+      transport: { label: "Vận chuyển", color: "#6d8ed8" },
+      utility: { label: "Hạ tầng", color: "#42a7a1" },
+      tax: { label: "Phí", color: "#d45a6c" },
+      card: { label: "Thẻ", color: "#9b7bd4" },
+      corner: { label: "Góc", color: "#f3efe2" },
+    };
+
+    const tiles = [
+      { id: 0, type: "start", name: "Launch Gate", group: "Core", blurb: "Nhận 200 tín dụng khi đi qua cổng khởi động." },
+      { id: 1, type: "industry", name: "Sketch Bench", group: "Design", cost: 90, rent: 18, blurb: "Một bàn phác thảo tốt giúp ý tưởng rời khỏi đầu và bước lên mặt bàn." },
+      { id: 2, type: "industry", name: "Prototype Lab", group: "Design", cost: 110, rent: 22, blurb: "Mẫu thử nhỏ cho đội chơi biết điều gì đáng giữ lại trước khi tốn tiền lớn." },
+      { id: 3, type: "card", name: "Chance Deck", group: "Event", blurb: "Rút một sự kiện của vòng sản xuất." },
+      { id: 4, type: "tax", name: "Permit Fee", group: "Civic", amount: 80, blurb: "Trả phí cấp phép để giữ dây chuyền vận hành." },
+      { id: 5, type: "transport", name: "Cargo Tram", group: "Transit", cost: 150, rent: 35, blurb: "Tuyến vận chuyển tốt biến hàng tồn thành doanh thu." },
+      { id: 6, type: "industry", name: "Print Room", group: "Media", cost: 130, rent: 26, blurb: "Nơi biến hướng dẫn, poster và nhãn sản phẩm thành vật thật." },
+      { id: 7, type: "corner", name: "Union Hall", group: "Core", blurb: "Dừng chân ngắn, lắng nghe thị trường và tiếp tục vòng sau." },
+      { id: 8, type: "industry", name: "Signal Shop", group: "Media", cost: 140, rent: 28, blurb: "Tín hiệu rõ giúp khách hàng hiểu sản phẩm trước khi họ chạm vào nó." },
+      { id: 9, type: "utility", name: "Power Grid", group: "Utility", cost: 160, rent: 38, blurb: "Không có điện ổn định, mọi kế hoạch đẹp đều đứng yên." },
+      { id: 10, type: "industry", name: "Assembly Line", group: "Build", cost: 170, rent: 34, blurb: "Quy trình lặp lại biến tay nghề cá nhân thành năng lực nhóm." },
+      { id: 11, type: "card", name: "Workshop News", group: "Event", blurb: "Tin xưởng có thể mở thêm đường hoặc làm bạn mất một lượt tiền." },
+      { id: 12, type: "industry", name: "Quality Bay", group: "Build", cost: 185, rent: 38, blurb: "Kiểm thử đều tay giúp lỗi nhỏ không thành khủng hoảng lớn." },
+      { id: 13, type: "transport", name: "Harbor Lift", group: "Transit", cost: 190, rent: 42, blurb: "Cảng nâng mở đường đưa sản phẩm ra ngoài khu xưởng." },
+      { id: 14, type: "corner", name: "Market Plaza", group: "Core", blurb: "Nơi xem đối thủ, nghe phản hồi và tính lại đường đi." },
+      { id: 15, type: "industry", name: "Data Foundry", group: "Signal", cost: 200, rent: 44, blurb: "Dữ liệu thô cần được đúc lại thành quyết định rõ ràng." },
+      { id: 16, type: "tax", name: "Maintenance", group: "Civic", amount: 90, blurb: "Bảo trì chậm thường rẻ hơn sửa hỏng vội." },
+      { id: 17, type: "industry", name: "Robot Cell", group: "Signal", cost: 220, rent: 48, blurb: "Tự động hóa tốt nhất khi nó hỗ trợ con người, không che lỗi quy trình." },
+      { id: 18, type: "utility", name: "Water Tower", group: "Utility", cost: 165, rent: 40, blurb: "Hạ tầng ổn định giữ dây chuyền không bị hụt nhịp." },
+      { id: 19, type: "card", name: "Investor Call", group: "Event", blurb: "Một cuộc gọi có thể bơm vốn hoặc kéo bạn về kế hoạch cũ." },
+      { id: 20, type: "industry", name: "Packaging Dock", group: "Launch", cost: 240, rent: 54, blurb: "Đóng gói là lời hứa cuối cùng trước khi sản phẩm rời tay bạn." },
+      { id: 21, type: "corner", name: "Audit Gate", group: "Core", blurb: "Không phạt ngay, nhưng cả xưởng biết cần làm sạch sổ sách." },
+      { id: 22, type: "transport", name: "Night Train", group: "Transit", cost: 230, rent: 50, blurb: "Chuyến đêm giúp dòng hàng đi tiếp khi thành phố nghỉ." },
+      { id: 23, type: "industry", name: "Launch Studio", group: "Launch", cost: 260, rent: 60, blurb: "Ra mắt tốt không chỉ là ồn ào, mà là đúng người, đúng lúc." },
+      { id: 24, type: "tax", name: "Safety Drill", group: "Civic", amount: 100, blurb: "Trả chi phí diễn tập để giảm rủi ro khi áp lực tăng." },
+      { id: 25, type: "industry", name: "Expo Booth", group: "Launch", cost: 280, rent: 66, blurb: "Gian trưng bày tốt giúp người lạ hiểu câu chuyện trong vài giây." },
+      { id: 26, type: "card", name: "Field Report", group: "Event", blurb: "Báo cáo thị trường thường đến vào lúc bạn tưởng mọi thứ đã chắc." },
+      { id: 27, type: "industry", name: "Patent Desk", group: "Strategy", cost: 300, rent: 74, blurb: "Bảo vệ ý tưởng đúng cách giúp đội có thời gian biến lợi thế thành sản phẩm." },
+    ];
+
+    const questions = {
+      1: [{ prompt: "Bước nào giúp giảm rủi ro trước khi xây bản lớn?", options: ["Tạo mẫu thử nhỏ", "Tăng ngân sách quảng cáo", "Mua thêm kho", "Bỏ qua phản hồi"], correct: 0, hint: "Nó thường rẻ, nhanh và chưa cần hoàn hảo.", note: "Prototype giúp kiểm chứng giả định trước khi đầu tư lớn." }],
+      2: [{ prompt: "Mục tiêu chính của prototype là gì?", options: ["Chốt toàn bộ thương hiệu", "Học nhanh từ phiên bản nhỏ", "Thay thế sản phẩm cuối", "Tăng phí vận chuyển"], correct: 1, hint: "Từ khóa là học nhanh.", note: "Prototype tốt cho phép sai sớm và sửa rẻ." }],
+      3: [{ prompt: "Khi rút thẻ sự kiện, yếu tố nào nên được xử lý trước?", options: ["Hiệu ứng lên tiền/vị trí", "Màu token", "Tên người chơi", "Kích thước màn hình"], correct: 0, hint: "Thẻ thay đổi trạng thái game.", note: "Event card nên có hiệu ứng rõ, ngắn và áp dụng ngay." }],
+      4: [{ prompt: "Phí cấp phép trong game đại diện cho điều gì?", options: ["Chi phí vận hành bắt buộc", "Quà tặng miễn phí", "Một lượt đi thêm", "Một tài sản có thể mua"], correct: 0, hint: "Nó làm giảm tiền nhưng không tạo chủ sở hữu.", note: "Tax tile là điểm điều tiết tài nguyên trong vòng chơi." }],
+      5: [{ prompt: "Tuyến vận chuyển tốt thường cải thiện điều gì?", options: ["Tốc độ đưa hàng ra thị trường", "Số mặt của xúc xắc", "Màu nền giao diện", "Tên ô Start"], correct: 0, hint: "Nó liên quan đến luồng hàng.", note: "Transport tile có giá trị vì nó kết nối sản xuất với thị trường." }],
+      6: [{ prompt: "Tài liệu in ấn tốt giúp đội ở điểm nào?", options: ["Giảm hiểu nhầm", "Tăng thuế", "Xóa hết rủi ro", "Thắng ngay lập tức"], correct: 0, hint: "Nó làm thông tin rõ hơn.", note: "Tài liệu rõ làm quy trình và truyền thông bớt lệch nhau." }],
+      8: [{ prompt: "Tín hiệu truyền thông tốt cần điều gì nhất?", options: ["Thông điệp rõ", "Nhiều màu nhất có thể", "Ẩn giá bán", "Không đo phản hồi"], correct: 0, hint: "Người xem cần hiểu nhanh.", note: "Signal tốt giúp giảm ma sát trong quyết định của khách hàng." }],
+      9: [{ prompt: "Hạ tầng điện ổn định thuộc loại tài sản nào trong game?", options: ["Utility", "Tax", "Corner", "Card"], correct: 0, hint: "Nó là nền tảng dùng chung.", note: "Utility tạo giá trị nền cho toàn hệ thống." }],
+      10: [{ prompt: "Dây chuyền lắp ráp mạnh nhất khi nào?", options: ["Các bước được chuẩn hóa", "Mỗi người làm một kiểu", "Không có kiểm tra", "Không ghi nhận lỗi"], correct: 0, hint: "Từ khóa là lặp lại nhất quán.", note: "Assembly line biến năng lực cá nhân thành năng lực quy trình." }],
+      11: [{ prompt: "Tin xưởng nên tác động vào phần nào của lượt chơi?", options: ["Một hiệu ứng ngắn", "Toàn bộ mã nguồn", "Kích thước canvas", "Tên miền"], correct: 0, hint: "Nó giống một thẻ sự kiện.", note: "Card event tốt nên dễ hiểu và không làm lượt bị rối." }],
+      12: [{ prompt: "Quality Bay giúp phát hiện điều gì?", options: ["Lỗi trước khi giao", "Chủ sở hữu ô Start", "Số người đang xem", "Độ sáng màn hình"], correct: 0, hint: "Nó nằm trước khi hàng rời xưởng.", note: "Kiểm thử sớm giảm chi phí sửa lỗi muộn." }],
+      13: [{ prompt: "Harbor Lift trong game thuộc nhóm nào?", options: ["Transit", "Utility", "Civic", "Design"], correct: 0, hint: "Nó di chuyển hàng.", note: "Transit tiles tạo nhịp vận chuyển và dòng tiền thuê." }],
+      15: [{ prompt: "Dữ liệu thô cần bước nào để thành quyết định?", options: ["Tổ chức và diễn giải", "Giấu đi", "In thật to", "Đổi tên người chơi"], correct: 0, hint: "Dữ liệu cần ngữ cảnh.", note: "Data Foundry tượng trưng cho việc biến tín hiệu rời rạc thành hành động." }],
+      16: [{ prompt: "Bảo trì định kỳ trong game là loại chi phí nào?", options: ["Tax/fee", "Tài sản mua được", "Thẻ bài", "Ô nghỉ"], correct: 0, hint: "Nó trừ tiền và không đổi chủ.", note: "Maintenance nhắc người chơi quản lý dòng tiền." }],
+      17: [{ prompt: "Tự động hóa hữu ích nhất khi nó làm gì?", options: ["Hỗ trợ quy trình rõ", "Che lỗi hệ thống", "Loại bỏ kiểm thử", "Tăng may rủi"], correct: 0, hint: "Robot tốt cần quy trình tốt.", note: "Automation khuếch đại quy trình, cả điểm mạnh lẫn điểm yếu." }],
+      18: [{ prompt: "Water Tower được xếp vào nhóm nào?", options: ["Utility", "Transit", "Launch", "Card"], correct: 0, hint: "Nó là hạ tầng dùng chung.", note: "Utility làm board có thêm dạng tài sản khác ngoài xưởng." }],
+      19: [{ prompt: "Một cuộc gọi đầu tư thường tác động trực tiếp vào gì?", options: ["Nguồn vốn hoặc kế hoạch", "Số cạnh của board", "Tên miền deploy", "Màu của xúc xắc"], correct: 0, hint: "Nó liên quan đến tiền hoặc hướng đi.", note: "Investor event tạo biến động tài nguyên." }],
+      20: [{ prompt: "Đóng gói tốt tác động đến trải nghiệm nào?", options: ["Ấn tượng cuối trước giao hàng", "Số lượt quiz", "Tốc độ render", "Quyền sở hữu Start"], correct: 0, hint: "Nó xảy ra ngay trước khi rời xưởng.", note: "Packaging là một phần của lời hứa sản phẩm." }],
+      22: [{ prompt: "Night Train có vai trò tương tự ô nào?", options: ["Transport", "Tax", "Start", "Corner"], correct: 0, hint: "Nó là tuyến di chuyển.", note: "Transport đem lại mạng lưới và rent ổn định." }],
+      23: [{ prompt: "Ra mắt sản phẩm tốt cần điều gì?", options: ["Đúng người và đúng thời điểm", "Chỉ cần âm lượng lớn", "Ẩn thông tin giá trị", "Không đo phản hồi"], correct: 0, hint: "Không chỉ là gây chú ý.", note: "Launch là phối hợp giữa thông điệp, kênh và thời điểm." }],
+      24: [{ prompt: "Safety Drill giúp đội giảm điều gì?", options: ["Rủi ro vận hành", "Số người chơi", "Kích thước board", "Tất cả phí thuê"], correct: 0, hint: "Nó là chuẩn bị trước sự cố.", note: "Safety cost tạo áp lực tiền nhưng hợp lý trong mô phỏng xưởng." }],
+      25: [{ prompt: "Expo Booth tốt nhất khi người xem có thể làm gì?", options: ["Hiểu giá trị nhanh", "Đoán luật từ đầu", "Tránh tương tác", "Không thấy sản phẩm"], correct: 0, hint: "Gian trưng bày có ít thời gian để thuyết phục.", note: "Expo là nơi kể chuyện sản phẩm bằng hình ảnh và bố cục." }],
+      26: [{ prompt: "Field Report thường chứa loại tín hiệu nào?", options: ["Phản hồi thị trường", "Mã bí mật của trình duyệt", "Số mặt xúc xắc mới", "Quyền miễn phí mọi ô"], correct: 0, hint: "Nó đến từ bên ngoài xưởng.", note: "Báo cáo thực địa giúp game có biến động như thị trường thật." }],
+      27: [{ prompt: "Patent Desk tượng trưng cho việc gì?", options: ["Bảo vệ lợi thế sáng tạo", "Tăng phí bảo trì", "Đổi vị trí Start", "Bỏ qua quiz"], correct: 0, hint: "Nó liên quan đến lợi thế và thời gian.", note: "Chiến lược sở hữu trí tuệ giúp đội giữ không gian để phát triển." }],
+    };
+
+    const cards = [
+      { title: "Đơn đặt hàng nhỏ", text: "Nhận 120 tín dụng.", kind: "cash", amount: 120 },
+      { title: "Lỗi khuôn mẫu", text: "Trả 70 tín dụng để sửa lô thử.", kind: "cash", amount: -70 },
+      { title: "Mentor ghé xưởng", text: "Nhận 60 tín dụng nhờ tối ưu quy trình.", kind: "cash", amount: 60 },
+      { title: "Giao hàng trễ", text: "Trả 50 tín dụng phí bù lịch.", kind: "cash", amount: -50 },
+      { title: "Demo thành công", text: "Di chuyển tới Launch Gate và nhận 200 tín dụng.", kind: "start" },
+      { title: "Khách hàng thử sớm", text: "Tiến thêm 3 ô.", kind: "move", amount: 3 },
+    ];
+
+    const game = {
+      playerCount: 2,
+      players: [],
+      currentIndex: 0,
+      round: 1,
+      phase: "ready",
+      owners: {},
+      dice: [0, 0],
+      pendingRoll: 0,
+      pendingQuestion: null,
+      hintUsed: false,
+      journal: [],
+      cardIndex: 0,
+    };
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f1214);
+    scene.fog = new THREE.FogExp2(0x0f1214, 0.035);
+
+    const camera = new THREE.PerspectiveCamera(47, window.innerWidth / window.innerHeight, 0.05, 120);
+    camera.position.set(9.8, 9.2, 11.4);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    stage.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.minDistance = 6;
+    controls.maxDistance = 28;
+    controls.maxPolarAngle = Math.PI * 0.48;
+    controls.target.set(0, 0.35, 0);
+
+    const boardGroup = new THREE.Group();
+    const tokenGroup = new THREE.Group();
+    const ownershipGroup = new THREE.Group();
+    scene.add(boardGroup, tokenGroup, ownershipGroup);
+
+    const hemi = new THREE.HemisphereLight(0xdfe9ff, 0x221b15, 1.8);
+    scene.add(hemi);
+
+    const keyLight = new THREE.DirectionalLight(0xffebc2, 3.1);
+    keyLight.position.set(9, 14, 7);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.left = -16;
+    keyLight.shadow.camera.right = 16;
+    keyLight.shadow.camera.top = 16;
+    keyLight.shadow.camera.bottom = -16;
+    scene.add(keyLight);
+
+    const tealLight = new THREE.PointLight(0x42a7a1, 24, 32);
+    tealLight.position.set(-7, 4, -7);
+    scene.add(tealLight);
+
+    const tileMeshes = [];
+    const tilePositions = [];
+    const tokenMeshes = [];
+    const clock = new THREE.Clock();
+    let toastTimer = 0;
+
+    function currency(value) {
+      return `${Math.round(value)} cr`;
+    }
+
+    function currentPlayer() {
+      return game.players[game.currentIndex];
+    }
+
+    function currentTile(player = currentPlayer()) {
+      return tiles[player.position];
+    }
+
+    function ownerName(tile) {
+      const ownerId = game.owners[tile.id];
+      const owner = game.players.find((player) => player.id === ownerId);
+      return owner ? owner.name : "-";
+    }
+
+    function isBuyable(tile) {
+      return ["industry", "transport", "utility"].includes(tile.type);
+    }
+
+    function tileQuestion(tile) {
+      const bucket = questions[tile.id];
+      if (!bucket || bucket.length === 0) return null;
+      return bucket[(game.round + game.currentIndex) % bucket.length];
+    }
+
+    function addJournal(text) {
+      game.journal.unshift(text);
+      game.journal = game.journal.slice(0, 10);
+    }
+
+    function showToast(text) {
+      toast.textContent = text;
+      toast.classList.add("is-visible");
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2300);
+    }
+
+    function setDiceFace(element, value) {
+      const spots = {
+        0: [],
+        1: [5],
+        2: [1, 9],
+        3: [1, 5, 9],
+        4: [1, 3, 7, 9],
+        5: [1, 3, 5, 7, 9],
+        6: [1, 3, 4, 6, 7, 9],
+      };
+      element.innerHTML = "";
+      const active = new Set(spots[value] || []);
+      for (let index = 1; index <= 9; index += 1) {
+        const pip = document.createElement("span");
+        if (active.has(index)) {
+          pip.className = "pip";
+        }
+        element.appendChild(pip);
+      }
+    }
+
+    function createTileTexture(tile) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 220;
+      const context = canvas.getContext("2d");
+      const theme = tileThemes[tile.type];
+
+      context.fillStyle = "#f3efe2";
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = theme.color;
+      context.fillRect(0, 0, canvas.width, 42);
+      context.fillStyle = "#111416";
+      context.font = "900 24px Inter, Arial, sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "middle";
+      context.fillText(theme.label.toUpperCase(), canvas.width / 2, 22);
+
+      context.fillStyle = "#181b1d";
+      context.font = "850 31px Inter, Arial, sans-serif";
+      wrapCanvasText(context, tile.name, canvas.width / 2, 95, 270, 34);
+
+      context.fillStyle = "#54524a";
+      context.font = "760 22px Inter, Arial, sans-serif";
+      const detail = isBuyable(tile) ? `${tile.cost} cr · ${tile.rent} rent` : tile.group;
+      context.fillText(detail, canvas.width / 2, 176);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+      return texture;
+    }
+
+    function wrapCanvasText(context, text, x, y, maxWidth, lineHeight) {
+      const words = text.split(" ");
+      let line = "";
+      let lineIndex = 0;
+      words.forEach((word, index) => {
+        const test = line ? `${line} ${word}` : word;
+        if (context.measureText(test).width > maxWidth && line) {
+          context.fillText(line, x, y + lineIndex * lineHeight);
+          line = word;
+          lineIndex += 1;
+          return;
+        }
+        line = test;
+        if (index === words.length - 1) {
+          context.fillText(line, x, y + lineIndex * lineHeight);
+        }
+      });
+    }
+
+    function boardPosition(index) {
+      const side = 8;
+      const spacing = 1.42;
+      const half = (side - 1) / 2;
+      let x = half;
+      let z = half;
+
+      if (index < side) {
+        x = half - index;
+        z = half;
+      } else if (index < side + side - 1) {
+        x = -half;
+        z = half - (index - side + 1);
+      } else if (index < side * 2 + side - 2) {
+        x = -half + (index - (side + side - 1) + 1);
+        z = -half;
+      } else {
+        x = half;
+        z = -half + (index - (side * 2 + side - 2) + 1);
+      }
+
+      return new THREE.Vector3(x * spacing, 0, z * spacing);
+    }
+
+    function buildBoard() {
+      const base = new THREE.Mesh(
+        new THREE.BoxGeometry(12.5, 0.18, 12.5),
+        new THREE.MeshStandardMaterial({ color: 0x191d1c, roughness: 0.78, metalness: 0.08 })
+      );
+      base.position.y = -0.13;
+      base.receiveShadow = true;
+      boardGroup.add(base);
+
+      const centerTexture = createCenterTexture();
+      const center = new THREE.Mesh(
+        new THREE.PlaneGeometry(5.8, 5.8),
+        new THREE.MeshStandardMaterial({ map: centerTexture, roughness: 0.72, metalness: 0.04 })
+      );
+      center.rotation.x = -Math.PI / 2;
+      center.position.y = 0.01;
+      center.receiveShadow = true;
+      boardGroup.add(center);
+
+      const ring = new THREE.GridHelper(12.5, 14, 0x38413d, 0x242b28);
+      ring.position.y = 0.02;
+      boardGroup.add(ring);
+
+      tiles.forEach((tile) => {
+        const position = boardPosition(tile.id);
+        tilePositions[tile.id] = position;
+        const theme = tileThemes[tile.type];
+
+        const tileMesh = new THREE.Mesh(
+          new THREE.BoxGeometry(1.26, 0.2, 1.26),
+          new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.color), roughness: 0.62, metalness: 0.05 })
+        );
+        tileMesh.position.copy(position);
+        tileMesh.position.y = 0.05;
+        tileMesh.castShadow = true;
+        tileMesh.receiveShadow = true;
+        tileMesh.userData.tileId = tile.id;
+        boardGroup.add(tileMesh);
+        tileMeshes[tile.id] = tileMesh;
+
+        const label = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.08, 0.78),
+          new THREE.MeshBasicMaterial({ map: createTileTexture(tile), transparent: true })
+        );
+        label.rotation.x = -Math.PI / 2;
+        label.position.copy(position);
+        label.position.y = 0.165;
+        label.userData.tileId = tile.id;
+        boardGroup.add(label);
+      });
+    }
+
+    function createCenterTexture() {
+      const canvas = document.createElement("canvas");
+      canvas.width = 640;
+      canvas.height = 640;
+      const context = canvas.getContext("2d");
+      context.fillStyle = "#202523";
+      context.fillRect(0, 0, 640, 640);
+      context.strokeStyle = "#d79a43";
+      context.lineWidth = 12;
+      context.strokeRect(42, 42, 556, 556);
+      context.strokeStyle = "#42a7a1";
+      context.lineWidth = 4;
+      context.strokeRect(78, 78, 484, 484);
+      context.fillStyle = "#f3efe2";
+      context.font = "900 72px Inter, Arial, sans-serif";
+      context.textAlign = "center";
+      context.fillText("FORGE", 320, 270);
+      context.fillText("CIRCUIT", 320, 350);
+      context.fillStyle = "#bab8aa";
+      context.font = "760 30px Inter, Arial, sans-serif";
+      context.fillText("QUIZ · BUILD · TRADE", 320, 418);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+      return texture;
+    }
+
+    function buildTokens() {
+      tokenGroup.clear();
+      tokenMeshes.length = 0;
+      playerTemplates.forEach((template, index) => {
+        const root = new THREE.Group();
+        const material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(template.color),
+          roughness: 0.48,
+          metalness: 0.18,
+        });
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.25, 0.22, 28), material);
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(0.2, 28, 18), material);
+        cap.position.y = 0.23;
+        root.add(base, cap);
+        root.visible = index < game.playerCount;
+        root.position.copy(tokenPosition(0, index));
+        root.userData.target = root.position.clone();
+        tokenGroup.add(root);
+        tokenMeshes.push(root);
+      });
+    }
+
+    function tokenPosition(tileIndex, playerIndex) {
+      const offsets = [
+        [-0.28, -0.28],
+        [0.28, -0.28],
+        [-0.28, 0.28],
+        [0.28, 0.28],
+      ];
+      const base = tilePositions[tileIndex] || new THREE.Vector3();
+      const [xOffset, zOffset] = offsets[playerIndex] || [0, 0];
+      return new THREE.Vector3(base.x + xOffset, 0.42, base.z + zOffset);
+    }
+
+    function renderOwnership() {
+      ownershipGroup.clear();
+      Object.entries(game.owners).forEach(([tileId, playerId]) => {
+        const tile = tiles[Number(tileId)];
+        const ownerIndex = game.players.findIndex((player) => player.id === playerId);
+        if (!tile || ownerIndex < 0) return;
+        const player = game.players[ownerIndex];
+        const position = tilePositions[tile.id];
+        const material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(player.color),
+          roughness: 0.5,
+          metalness: 0.12,
+        });
+        const tower = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.52, 0.24), material);
+        tower.position.set(position.x, 0.46, position.z);
+        tower.castShadow = true;
+        ownershipGroup.add(tower);
+      });
+    }
+
+    function updateTokenTargets() {
+      tokenMeshes.forEach((token, index) => {
+        token.visible = index < game.playerCount;
+        const player = game.players[index];
+        if (!player) return;
+        token.userData.target = tokenPosition(player.position, index);
+      });
+    }
+
+    function createPlayers(count) {
+      return playerTemplates.slice(0, count).map((template) => ({
+        ...template,
+        cash: 1500,
+        position: 0,
+        owned: 0,
+      }));
+    }
+
+    function newGame(count = game.playerCount) {
+      game.playerCount = count;
+      game.players = createPlayers(count);
+      game.currentIndex = 0;
+      game.round = 1;
+      game.phase = "ready";
+      game.owners = {};
+      game.dice = [0, 0];
+      game.pendingRoll = 0;
+      game.pendingQuestion = null;
+      game.hintUsed = false;
+      game.journal = ["Bắt đầu vòng sản xuất mới."];
+      game.cardIndex = Math.floor(Math.random() * cards.length);
+      countButtons.forEach((button) => {
+        button.classList.toggle("is-active", Number(button.dataset.playerCount) === count);
+      });
+      setDiceFace(dieOne, 0);
+      setDiceFace(dieTwo, 0);
+      quizModal.classList.remove("is-open");
+      updateTokenTargets();
+      renderOwnership();
+      render();
+      showToast(`${count} người chơi đã vào bàn.`);
+    }
+
+    function rollDice() {
+      if (game.phase !== "ready") return;
+      const first = Math.floor(Math.random() * 6) + 1;
+      const second = Math.floor(Math.random() * 6) + 1;
+      game.dice = [first, second];
+      game.pendingRoll = first + second;
+      setDiceFace(dieOne, first);
+      setDiceFace(dieTwo, second);
+
+      const player = currentPlayer();
+      const tile = currentTile(player);
+      const question = tileQuestion(tile);
+      addJournal(`<strong>${player.name}</strong> gieo ${game.pendingRoll}.`);
+
+      if (question) {
+        game.phase = "quiz";
+        game.pendingQuestion = { tile, question };
+        game.hintUsed = false;
+        showQuiz(tile, question);
+      } else {
+        moveCurrentPlayer(game.pendingRoll);
+      }
+      render();
+    }
+
+    function showQuiz(tile, question) {
+      quizTile.textContent = `${tile.name} · Quiz Gate`;
+      quizQuestion.textContent = question.prompt;
+      hintBox.textContent = question.hint;
+      hintBox.classList.remove("is-visible");
+      hintButton.disabled = false;
+      quizNote.textContent = "";
+      choiceList.innerHTML = "";
+      question.options.forEach((option, index) => {
+        const button = document.createElement("button");
+        button.className = "choice-button";
+        button.type = "button";
+        button.textContent = option;
+        button.addEventListener("click", () => answerQuiz(index));
+        choiceList.appendChild(button);
+      });
+      quizModal.classList.add("is-open");
+    }
+
+    function useHint() {
+      if (!game.pendingQuestion || game.hintUsed) return;
+      const player = currentPlayer();
+      if (player.cash >= 30) {
+        player.cash -= 30;
+        addJournal(`<strong>${player.name}</strong> mua hint với 30 cr.`);
+      }
+      game.hintUsed = true;
+      hintBox.classList.add("is-visible");
+      hintButton.disabled = true;
+      render();
+    }
+
+    function answerQuiz(index) {
+      if (game.phase !== "quiz" || !game.pendingQuestion) return;
+      const { question } = game.pendingQuestion;
+      const player = currentPlayer();
+      const buttons = Array.from(choiceList.querySelectorAll(".choice-button"));
+      buttons.forEach((button, buttonIndex) => {
+        button.disabled = true;
+        button.classList.toggle("is-correct", buttonIndex === question.correct);
+        button.classList.toggle("is-wrong", buttonIndex === index && index !== question.correct);
+      });
+
+      if (index === question.correct) {
+        quizNote.textContent = question.note;
+        addJournal(`<strong>${player.name}</strong> trả lời đúng và được đi ${game.pendingRoll} ô.`);
+        window.setTimeout(() => {
+          quizModal.classList.remove("is-open");
+          moveCurrentPlayer(game.pendingRoll);
+          render();
+        }, 820);
+      } else {
+        quizNote.textContent = question.note;
+        addJournal(`<strong>${player.name}</strong> trả lời sai và mất lượt di chuyển.`);
+        game.phase = "ended";
+        game.pendingRoll = 0;
+        window.setTimeout(() => {
+          quizModal.classList.remove("is-open");
+          render();
+        }, 1100);
+      }
+      game.pendingQuestion = null;
+      render();
+    }
+
+    function moveCurrentPlayer(steps) {
+      const player = currentPlayer();
+      const oldPosition = player.position;
+      const nextPosition = (player.position + steps) % tiles.length;
+      if (oldPosition + steps >= tiles.length) {
+        player.cash += 200;
+        addJournal(`<strong>${player.name}</strong> đi qua Launch Gate và nhận 200 cr.`);
+      }
+      player.position = nextPosition;
+      game.pendingRoll = 0;
+      updateTokenTargets();
+      resolveLanding();
+    }
+
+    function resolveLanding() {
+      const player = currentPlayer();
+      const tile = currentTile(player);
+      const ownerId = game.owners[tile.id];
+
+      if (tile.type === "tax") {
+        player.cash -= tile.amount;
+        addJournal(`<strong>${player.name}</strong> trả ${currency(tile.amount)} tại ${tile.name}.`);
+        game.phase = "ended";
+        render();
+        return;
+      }
+
+      if (tile.type === "card") {
+        drawCard(player);
+        game.phase = "ended";
+        render();
+        return;
+      }
+
+      if (isBuyable(tile)) {
+        if (!ownerId) {
+          game.phase = "landed";
+          addJournal(`<strong>${player.name}</strong> tới ${tile.name}, có thể mua với ${currency(tile.cost)}.`);
+          render();
+          return;
+        }
+        if (ownerId !== player.id) {
+          const owner = game.players.find((entry) => entry.id === ownerId);
+          const rent = tile.rent;
+          player.cash -= rent;
+          owner.cash += rent;
+          addJournal(`<strong>${player.name}</strong> trả ${currency(rent)} thuê cho <strong>${owner.name}</strong>.`);
+        } else {
+          addJournal(`<strong>${player.name}</strong> ghé tài sản của mình tại ${tile.name}.`);
+        }
+      } else {
+        addJournal(`<strong>${player.name}</strong> dừng tại ${tile.name}.`);
+      }
+
+      game.phase = "ended";
+      render();
+    }
+
+    function drawCard(player) {
+      const card = cards[game.cardIndex % cards.length];
+      game.cardIndex += 1;
+      if (card.kind === "cash") {
+        player.cash += card.amount;
+      }
+      if (card.kind === "start") {
+        player.position = 0;
+        player.cash += 200;
+        updateTokenTargets();
+      }
+      if (card.kind === "move") {
+        player.position = (player.position + card.amount) % tiles.length;
+        updateTokenTargets();
+      }
+      addJournal(`<strong>${player.name}</strong> rút "${card.title}": ${card.text}`);
+      showToast(card.text);
+    }
+
+    function buyTile() {
+      const player = currentPlayer();
+      const tile = currentTile(player);
+      if (game.phase !== "landed" || !isBuyable(tile) || game.owners[tile.id]) return;
+      if (player.cash < tile.cost) {
+        showToast("Không đủ tín dụng để mua ô này.");
+        return;
+      }
+      player.cash -= tile.cost;
+      player.owned += 1;
+      game.owners[tile.id] = player.id;
+      game.phase = "ended";
+      addJournal(`<strong>${player.name}</strong> mua ${tile.name} với ${currency(tile.cost)}.`);
+      renderOwnership();
+      render();
+    }
+
+    function endTurn() {
+      if (game.phase === "quiz") return;
+      game.currentIndex += 1;
+      if (game.currentIndex >= game.players.length) {
+        game.currentIndex = 0;
+        game.round += 1;
+      }
+      game.phase = "ready";
+      game.pendingRoll = 0;
+      game.pendingQuestion = null;
+      game.hintUsed = false;
+      addJournal(`Tới lượt <strong>${currentPlayer().name}</strong>.`);
+      render();
+    }
+
+    function render() {
+      const player = currentPlayer();
+      const tile = currentTile(player);
+      const theme = tileThemes[tile.type];
+      const buyAvailable = game.phase === "landed" && isBuyable(tile) && !game.owners[tile.id] && player.cash >= tile.cost;
+      const canEnd = game.phase === "landed" || game.phase === "ended";
+
+      roundMeta.textContent = `Vòng ${game.round} · Hot-seat local`;
+      turnToken.textContent = player.short;
+      turnToken.style.setProperty("--player-color", player.color);
+      turnName.textContent = player.name;
+      currentCash.textContent = currency(player.cash);
+      currentOwned.textContent = String(player.owned);
+      currentPosition.textContent = tile.name;
+      turnState.textContent = phaseText();
+
+      tileType.textContent = theme.label;
+      tileType.style.setProperty("--tile-color", theme.color);
+      tileName.textContent = tile.name;
+      tileCost.textContent = isBuyable(tile) ? currency(tile.cost) : "-";
+      tileRent.textContent = isBuyable(tile) ? currency(tile.rent) : tile.type === "tax" ? currency(tile.amount) : "-";
+      tileOwner.textContent = isBuyable(tile) ? ownerName(tile) : "-";
+      tileGroup.textContent = tile.group;
+      tileBlurb.textContent = tile.blurb;
+
+      diceTotal.textContent = String(game.dice[0] + game.dice[1]);
+      rollDiceButton.disabled = game.phase !== "ready";
+      buyTileButton.disabled = !buyAvailable;
+      endTurnButton.disabled = !canEnd;
+
+      renderPlayers();
+      renderJournal();
+      updateTokenTargets();
+    }
+
+    function phaseText() {
+      const player = currentPlayer();
+      const tile = currentTile(player);
+      if (game.phase === "ready") {
+        return `Đang đứng tại ${tile.name}.`;
+      }
+      if (game.phase === "quiz") {
+        return "Đang trả lời quiz trước khi di chuyển.";
+      }
+      if (game.phase === "landed") {
+        return `Có thể mua ${tile.name} hoặc kết thúc lượt.`;
+      }
+      return `${player.name} đã xong lượt.`;
+    }
+
+    function renderPlayers() {
+      playerList.innerHTML = "";
+      game.players.forEach((player, index) => {
+        const tile = tiles[player.position];
+        const row = document.createElement("div");
+        row.className = `player-row${index === game.currentIndex ? " is-active" : ""}`;
+        row.innerHTML = `
+          <span class="player-bar" style="--player-color: ${player.color}"></span>
+          <div class="turn-main">
+            <p class="row-title">${player.name}</p>
+            <p class="row-meta">${tile.name} · ${player.owned} tài sản</p>
+          </div>
+          <span class="row-cash">${currency(player.cash)}</span>
+        `;
+        playerList.appendChild(row);
+      });
+    }
+
+    function renderJournal() {
+      journalList.innerHTML = "";
+      game.journal.forEach((entry) => {
+        const item = document.createElement("div");
+        item.className = "journal-item";
+        item.innerHTML = `<p class="journal-copy">${entry}</p>`;
+        journalList.appendChild(item);
+      });
+    }
+
+    rollDiceButton.addEventListener("click", rollDice);
+    buyTileButton.addEventListener("click", buyTile);
+    endTurnButton.addEventListener("click", endTurn);
+    hintButton.addEventListener("click", useHint);
+    newGameButton.addEventListener("click", () => newGame(game.playerCount));
+
+    countButtons.forEach((button) => {
+      button.addEventListener("click", () => newGame(Number(button.dataset.playerCount)));
+    });
+
+    fullscreenButton.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.();
+      } else {
+        document.exitFullscreen?.();
+      }
+    });
+
+    function resize() {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    }
+
+    window.addEventListener("resize", resize);
+
+    function animate() {
+      const delta = clock.getDelta();
+      tokenMeshes.forEach((token, index) => {
+        if (!token.visible) return;
+        token.position.lerp(token.userData.target, Math.min(1, delta * 8));
+        token.rotation.y += delta * (0.8 + index * 0.18);
+      });
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    buildBoard();
+    buildTokens();
+    newGame(2);
+    animate();
+  </script>
+</body>
+</html>
