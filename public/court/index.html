@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VŨ ĐỨC AN — BASKETBALL COURT</title>
+<meta name="description" content="Sân bóng rổ 3D dựng bằng Three.js (GLB game-ready)." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{ --ink:#0c0c0c; --paper:#f3f1ea; --accent:#e8732b; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:'Inter',Helvetica,Arial,sans-serif;overflow:hidden;-webkit-font-smoothing:antialiased;
+    background:linear-gradient(180deg,#bfe0f2 0%,#dcecef 42%,#efe7d8 100%);color:var(--ink)}
+  #gl{position:fixed;inset:0;display:block;cursor:grab}
+  #gl:active{cursor:grabbing}
+
+  .ui{position:fixed;inset:0;z-index:5;pointer-events:none}
+  .top{position:absolute;top:24px;left:28px;right:28px;display:flex;justify-content:space-between;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+  .top .r{color:var(--accent)}
+  a.back{position:absolute;left:28px;top:46px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#5b5b5b;text-decoration:none;pointer-events:auto}
+  a.back:hover{color:var(--ink)}
+  .title{position:absolute;left:28px;bottom:74px;font-weight:900;letter-spacing:-.03em;line-height:.88;
+    font-size:clamp(34px,7vw,86px);text-transform:uppercase}
+  .sub{position:absolute;left:30px;bottom:50px;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#5b5b5b}
+  .hint{position:absolute;right:28px;bottom:50px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#5b5b5b;text-align:right}
+
+  .panel{position:absolute;right:28px;bottom:80px;display:flex;gap:10px;pointer-events:auto}
+  button{pointer-events:auto;font-family:inherit;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    font-size:12px;padding:12px 18px;border:1px solid rgba(0,0,0,.18);background:rgba(255,255,255,.6);color:var(--ink);
+    cursor:pointer;border-radius:999px;transition:.18s;backdrop-filter:blur(6px)}
+  button:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+  .loader{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;gap:14px;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,#bfe0f2,#efe7d8);transition:opacity .6s}
+  .loader.hide{opacity:0;pointer-events:none}
+  .loader .lbl{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:#5b5b5b}
+  .bar{width:220px;height:3px;background:rgba(0,0,0,.12);border-radius:2px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="ui">
+  <div class="top"><span>Vũ Đức An · Lab</span><span class="r">Three.js · glTF</span></div>
+  <a class="back" href="/#apps">← apps</a>
+  <h1 class="title">Basketball<br>Court</h1>
+  <div class="sub">Mô hình glTF game-ready · dựng cảnh real-time</div>
+  <div class="hint">Kéo để xoay · cuộn để zoom</div>
+</div>
+
+<div class="panel">
+  <button id="rotate" class="on">Tự xoay: bật</button>
+  <button id="reset">Về giữa</button>
+</div>
+
+<div class="loader" id="loader">
+  <div class="lbl" id="lbl">Đang tải mô hình… 0%</div>
+  <div class="bar"><i id="barfill"></i></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from "three"
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js"
+import { OrbitControls } from "three/addons/controls/OrbitControls.js"
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js"
+
+const canvas = document.getElementById("gl")
+const loaderEl = document.getElementById("loader")
+const lbl = document.getElementById("lbl")
+const barfill = document.getElementById("barfill")
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+renderer.setSize(innerWidth, innerHeight)
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.0
+renderer.outputColorSpace = THREE.SRGBColorSpace
+
+const scene = new THREE.Scene()
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 2000)
+camera.position.set(8, 6, 10)
+
+// môi trường phản chiếu (PBR)
+const pmrem = new THREE.PMREMGenerator(renderer)
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
+
+// ánh sáng
+const hemi = new THREE.HemisphereLight(0xffffff, 0x9aa7b0, 0.7)
+scene.add(hemi)
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.6)
+sun.position.set(12, 18, 8)
+sun.castShadow = true
+sun.shadow.mapSize.set(2048, 2048)
+sun.shadow.bias = -0.0002
+scene.add(sun)
+
+const controls = new OrbitControls(camera, canvas)
+controls.enableDamping = true
+controls.dampingFactor = 0.07
+controls.autoRotate = true
+controls.autoRotateSpeed = 0.7
+controls.maxPolarAngle = Math.PI / 2.05
+controls.minDistance = 3
+
+// mặt nhận bóng mềm dưới sân
+const shadowMat = new THREE.ShadowMaterial({ opacity: 0.28 })
+const shadowPlane = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), shadowMat)
+shadowPlane.rotation.x = -Math.PI / 2
+shadowPlane.receiveShadow = true
+scene.add(shadowPlane)
+
+let model = null
+const home = { pos: new THREE.Vector3(8, 6, 10), target: new THREE.Vector3(0, 0, 0) }
+const loader = new GLTFLoader()
+loader.load(
+  "BasketBall_Court.glb",
+  (gltf) => {
+    model = gltf.scene
+    model.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true
+        o.receiveShadow = true
+        if (o.material && "envMapIntensity" in o.material) o.material.envMapIntensity = 1.0
+      }
+    })
+    // căn giữa + đặt lên mặt đất
+    const box = new THREE.Box3().setFromObject(model)
+    const size = box.getSize(new THREE.Vector3())
+    const center = box.getCenter(new THREE.Vector3())
+    model.position.x += -center.x
+    model.position.z += -center.z
+    model.position.y += -box.min.y
+    scene.add(model)
+
+    shadowPlane.position.y = 0.001
+
+    // khung hình camera theo kích thước sân
+    const maxd = Math.max(size.x, size.z)
+    const h = size.y
+    controls.target.set(0, h * 0.35, 0)
+    camera.position.set(maxd * 0.65, Math.max(h * 1.1, maxd * 0.5), maxd * 0.85)
+    home.pos.copy(camera.position)
+    home.target.copy(controls.target)
+    camera.near = maxd / 100
+    camera.far = maxd * 12
+    camera.updateProjectionMatrix()
+
+    // bóng đổ phủ vừa sân
+    const d = maxd * 0.9
+    const sc = sun.shadow.camera
+    sc.left = -d; sc.right = d; sc.top = d; sc.bottom = -d
+    sc.near = 1; sc.far = maxd * 6
+    sun.position.set(maxd * 0.6, maxd * 1.1, maxd * 0.5)
+    sc.updateProjectionMatrix()
+
+    loaderEl.classList.add("hide")
+  },
+  (e) => {
+    if (e.total) {
+      const pct = Math.round((e.loaded / e.total) * 100)
+      lbl.textContent = "Đang tải mô hình… " + pct + "%"
+      barfill.style.width = pct + "%"
+    } else {
+      lbl.textContent = "Đang tải mô hình… " + Math.round(e.loaded / 1048576) + "MB"
+    }
+  },
+  (err) => {
+    lbl.textContent = "Lỗi tải mô hình."
+    console.error(err)
+  }
+)
+
+// điều khiển UI
+const rotateBtn = document.getElementById("rotate")
+rotateBtn.addEventListener("click", () => {
+  controls.autoRotate = !controls.autoRotate
+  rotateBtn.classList.toggle("on", controls.autoRotate)
+  rotateBtn.textContent = "Tự xoay: " + (controls.autoRotate ? "bật" : "tắt")
+})
+document.getElementById("reset").addEventListener("click", () => {
+  if (!model) return
+  camera.position.copy(home.pos)
+  controls.target.copy(home.target)
+  controls.update()
+})
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(innerWidth, innerHeight)
+})
+
+function tick() {
+  controls.update()
+  renderer.render(scene, camera)
+  requestAnimationFrame(tick)
+}
+tick()
+</script>
+</body>
+</html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<script type="module" src="/auth.js"></script>
+<title>VŨ ĐỨC AN — WEBGL GALLERY</title>
+<meta name="description" content="WebGL image gallery — Three.js shader distortion." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  :root{ --ink:#0c0c0c; --paper:#ece9e2; --accent:#e8482b; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--ink);color:var(--paper);font-family:'Inter',Helvetica,Arial,sans-serif;
+    overflow:hidden;-webkit-font-smoothing:antialiased}
+  #gl{position:fixed;inset:0;display:block;cursor:grab}
+  #gl.drag{cursor:grabbing}
+
+  .ui{position:fixed;inset:0;z-index:5;pointer-events:none}
+  .top{position:absolute;top:22px;left:24px;right:24px;display:flex;justify-content:space-between;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+  .top .r{color:var(--accent)}
+  .title{position:absolute;left:24px;bottom:84px;font-weight:900;letter-spacing:-.03em;line-height:.9;
+    font-size:clamp(40px,9vw,120px);text-transform:uppercase;mix-blend-mode:difference}
+  .sub{position:absolute;left:26px;bottom:54px;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#9a958c}
+  .hint{position:absolute;right:24px;bottom:54px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#9a958c}
+  .caption{position:absolute;left:24px;bottom:24px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--paper)}
+  .loader{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:var(--ink);font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#9a958c;transition:opacity .6s}
+  .loader.hide{opacity:0;pointer-events:none}
+  a{color:inherit}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="ui">
+  <div class="top">
+    <span>Vũ Đức An · Gallery</span>
+    <span class="r">WebGL · Three.js</span>
+  </div>
+  <div class="title">Works</div>
+  <div class="sub">Coll. 2026 — ảnh từ kho của bạn</div>
+  <div class="hint">Kéo / cuộn ↔ · Hover</div>
+  <div class="caption" id="caption">—</div>
+</div>
+
+<div class="loader" id="loader">Đang tải ảnh…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const SUPABASE_URL='https://huhzwawyysehjtofkpvb.supabase.co';
+const SUPABASE_KEY='sb_publishable_U0L64ODHeuid599c6oRgvw_5fM-2D8n';
+const BUCKET='album';
+const IMG_RE=/\.(jpe?g|png|webp|avif)$/i;
+
+const VERT = `
+  uniform float uVelocity;
+  uniform float uHover;
+  uniform float uTime;
+  varying vec2 vUv;
+  void main(){
+    vUv = uv;
+    vec3 p = position;
+    // bend theo tốc độ kéo/cuộn
+    float bend = sin(uv.x * 3.14159) * uVelocity * 0.9;
+    p.z -= abs(bend);
+    p.x += bend * 0.15;
+    // hover: phồng nhẹ ra trước
+    p.z += uHover * 0.35 * sin(uv.x*3.14159) * sin(uv.y*3.14159);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(p,1.0);
+  }
+`;
+const FRAG = `
+  precision highp float;
+  uniform sampler2D uTex;
+  uniform float uImageAspect;
+  uniform float uPlaneAspect;
+  uniform float uVelocity;
+  uniform float uHover;
+  uniform vec2 uMouse;
+  varying vec2 vUv;
+  void main(){
+    // cover-fit
+    float ia = uImageAspect, pa = uPlaneAspect;
+    vec2 scale = (ia > pa) ? vec2(pa/ia, 1.0) : vec2(1.0, ia/pa);
+    vec2 uv = (vUv - 0.5) * scale + 0.5;
+    // hover zoom nhẹ về phía con trỏ
+    uv = mix(uv, (uv - uMouse)*0.92 + uMouse, uHover);
+    // chromatic aberration theo tốc độ
+    float amt = clamp(abs(uVelocity)*0.6, 0.0, 0.06) + uHover*0.006;
+    float r = texture2D(uTex, uv + vec2(amt,0.0)).r;
+    float g = texture2D(uTex, uv).g;
+    float b = texture2D(uTex, uv - vec2(amt,0.0)).b;
+    vec3 col = vec3(r,g,b);
+    // viền tối nhẹ + sáng lên khi hover
+    float edge = smoothstep(0.0,0.04,uv.x)*smoothstep(1.0,0.96,uv.x)*smoothstep(0.0,0.04,uv.y)*smoothstep(1.0,0.96,uv.y);
+    col *= mix(0.82, 1.0, edge);
+    col *= mix(0.7, 1.06, uHover>0.0 ? 1.0 : 0.0);
+    // ngoài vùng ảnh -> nền
+    if(uv.x<0.0||uv.x>1.0||uv.y<0.0||uv.y>1.0){ col = vec3(0.09); }
+    gl_FragColor = vec4(col,1.0);
+  }
+`;
+
+(function(){
+  const canvas=document.getElementById('gl');
+  const loaderEl=document.getElementById('loader');
+  const capEl=document.getElementById('caption');
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  let W=innerWidth,H=innerHeight; renderer.setSize(W,H); renderer.setClearColor(0x0c0c0c,1);
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(45,W/H,0.1,100); camera.position.z=7;
+
+  // kích thước plane theo thế giới
+  const PH=3.4, PW=2.55, GAP=0.55, STEP=PW+GAP;
+  const planeGeo=new THREE.PlaneGeometry(PW,PH,28,28);
+
+  const group=new THREE.Group(); scene.add(group);
+  const meshes=[]; const names=[];
+
+  function makeMesh(tex, name){
+    tex.minFilter=THREE.LinearFilter; tex.generateMipmaps=false;
+    const ia = (tex.image&&tex.image.width)? tex.image.width/tex.image.height : 0.75;
+    const mat=new THREE.ShaderMaterial({
+      vertexShader:VERT, fragmentShader:FRAG,
+      uniforms:{
+        uTex:{value:tex}, uImageAspect:{value:ia}, uPlaneAspect:{value:PW/PH},
+        uVelocity:{value:0}, uHover:{value:0}, uMouse:{value:new THREE.Vector2(0.5,0.5)}, uTime:{value:0}
+      }
+    });
+    const m=new THREE.Mesh(planeGeo,mat); m.userData.name=name; return m;
+  }
+
+  // ----- tương tác kéo/cuộn -----
+  let targetX=0, curX=0, velocity=0, dragging=false, lastPX=0;
+  const raycaster=new THREE.Raycaster(); const mouseNDC=new THREE.Vector2();
+  let hovered=null;
+
+  function clampTarget(){
+    const max=0; const min=-(meshes.length-1)*STEP;
+    if(targetX>max) targetX=max; if(targetX<min) targetX=min;
+  }
+  canvas.addEventListener('wheel',e=>{ targetX -= (Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY)*0.0016; clampTarget(); },{passive:true});
+  canvas.addEventListener('pointerdown',e=>{ dragging=true; lastPX=e.clientX; canvas.classList.add('drag'); });
+  window.addEventListener('pointerup',()=>{ dragging=false; canvas.classList.remove('drag'); });
+  window.addEventListener('pointermove',e=>{
+    if(dragging){ targetX += (e.clientX-lastPX)*0.006; lastPX=e.clientX; clampTarget(); }
+    mouseNDC.x=(e.clientX/innerWidth)*2-1; mouseNDC.y=-(e.clientY/innerHeight)*2+1;
+  });
+  addEventListener('resize',()=>{ W=innerWidth;H=innerHeight; camera.aspect=W/H; camera.updateProjectionMatrix(); renderer.setSize(W,H); });
+
+  function layout(){ meshes.forEach((m,i)=>{ m.position.x = i*STEP; }); }
+
+  let raf;
+  function tick(t){
+    curX += (targetX-curX)*0.085;
+    velocity = (targetX-curX);
+    group.position.x = curX;
+    // hover
+    raycaster.setFromCamera(mouseNDC,camera);
+    const hits=raycaster.intersectObjects(meshes);
+    const hit=hits.length?hits[0].object:null;
+    if(hit!==hovered){ hovered=hit; capEl.textContent = hit? (hit.userData.name||'—') : '—'; }
+    if(hit && hits[0].uv){ hit.material.uniforms.uMouse.value.set(hits[0].uv.x,hits[0].uv.y); }
+    meshes.forEach(m=>{
+      const u=m.material.uniforms;
+      u.uVelocity.value += (velocity - u.uVelocity.value)*0.2;
+      const targetHover = (m===hovered)?1:0;
+      u.uHover.value += (targetHover - u.uHover.value)*0.12;
+      u.uTime.value=t*0.001;
+    });
+    renderer.render(scene,camera);
+    raf=requestAnimationFrame(tick);
+  }
+
+  // ----- nạp ảnh từ Supabase -----
+  async function load(){
+    let photos=[];
+    try{
+      const al=await window.AUTH.loadAlbum();   // cần đăng nhập; ảnh qua signed URL
+      photos=al.list;
+    }catch(e){}
+    if(!photos.length){ loaderEl.textContent='Chưa có ảnh trong album.'; return; }
+    const loader=new THREE.TextureLoader(); loader.setCrossOrigin('anonymous');
+    let done=0;
+    photos.forEach((p)=>{
+      const url=p.url;
+      loader.load(url,(tex)=>{
+        const m=makeMesh(tex,p.name); group.add(m); meshes.push(m); layout();
+        done++; if(done===1){ loaderEl.classList.add('hide'); if(!raf) raf=requestAnimationFrame(tick); }
+      },undefined,()=>{ done++; });
+    });
+    // fallback hiện loader ẩn sau 8s kể cả lỗi
+    setTimeout(()=>loaderEl.classList.add('hide'),8000);
+  }
+  load();
+})();
+</script>
+</body>
+</html>
