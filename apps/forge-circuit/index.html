@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Forge Circuit 3D</title>
+  <title>Capital Circuit 3D</title>
   <link rel="icon" href="data:," />
   <style>
     :root {
@@ -80,7 +80,6 @@
     .left-panel,
     .right-panel,
     .bottom-bar,
-    .modal,
     .toast {
       position: absolute;
       z-index: 2;
@@ -161,8 +160,7 @@
     .segment-button,
     .icon-button,
     .text-button,
-    .primary-button,
-    .choice-button {
+    .primary-button {
       min-height: 34px;
       border-radius: 7px;
       border: 1px solid transparent;
@@ -220,8 +218,7 @@
     }
 
     .primary-button:disabled,
-    .text-button:disabled,
-    .choice-button:disabled {
+    .text-button:disabled {
       cursor: not-allowed;
       opacity: 0.45;
       transform: none;
@@ -231,8 +228,7 @@
     .segment-button:hover,
     .icon-button:hover,
     .text-button:hover,
-    .primary-button:hover,
-    .choice-button:hover {
+    .primary-button:hover {
       transform: translateY(-1px);
       border-color: var(--line-strong);
     }
@@ -539,102 +535,6 @@
       text-align: center;
     }
 
-    .modal {
-      inset: 0;
-      z-index: 5;
-      display: none;
-      place-items: center;
-      padding: 18px;
-      background: rgba(5, 7, 8, 0.5);
-    }
-
-    .modal.is-open {
-      display: grid;
-    }
-
-    .quiz-panel {
-      width: min(560px, 100%);
-      border: 1px solid var(--line-strong);
-      border-radius: var(--radius);
-      background: rgba(18, 22, 24, 0.96);
-      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
-      display: grid;
-      gap: 13px;
-      padding: 16px;
-    }
-
-    .quiz-top {
-      display: flex;
-      align-items: start;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .quiz-title {
-      margin: 0;
-      color: var(--amber);
-      font-size: 12px;
-      font-weight: 900;
-      text-transform: uppercase;
-    }
-
-    .quiz-question {
-      margin: 6px 0 0;
-      font-size: 20px;
-      line-height: 1.25;
-      font-weight: 840;
-    }
-
-    .hint-box {
-      min-height: 38px;
-      padding: 9px 10px;
-      border-radius: var(--radius);
-      border: 1px solid rgba(215, 154, 67, 0.28);
-      background: rgba(215, 154, 67, 0.1);
-      color: #f7d7a8;
-      font-size: 13px;
-      line-height: 1.4;
-      display: none;
-    }
-
-    .hint-box.is-visible {
-      display: block;
-    }
-
-    .choice-list {
-      display: grid;
-      gap: 8px;
-    }
-
-    .choice-button {
-      min-height: 46px;
-      width: 100%;
-      padding: 9px 11px;
-      border-color: var(--line);
-      background: rgba(255, 255, 255, 0.07);
-      justify-content: flex-start;
-      text-align: left;
-      white-space: normal;
-      line-height: 1.3;
-    }
-
-    .choice-button.is-correct {
-      background: rgba(103, 181, 110, 0.18);
-      border-color: rgba(103, 181, 110, 0.54);
-    }
-
-    .choice-button.is-wrong {
-      background: rgba(212, 90, 108, 0.16);
-      border-color: rgba(212, 90, 108, 0.52);
-    }
-
-    .quiz-note {
-      margin: 0;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
-    }
-
     .toast {
       left: 50%;
       top: 86px;
@@ -754,15 +654,12 @@
         justify-content: center;
       }
 
-      .quiz-question {
-        font-size: 18px;
-      }
     }
   </style>
 </head>
 <body>
   <main class="game-shell">
-    <div id="stage" aria-label="Forge Circuit 3D board"></div>
+    <div id="stage" aria-label="Capital Circuit 3D board"></div>
 
     <header class="topbar">
       <div class="brand">
@@ -775,7 +672,7 @@
           </svg>
         </div>
         <div>
-          <h1 class="brand-title">Forge Circuit 3D</h1>
+          <h1 class="brand-title">Capital Circuit 3D</h1>
           <p id="roundMeta" class="brand-subtitle">Vòng 1 · Hot-seat local</p>
         </div>
       </div>
@@ -900,24 +797,9 @@
             <path d="M6 7h12" />
             <path d="M6 17h12" />
           </svg>
-          Buy
+          <span id="buyButtonLabel">Buy</span>
         </button>
         <button id="endTurn" class="text-button" type="button" disabled>End turn</button>
-      </div>
-    </div>
-
-    <div id="quizModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="quizQuestion">
-      <div class="quiz-panel">
-        <div class="quiz-top">
-          <div>
-            <p id="quizTile" class="quiz-title">Quiz Gate</p>
-            <h2 id="quizQuestion" class="quiz-question"></h2>
-          </div>
-          <button id="hintButton" class="text-button" type="button">Hint 30</button>
-        </div>
-        <div id="hintBox" class="hint-box"></div>
-        <div id="choiceList" class="choice-list"></div>
-        <p id="quizNote" class="quiz-note"></p>
       </div>
     </div>
 
@@ -959,17 +841,11 @@
     const diceTotal = document.querySelector("#diceTotal");
     const rollDiceButton = document.querySelector("#rollDice");
     const buyTileButton = document.querySelector("#buyTile");
+    const buyButtonLabel = document.querySelector("#buyButtonLabel");
     const endTurnButton = document.querySelector("#endTurn");
     const newGameButton = document.querySelector("#newGame");
     const fullscreenButton = document.querySelector("#fullscreen");
     const countButtons = Array.from(document.querySelectorAll("[data-player-count]"));
-    const quizModal = document.querySelector("#quizModal");
-    const quizTile = document.querySelector("#quizTile");
-    const quizQuestion = document.querySelector("#quizQuestion");
-    const choiceList = document.querySelector("#choiceList");
-    const hintButton = document.querySelector("#hintButton");
-    const hintBox = document.querySelector("#hintBox");
-    const quizNote = document.querySelector("#quizNote");
     const toast = document.querySelector("#toast");
 
     const playerTemplates = [
@@ -980,80 +856,92 @@
     ];
 
     const tileThemes = {
-      start: { label: "Start", color: "#67b56e" },
-      industry: { label: "Xưởng", color: "#d79a43" },
-      transport: { label: "Vận chuyển", color: "#6d8ed8" },
-      utility: { label: "Hạ tầng", color: "#42a7a1" },
-      tax: { label: "Phí", color: "#d45a6c" },
-      card: { label: "Thẻ", color: "#9b7bd4" },
-      corner: { label: "Góc", color: "#f3efe2" },
+      go: { label: "GO", color: "#67b56e" },
+      property: { label: "Property", color: "#d79a43" },
+      railroad: { label: "Rail", color: "#6d8ed8" },
+      utility: { label: "Utility", color: "#42a7a1" },
+      tax: { label: "Tax", color: "#d45a6c" },
+      chance: { label: "Chance", color: "#9b7bd4" },
+      chest: { label: "Community", color: "#7aa7d8" },
+      jail: { label: "Jail", color: "#f3efe2" },
+      parking: { label: "Parking", color: "#9aa19d" },
+      goToJail: { label: "Go Jail", color: "#d45a6c" },
+    };
+
+    const groupColors = {
+      brown: "#8b5a3c",
+      lightblue: "#8ecae6",
+      magenta: "#c65f9e",
+      orange: "#f28c38",
+      red: "#d94d4d",
+      yellow: "#f0d45a",
+      green: "#58a96b",
+      navy: "#476bd8",
+      rail: "#6d8ed8",
+      utility: "#42a7a1",
     };
 
     const tiles = [
-      { id: 0, type: "start", name: "Launch Gate", group: "Core", blurb: "Nhận 200 tín dụng khi đi qua cổng khởi động." },
-      { id: 1, type: "industry", name: "Sketch Bench", group: "Design", cost: 90, rent: 18, blurb: "Một bàn phác thảo tốt giúp ý tưởng rời khỏi đầu và bước lên mặt bàn." },
-      { id: 2, type: "industry", name: "Prototype Lab", group: "Design", cost: 110, rent: 22, blurb: "Mẫu thử nhỏ cho đội chơi biết điều gì đáng giữ lại trước khi tốn tiền lớn." },
-      { id: 3, type: "card", name: "Chance Deck", group: "Event", blurb: "Rút một sự kiện của vòng sản xuất." },
-      { id: 4, type: "tax", name: "Permit Fee", group: "Civic", amount: 80, blurb: "Trả phí cấp phép để giữ dây chuyền vận hành." },
-      { id: 5, type: "transport", name: "Cargo Tram", group: "Transit", cost: 150, rent: 35, blurb: "Tuyến vận chuyển tốt biến hàng tồn thành doanh thu." },
-      { id: 6, type: "industry", name: "Print Room", group: "Media", cost: 130, rent: 26, blurb: "Nơi biến hướng dẫn, poster và nhãn sản phẩm thành vật thật." },
-      { id: 7, type: "corner", name: "Union Hall", group: "Core", blurb: "Dừng chân ngắn, lắng nghe thị trường và tiếp tục vòng sau." },
-      { id: 8, type: "industry", name: "Signal Shop", group: "Media", cost: 140, rent: 28, blurb: "Tín hiệu rõ giúp khách hàng hiểu sản phẩm trước khi họ chạm vào nó." },
-      { id: 9, type: "utility", name: "Power Grid", group: "Utility", cost: 160, rent: 38, blurb: "Không có điện ổn định, mọi kế hoạch đẹp đều đứng yên." },
-      { id: 10, type: "industry", name: "Assembly Line", group: "Build", cost: 170, rent: 34, blurb: "Quy trình lặp lại biến tay nghề cá nhân thành năng lực nhóm." },
-      { id: 11, type: "card", name: "Workshop News", group: "Event", blurb: "Tin xưởng có thể mở thêm đường hoặc làm bạn mất một lượt tiền." },
-      { id: 12, type: "industry", name: "Quality Bay", group: "Build", cost: 185, rent: 38, blurb: "Kiểm thử đều tay giúp lỗi nhỏ không thành khủng hoảng lớn." },
-      { id: 13, type: "transport", name: "Harbor Lift", group: "Transit", cost: 190, rent: 42, blurb: "Cảng nâng mở đường đưa sản phẩm ra ngoài khu xưởng." },
-      { id: 14, type: "corner", name: "Market Plaza", group: "Core", blurb: "Nơi xem đối thủ, nghe phản hồi và tính lại đường đi." },
-      { id: 15, type: "industry", name: "Data Foundry", group: "Signal", cost: 200, rent: 44, blurb: "Dữ liệu thô cần được đúc lại thành quyết định rõ ràng." },
-      { id: 16, type: "tax", name: "Maintenance", group: "Civic", amount: 90, blurb: "Bảo trì chậm thường rẻ hơn sửa hỏng vội." },
-      { id: 17, type: "industry", name: "Robot Cell", group: "Signal", cost: 220, rent: 48, blurb: "Tự động hóa tốt nhất khi nó hỗ trợ con người, không che lỗi quy trình." },
-      { id: 18, type: "utility", name: "Water Tower", group: "Utility", cost: 165, rent: 40, blurb: "Hạ tầng ổn định giữ dây chuyền không bị hụt nhịp." },
-      { id: 19, type: "card", name: "Investor Call", group: "Event", blurb: "Một cuộc gọi có thể bơm vốn hoặc kéo bạn về kế hoạch cũ." },
-      { id: 20, type: "industry", name: "Packaging Dock", group: "Launch", cost: 240, rent: 54, blurb: "Đóng gói là lời hứa cuối cùng trước khi sản phẩm rời tay bạn." },
-      { id: 21, type: "corner", name: "Audit Gate", group: "Core", blurb: "Không phạt ngay, nhưng cả xưởng biết cần làm sạch sổ sách." },
-      { id: 22, type: "transport", name: "Night Train", group: "Transit", cost: 230, rent: 50, blurb: "Chuyến đêm giúp dòng hàng đi tiếp khi thành phố nghỉ." },
-      { id: 23, type: "industry", name: "Launch Studio", group: "Launch", cost: 260, rent: 60, blurb: "Ra mắt tốt không chỉ là ồn ào, mà là đúng người, đúng lúc." },
-      { id: 24, type: "tax", name: "Safety Drill", group: "Civic", amount: 100, blurb: "Trả chi phí diễn tập để giảm rủi ro khi áp lực tăng." },
-      { id: 25, type: "industry", name: "Expo Booth", group: "Launch", cost: 280, rent: 66, blurb: "Gian trưng bày tốt giúp người lạ hiểu câu chuyện trong vài giây." },
-      { id: 26, type: "card", name: "Field Report", group: "Event", blurb: "Báo cáo thị trường thường đến vào lúc bạn tưởng mọi thứ đã chắc." },
-      { id: 27, type: "industry", name: "Patent Desk", group: "Strategy", cost: 300, rent: 74, blurb: "Bảo vệ ý tưởng đúng cách giúp đội có thời gian biến lợi thế thành sản phẩm." },
+      { id: 0, type: "go", name: "Start Plaza", group: "Corner", blurb: "Đi qua hoặc dừng tại đây nhận 200 cr." },
+      { id: 1, type: "property", name: "Old Wharf", group: "Brown", set: "brown", cost: 60, rent: 2, blurb: "Khu bến cũ, rẻ nhưng dễ gom đủ bộ màu." },
+      { id: 2, type: "chest", name: "Community Fund", group: "Card", blurb: "Rút một thẻ cộng đồng." },
+      { id: 3, type: "property", name: "Brick Lane", group: "Brown", set: "brown", cost: 60, rent: 4, blurb: "Một con phố nhỏ có tiền thuê ổn định khi về đúng chủ." },
+      { id: 4, type: "tax", name: "Income Tax", group: "Civic", amount: 200, blurb: "Trả 200 cr vào ngân hàng." },
+      { id: 5, type: "railroad", name: "North Station", group: "Rail", set: "rail", cost: 200, rent: 25, blurb: "Trạm tàu tăng giá trị khi cùng người chơi sở hữu nhiều trạm." },
+      { id: 6, type: "property", name: "Skyline Walk", group: "Light Blue", set: "lightblue", cost: 100, rent: 6, blurb: "Dãy phố dễ tiếp cận, phù hợp gom tài sản đầu game." },
+      { id: 7, type: "chance", name: "Chance", group: "Card", blurb: "Rút một thẻ cơ hội." },
+      { id: 8, type: "property", name: "Canal Row", group: "Light Blue", set: "lightblue", cost: 100, rent: 6, blurb: "Kênh thương mại nhỏ, tiền thuê tăng khi sở hữu trọn bộ màu." },
+      { id: 9, type: "property", name: "Cloud Terrace", group: "Light Blue", set: "lightblue", cost: 120, rent: 8, blurb: "Ô cuối của bộ xanh nhạt, đáng mua nếu đủ tiền." },
+      { id: 10, type: "jail", name: "Jail / Visiting", group: "Corner", blurb: "Nếu chỉ đi ngang hoặc rơi vào đây thì đang thăm tù. Bị đưa vào tù sẽ phải gieo đôi hoặc trả 50 cr." },
+      { id: 11, type: "property", name: "Neon Avenue", group: "Magenta", set: "magenta", cost: 140, rent: 10, blurb: "Khu phố sáng đèn, bắt đầu tăng áp lực tiền thuê." },
+      { id: 12, type: "utility", name: "Electric Works", group: "Utility", set: "utility", cost: 150, rent: 0, blurb: "Utility tính tiền thuê theo tổng xúc xắc: sở hữu 1 cái x4, sở hữu 2 cái x10." },
+      { id: 13, type: "property", name: "Arcade Street", group: "Magenta", set: "magenta", cost: 140, rent: 10, blurb: "Một điểm ghé đông khách trong khu giải trí." },
+      { id: 14, type: "property", name: "Gallery Road", group: "Magenta", set: "magenta", cost: 160, rent: 12, blurb: "Ô mạnh nhất của bộ tím hồng." },
+      { id: 15, type: "railroad", name: "East Station", group: "Rail", set: "rail", cost: 200, rent: 25, blurb: "Trạm thứ hai giúp rail rent tăng rất nhanh." },
+      { id: 16, type: "property", name: "Copper Market", group: "Orange", set: "orange", cost: 180, rent: 14, blurb: "Khu chợ cam thường ăn tiền vì nằm sau Jail." },
+      { id: 17, type: "chest", name: "Community Fund", group: "Card", blurb: "Rút một thẻ cộng đồng." },
+      { id: 18, type: "property", name: "Festival Way", group: "Orange", set: "orange", cost: 180, rent: 14, blurb: "Điểm lễ hội giữa board, dễ bị ghé sau khi ra tù." },
+      { id: 19, type: "property", name: "Harbor View", group: "Orange", set: "orange", cost: 200, rent: 16, blurb: "Ô giá trị nhất của bộ cam." },
+      { id: 20, type: "parking", name: "Free Parking", group: "Corner", blurb: "Nghỉ chân, không thu không trả." },
+      { id: 21, type: "property", name: "Redwood Court", group: "Red", set: "red", cost: 220, rent: 18, blurb: "Bộ đỏ bắt đầu tạo cú đánh tiền thuê lớn." },
+      { id: 22, type: "chance", name: "Chance", group: "Card", blurb: "Rút một thẻ cơ hội." },
+      { id: 23, type: "property", name: "Metro Square", group: "Red", set: "red", cost: 220, rent: 18, blurb: "Quảng trường đô thị, dễ thành ô nguy hiểm nếu có chủ." },
+      { id: 24, type: "property", name: "Sunset Park", group: "Red", set: "red", cost: 240, rent: 20, blurb: "Ô cuối của bộ đỏ, tiền thuê nền cao." },
+      { id: 25, type: "railroad", name: "South Station", group: "Rail", set: "rail", cost: 200, rent: 25, blurb: "Rail thứ ba nâng tiền thuê lên 100 cr nếu cùng chủ." },
+      { id: 26, type: "property", name: "Golden Pier", group: "Yellow", set: "yellow", cost: 260, rent: 22, blurb: "Khu vàng có giá cao và sức nặng cuối game." },
+      { id: 27, type: "property", name: "Civic Garden", group: "Yellow", set: "yellow", cost: 260, rent: 22, blurb: "Một ô vàng cân bằng giữa giá mua và rent." },
+      { id: 28, type: "utility", name: "Water Works", group: "Utility", set: "utility", cost: 150, rent: 0, blurb: "Utility thứ hai giúp tiền thuê utility tăng lên tổng xúc xắc x10." },
+      { id: 29, type: "property", name: "Royal Arcade", group: "Yellow", set: "yellow", cost: 280, rent: 24, blurb: "Ô vàng mạnh nhất." },
+      { id: 30, type: "goToJail", name: "Go To Jail", group: "Corner", blurb: "Đi thẳng tới Jail, không nhận tiền qua Start." },
+      { id: 31, type: "property", name: "Emerald Gate", group: "Green", set: "green", cost: 300, rent: 26, blurb: "Bộ xanh lá là vùng tài sản đắt đỏ." },
+      { id: 32, type: "property", name: "Botanical Row", group: "Green", set: "green", cost: 300, rent: 26, blurb: "Ô xanh lá có rent cao ngay cả khi chưa nâng cấp." },
+      { id: 33, type: "chest", name: "Community Fund", group: "Card", blurb: "Rút một thẻ cộng đồng." },
+      { id: 34, type: "property", name: "Capital Green", group: "Green", set: "green", cost: 320, rent: 28, blurb: "Ô xanh lá đắt nhất, thường ép người chơi nghèo nhanh." },
+      { id: 35, type: "railroad", name: "West Station", group: "Rail", set: "rail", cost: 200, rent: 25, blurb: "Rail thứ tư hoàn tất mạng trạm và đưa rent lên 200 cr." },
+      { id: 36, type: "chance", name: "Chance", group: "Card", blurb: "Rút một thẻ cơ hội." },
+      { id: 37, type: "property", name: "Sapphire Tower", group: "Navy", set: "navy", cost: 350, rent: 35, blurb: "Một trong hai ô cuối đắt nhất board." },
+      { id: 38, type: "tax", name: "Luxury Tax", group: "Civic", amount: 100, blurb: "Trả 100 cr vào ngân hàng." },
+      { id: 39, type: "property", name: "Crown Avenue", group: "Navy", set: "navy", cost: 400, rent: 50, blurb: "Ô tài sản mạnh nhất board." },
     ];
 
-    const questions = {
-      1: [{ prompt: "Bước nào giúp giảm rủi ro trước khi xây bản lớn?", options: ["Tạo mẫu thử nhỏ", "Tăng ngân sách quảng cáo", "Mua thêm kho", "Bỏ qua phản hồi"], correct: 0, hint: "Nó thường rẻ, nhanh và chưa cần hoàn hảo.", note: "Prototype giúp kiểm chứng giả định trước khi đầu tư lớn." }],
-      2: [{ prompt: "Mục tiêu chính của prototype là gì?", options: ["Chốt toàn bộ thương hiệu", "Học nhanh từ phiên bản nhỏ", "Thay thế sản phẩm cuối", "Tăng phí vận chuyển"], correct: 1, hint: "Từ khóa là học nhanh.", note: "Prototype tốt cho phép sai sớm và sửa rẻ." }],
-      3: [{ prompt: "Khi rút thẻ sự kiện, yếu tố nào nên được xử lý trước?", options: ["Hiệu ứng lên tiền/vị trí", "Màu token", "Tên người chơi", "Kích thước màn hình"], correct: 0, hint: "Thẻ thay đổi trạng thái game.", note: "Event card nên có hiệu ứng rõ, ngắn và áp dụng ngay." }],
-      4: [{ prompt: "Phí cấp phép trong game đại diện cho điều gì?", options: ["Chi phí vận hành bắt buộc", "Quà tặng miễn phí", "Một lượt đi thêm", "Một tài sản có thể mua"], correct: 0, hint: "Nó làm giảm tiền nhưng không tạo chủ sở hữu.", note: "Tax tile là điểm điều tiết tài nguyên trong vòng chơi." }],
-      5: [{ prompt: "Tuyến vận chuyển tốt thường cải thiện điều gì?", options: ["Tốc độ đưa hàng ra thị trường", "Số mặt của xúc xắc", "Màu nền giao diện", "Tên ô Start"], correct: 0, hint: "Nó liên quan đến luồng hàng.", note: "Transport tile có giá trị vì nó kết nối sản xuất với thị trường." }],
-      6: [{ prompt: "Tài liệu in ấn tốt giúp đội ở điểm nào?", options: ["Giảm hiểu nhầm", "Tăng thuế", "Xóa hết rủi ro", "Thắng ngay lập tức"], correct: 0, hint: "Nó làm thông tin rõ hơn.", note: "Tài liệu rõ làm quy trình và truyền thông bớt lệch nhau." }],
-      8: [{ prompt: "Tín hiệu truyền thông tốt cần điều gì nhất?", options: ["Thông điệp rõ", "Nhiều màu nhất có thể", "Ẩn giá bán", "Không đo phản hồi"], correct: 0, hint: "Người xem cần hiểu nhanh.", note: "Signal tốt giúp giảm ma sát trong quyết định của khách hàng." }],
-      9: [{ prompt: "Hạ tầng điện ổn định thuộc loại tài sản nào trong game?", options: ["Utility", "Tax", "Corner", "Card"], correct: 0, hint: "Nó là nền tảng dùng chung.", note: "Utility tạo giá trị nền cho toàn hệ thống." }],
-      10: [{ prompt: "Dây chuyền lắp ráp mạnh nhất khi nào?", options: ["Các bước được chuẩn hóa", "Mỗi người làm một kiểu", "Không có kiểm tra", "Không ghi nhận lỗi"], correct: 0, hint: "Từ khóa là lặp lại nhất quán.", note: "Assembly line biến năng lực cá nhân thành năng lực quy trình." }],
-      11: [{ prompt: "Tin xưởng nên tác động vào phần nào của lượt chơi?", options: ["Một hiệu ứng ngắn", "Toàn bộ mã nguồn", "Kích thước canvas", "Tên miền"], correct: 0, hint: "Nó giống một thẻ sự kiện.", note: "Card event tốt nên dễ hiểu và không làm lượt bị rối." }],
-      12: [{ prompt: "Quality Bay giúp phát hiện điều gì?", options: ["Lỗi trước khi giao", "Chủ sở hữu ô Start", "Số người đang xem", "Độ sáng màn hình"], correct: 0, hint: "Nó nằm trước khi hàng rời xưởng.", note: "Kiểm thử sớm giảm chi phí sửa lỗi muộn." }],
-      13: [{ prompt: "Harbor Lift trong game thuộc nhóm nào?", options: ["Transit", "Utility", "Civic", "Design"], correct: 0, hint: "Nó di chuyển hàng.", note: "Transit tiles tạo nhịp vận chuyển và dòng tiền thuê." }],
-      15: [{ prompt: "Dữ liệu thô cần bước nào để thành quyết định?", options: ["Tổ chức và diễn giải", "Giấu đi", "In thật to", "Đổi tên người chơi"], correct: 0, hint: "Dữ liệu cần ngữ cảnh.", note: "Data Foundry tượng trưng cho việc biến tín hiệu rời rạc thành hành động." }],
-      16: [{ prompt: "Bảo trì định kỳ trong game là loại chi phí nào?", options: ["Tax/fee", "Tài sản mua được", "Thẻ bài", "Ô nghỉ"], correct: 0, hint: "Nó trừ tiền và không đổi chủ.", note: "Maintenance nhắc người chơi quản lý dòng tiền." }],
-      17: [{ prompt: "Tự động hóa hữu ích nhất khi nó làm gì?", options: ["Hỗ trợ quy trình rõ", "Che lỗi hệ thống", "Loại bỏ kiểm thử", "Tăng may rủi"], correct: 0, hint: "Robot tốt cần quy trình tốt.", note: "Automation khuếch đại quy trình, cả điểm mạnh lẫn điểm yếu." }],
-      18: [{ prompt: "Water Tower được xếp vào nhóm nào?", options: ["Utility", "Transit", "Launch", "Card"], correct: 0, hint: "Nó là hạ tầng dùng chung.", note: "Utility làm board có thêm dạng tài sản khác ngoài xưởng." }],
-      19: [{ prompt: "Một cuộc gọi đầu tư thường tác động trực tiếp vào gì?", options: ["Nguồn vốn hoặc kế hoạch", "Số cạnh của board", "Tên miền deploy", "Màu của xúc xắc"], correct: 0, hint: "Nó liên quan đến tiền hoặc hướng đi.", note: "Investor event tạo biến động tài nguyên." }],
-      20: [{ prompt: "Đóng gói tốt tác động đến trải nghiệm nào?", options: ["Ấn tượng cuối trước giao hàng", "Số lượt quiz", "Tốc độ render", "Quyền sở hữu Start"], correct: 0, hint: "Nó xảy ra ngay trước khi rời xưởng.", note: "Packaging là một phần của lời hứa sản phẩm." }],
-      22: [{ prompt: "Night Train có vai trò tương tự ô nào?", options: ["Transport", "Tax", "Start", "Corner"], correct: 0, hint: "Nó là tuyến di chuyển.", note: "Transport đem lại mạng lưới và rent ổn định." }],
-      23: [{ prompt: "Ra mắt sản phẩm tốt cần điều gì?", options: ["Đúng người và đúng thời điểm", "Chỉ cần âm lượng lớn", "Ẩn thông tin giá trị", "Không đo phản hồi"], correct: 0, hint: "Không chỉ là gây chú ý.", note: "Launch là phối hợp giữa thông điệp, kênh và thời điểm." }],
-      24: [{ prompt: "Safety Drill giúp đội giảm điều gì?", options: ["Rủi ro vận hành", "Số người chơi", "Kích thước board", "Tất cả phí thuê"], correct: 0, hint: "Nó là chuẩn bị trước sự cố.", note: "Safety cost tạo áp lực tiền nhưng hợp lý trong mô phỏng xưởng." }],
-      25: [{ prompt: "Expo Booth tốt nhất khi người xem có thể làm gì?", options: ["Hiểu giá trị nhanh", "Đoán luật từ đầu", "Tránh tương tác", "Không thấy sản phẩm"], correct: 0, hint: "Gian trưng bày có ít thời gian để thuyết phục.", note: "Expo là nơi kể chuyện sản phẩm bằng hình ảnh và bố cục." }],
-      26: [{ prompt: "Field Report thường chứa loại tín hiệu nào?", options: ["Phản hồi thị trường", "Mã bí mật của trình duyệt", "Số mặt xúc xắc mới", "Quyền miễn phí mọi ô"], correct: 0, hint: "Nó đến từ bên ngoài xưởng.", note: "Báo cáo thực địa giúp game có biến động như thị trường thật." }],
-      27: [{ prompt: "Patent Desk tượng trưng cho việc gì?", options: ["Bảo vệ lợi thế sáng tạo", "Tăng phí bảo trì", "Đổi vị trí Start", "Bỏ qua quiz"], correct: 0, hint: "Nó liên quan đến lợi thế và thời gian.", note: "Chiến lược sở hữu trí tuệ giúp đội giữ không gian để phát triển." }],
-    };
+    const chanceCards = [
+      { title: "Advance to Start", text: "Đi tới Start Plaza và nhận 200 cr.", kind: "moveTo", target: 0, collect: true },
+      { title: "Go To Jail", text: "Đi thẳng tới Jail, không nhận 200 cr.", kind: "jail" },
+      { title: "Transit Bonus", text: "Đi tới North Station. Nếu đi qua Start, nhận 200 cr.", kind: "moveTo", target: 5, collect: true },
+      { title: "Back Three", text: "Lùi lại 3 ô.", kind: "move", amount: -3 },
+      { title: "Bank Dividend", text: "Ngân hàng trả bạn 50 cr.", kind: "cash", amount: 50 },
+      { title: "Speeding Fine", text: "Trả phạt 50 cr.", kind: "cash", amount: -50 },
+      { title: "Street Repairs", text: "Trả 25 cr cho mỗi tài sản đang sở hữu.", kind: "perProperty", amount: -25 },
+    ];
 
-    const cards = [
-      { title: "Đơn đặt hàng nhỏ", text: "Nhận 120 tín dụng.", kind: "cash", amount: 120 },
-      { title: "Lỗi khuôn mẫu", text: "Trả 70 tín dụng để sửa lô thử.", kind: "cash", amount: -70 },
-      { title: "Mentor ghé xưởng", text: "Nhận 60 tín dụng nhờ tối ưu quy trình.", kind: "cash", amount: 60 },
-      { title: "Giao hàng trễ", text: "Trả 50 tín dụng phí bù lịch.", kind: "cash", amount: -50 },
-      { title: "Demo thành công", text: "Di chuyển tới Launch Gate và nhận 200 tín dụng.", kind: "start" },
-      { title: "Khách hàng thử sớm", text: "Tiến thêm 3 ô.", kind: "move", amount: 3 },
+    const communityCards = [
+      { title: "Consulting Fee", text: "Nhận 100 cr.", kind: "cash", amount: 100 },
+      { title: "Doctor Fee", text: "Trả 50 cr.", kind: "cash", amount: -50 },
+      { title: "Tax Refund", text: "Nhận hoàn thuế 80 cr.", kind: "cash", amount: 80 },
+      { title: "School Fees", text: "Trả 100 cr.", kind: "cash", amount: -100 },
+      { title: "From Each Player", text: "Mỗi người chơi khác trả bạn 20 cr.", kind: "collectFromPlayers", amount: 20 },
+      { title: "Go To Jail", text: "Đi thẳng tới Jail, không nhận 200 cr.", kind: "jail" },
+      { title: "Advance to Start", text: "Đi tới Start Plaza và nhận 200 cr.", kind: "moveTo", target: 0, collect: true },
     ];
 
     const game = {
@@ -1064,11 +952,12 @@
       phase: "ready",
       owners: {},
       dice: [0, 0],
-      pendingRoll: 0,
-      pendingQuestion: null,
-      hintUsed: false,
+      lastRoll: 0,
+      doublesInTurn: 0,
+      extraTurn: false,
       journal: [],
-      cardIndex: 0,
+      chanceIndex: 0,
+      communityIndex: 0,
     };
 
     const scene = new THREE.Scene();
@@ -1141,13 +1030,42 @@
     }
 
     function isBuyable(tile) {
-      return ["industry", "transport", "utility"].includes(tile.type);
+      return ["property", "railroad", "utility"].includes(tile.type);
     }
 
-    function tileQuestion(tile) {
-      const bucket = questions[tile.id];
-      if (!bucket || bucket.length === 0) return null;
-      return bucket[(game.round + game.currentIndex) % bucket.length];
+    function ownedBy(playerId, typeOrSet) {
+      return tiles.filter((tile) => {
+        const matches = tile.type === typeOrSet || tile.set === typeOrSet;
+        return matches && game.owners[tile.id] === playerId;
+      });
+    }
+
+    function ownsFullSet(playerId, set) {
+      const setTiles = tiles.filter((tile) => tile.set === set);
+      return setTiles.length > 0 && setTiles.every((tile) => game.owners[tile.id] === playerId);
+    }
+
+    function rentFor(tile, ownerId) {
+      if (tile.type === "railroad") {
+        const count = ownedBy(ownerId, "rail").length;
+        return [0, 25, 50, 100, 200][count] || 25;
+      }
+      if (tile.type === "utility") {
+        const count = ownedBy(ownerId, "utility").length;
+        return game.lastRoll * (count >= 2 ? 10 : 4);
+      }
+      if (tile.type === "property" && ownsFullSet(ownerId, tile.set)) {
+        return tile.rent * 2;
+      }
+      return tile.rent || 0;
+    }
+
+    function canBuy(tile, player = currentPlayer()) {
+      return game.phase === "landed" && isBuyable(tile) && !game.owners[tile.id] && player.cash >= tile.cost;
+    }
+
+    function canPayJail(player = currentPlayer()) {
+      return game.phase === "ready" && player.inJail && player.cash >= 50;
     }
 
     function addJournal(text) {
@@ -1183,16 +1101,21 @@
       }
     }
 
+    function colorForTile(tile) {
+      return groupColors[tile.set] || tileThemes[tile.type].color;
+    }
+
     function createTileTexture(tile) {
       const canvas = document.createElement("canvas");
       canvas.width = 320;
       canvas.height = 220;
       const context = canvas.getContext("2d");
       const theme = tileThemes[tile.type];
+      const tileColor = colorForTile(tile);
 
       context.fillStyle = "#f3efe2";
       context.fillRect(0, 0, canvas.width, canvas.height);
-      context.fillStyle = theme.color;
+      context.fillStyle = tileColor;
       context.fillRect(0, 0, canvas.width, 42);
       context.fillStyle = "#111416";
       context.font = "900 24px Inter, Arial, sans-serif";
@@ -1206,7 +1129,9 @@
 
       context.fillStyle = "#54524a";
       context.font = "760 22px Inter, Arial, sans-serif";
-      const detail = isBuyable(tile) ? `${tile.cost} cr · ${tile.rent} rent` : tile.group;
+      const detail = isBuyable(tile)
+        ? `${tile.cost} cr · ${tile.type === "utility" ? "dice rent" : `${tile.rent} rent`}`
+        : tile.group;
       context.fillText(detail, canvas.width / 2, 176);
 
       const texture = new THREE.CanvasTexture(canvas);
@@ -1235,8 +1160,8 @@
     }
 
     function boardPosition(index) {
-      const side = 8;
-      const spacing = 1.42;
+      const side = 11;
+      const spacing = 1.06;
       const half = (side - 1) / 2;
       let x = half;
       let z = half;
@@ -1260,7 +1185,7 @@
 
     function buildBoard() {
       const base = new THREE.Mesh(
-        new THREE.BoxGeometry(12.5, 0.18, 12.5),
+        new THREE.BoxGeometry(12.8, 0.18, 12.8),
         new THREE.MeshStandardMaterial({ color: 0x191d1c, roughness: 0.78, metalness: 0.08 })
       );
       base.position.y = -0.13;
@@ -1269,7 +1194,7 @@
 
       const centerTexture = createCenterTexture();
       const center = new THREE.Mesh(
-        new THREE.PlaneGeometry(5.8, 5.8),
+        new THREE.PlaneGeometry(5.55, 5.55),
         new THREE.MeshStandardMaterial({ map: centerTexture, roughness: 0.72, metalness: 0.04 })
       );
       center.rotation.x = -Math.PI / 2;
@@ -1277,18 +1202,18 @@
       center.receiveShadow = true;
       boardGroup.add(center);
 
-      const ring = new THREE.GridHelper(12.5, 14, 0x38413d, 0x242b28);
+      const ring = new THREE.GridHelper(12.8, 18, 0x38413d, 0x242b28);
       ring.position.y = 0.02;
       boardGroup.add(ring);
 
       tiles.forEach((tile) => {
         const position = boardPosition(tile.id);
         tilePositions[tile.id] = position;
-        const theme = tileThemes[tile.type];
+        const tileColor = colorForTile(tile);
 
         const tileMesh = new THREE.Mesh(
-          new THREE.BoxGeometry(1.26, 0.2, 1.26),
-          new THREE.MeshStandardMaterial({ color: new THREE.Color(theme.color), roughness: 0.62, metalness: 0.05 })
+          new THREE.BoxGeometry(0.98, 0.2, 0.98),
+          new THREE.MeshStandardMaterial({ color: new THREE.Color(tileColor), roughness: 0.62, metalness: 0.05 })
         );
         tileMesh.position.copy(position);
         tileMesh.position.y = 0.05;
@@ -1299,7 +1224,7 @@
         tileMeshes[tile.id] = tileMesh;
 
         const label = new THREE.Mesh(
-          new THREE.PlaneGeometry(1.08, 0.78),
+          new THREE.PlaneGeometry(0.88, 0.64),
           new THREE.MeshBasicMaterial({ map: createTileTexture(tile), transparent: true })
         );
         label.rotation.x = -Math.PI / 2;
@@ -1326,11 +1251,11 @@
       context.fillStyle = "#f3efe2";
       context.font = "900 72px Inter, Arial, sans-serif";
       context.textAlign = "center";
-      context.fillText("FORGE", 320, 270);
+      context.fillText("CAPITAL", 320, 270);
       context.fillText("CIRCUIT", 320, 350);
       context.fillStyle = "#bab8aa";
       context.font = "760 30px Inter, Arial, sans-serif";
-      context.fillText("QUIZ · BUILD · TRADE", 320, 418);
+      context.fillText("BUY · RENT · JAIL", 320, 418);
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
       texture.anisotropy = 4;
@@ -1406,6 +1331,8 @@
         cash: 1500,
         position: 0,
         owned: 0,
+        inJail: false,
+        jailTurns: 0,
       }));
     }
 
@@ -1417,17 +1344,16 @@
       game.phase = "ready";
       game.owners = {};
       game.dice = [0, 0];
-      game.pendingRoll = 0;
-      game.pendingQuestion = null;
-      game.hintUsed = false;
-      game.journal = ["Bắt đầu vòng sản xuất mới."];
-      game.cardIndex = Math.floor(Math.random() * cards.length);
+      game.lastRoll = 0;
+      game.doublesInTurn = 0;
+      game.journal = ["Bắt đầu ván Capital Circuit mới."];
+      game.chanceIndex = Math.floor(Math.random() * chanceCards.length);
+      game.communityIndex = Math.floor(Math.random() * communityCards.length);
       countButtons.forEach((button) => {
         button.classList.toggle("is-active", Number(button.dataset.playerCount) === count);
       });
       setDiceFace(dieOne, 0);
       setDiceFace(dieTwo, 0);
-      quizModal.classList.remove("is-open");
       updateTokenTargets();
       renderOwnership();
       render();
@@ -1438,110 +1364,109 @@
       if (game.phase !== "ready") return;
       const first = Math.floor(Math.random() * 6) + 1;
       const second = Math.floor(Math.random() * 6) + 1;
+      const total = first + second;
+      const isDouble = first === second;
       game.dice = [first, second];
-      game.pendingRoll = first + second;
+      game.lastRoll = total;
       setDiceFace(dieOne, first);
       setDiceFace(dieTwo, second);
 
       const player = currentPlayer();
-      const tile = currentTile(player);
-      const question = tileQuestion(tile);
-      addJournal(`<strong>${player.name}</strong> gieo ${game.pendingRoll}.`);
+      addJournal(`<strong>${player.name}</strong> gieo ${first}+${second} = ${total}.`);
 
-      if (question) {
-        game.phase = "quiz";
-        game.pendingQuestion = { tile, question };
-        game.hintUsed = false;
-        showQuiz(tile, question);
-      } else {
-        moveCurrentPlayer(game.pendingRoll);
+      if (player.inJail) {
+        if (isDouble) {
+          player.inJail = false;
+          player.jailTurns = 0;
+          game.extraTurn = false;
+          addJournal(`<strong>${player.name}</strong> gieo đôi và ra tù.`);
+          moveCurrentPlayer(total);
+        } else {
+          player.jailTurns += 1;
+          if (player.jailTurns >= 3) {
+            player.cash -= 50;
+            player.inJail = false;
+            player.jailTurns = 0;
+            addJournal(`<strong>${player.name}</strong> trả 50 cr sau 3 lượt trong tù và di chuyển.`);
+            moveCurrentPlayer(total);
+          } else {
+            game.phase = "ended";
+            addJournal(`<strong>${player.name}</strong> vẫn ở Jail (${player.jailTurns}/3).`);
+          }
+        }
+        render();
+        return;
       }
-      render();
-    }
 
-    function showQuiz(tile, question) {
-      quizTile.textContent = `${tile.name} · Quiz Gate`;
-      quizQuestion.textContent = question.prompt;
-      hintBox.textContent = question.hint;
-      hintBox.classList.remove("is-visible");
-      hintButton.disabled = false;
-      quizNote.textContent = "";
-      choiceList.innerHTML = "";
-      question.options.forEach((option, index) => {
-        const button = document.createElement("button");
-        button.className = "choice-button";
-        button.type = "button";
-        button.textContent = option;
-        button.addEventListener("click", () => answerQuiz(index));
-        choiceList.appendChild(button);
-      });
-      quizModal.classList.add("is-open");
-    }
-
-    function useHint() {
-      if (!game.pendingQuestion || game.hintUsed) return;
-      const player = currentPlayer();
-      if (player.cash >= 30) {
-        player.cash -= 30;
-        addJournal(`<strong>${player.name}</strong> mua hint với 30 cr.`);
-      }
-      game.hintUsed = true;
-      hintBox.classList.add("is-visible");
-      hintButton.disabled = true;
-      render();
-    }
-
-    function answerQuiz(index) {
-      if (game.phase !== "quiz" || !game.pendingQuestion) return;
-      const { question } = game.pendingQuestion;
-      const player = currentPlayer();
-      const buttons = Array.from(choiceList.querySelectorAll(".choice-button"));
-      buttons.forEach((button, buttonIndex) => {
-        button.disabled = true;
-        button.classList.toggle("is-correct", buttonIndex === question.correct);
-        button.classList.toggle("is-wrong", buttonIndex === index && index !== question.correct);
-      });
-
-      if (index === question.correct) {
-        quizNote.textContent = question.note;
-        addJournal(`<strong>${player.name}</strong> trả lời đúng và được đi ${game.pendingRoll} ô.`);
-        window.setTimeout(() => {
-          quizModal.classList.remove("is-open");
-          moveCurrentPlayer(game.pendingRoll);
+      if (isDouble) {
+        game.doublesInTurn += 1;
+        if (game.doublesInTurn >= 3) {
+          addJournal(`<strong>${player.name}</strong> gieo đôi lần thứ ba và bị đưa vào Jail.`);
+          sendToJail(player);
           render();
-        }, 820);
+          return;
+        }
+        game.extraTurn = true;
       } else {
-        quizNote.textContent = question.note;
-        addJournal(`<strong>${player.name}</strong> trả lời sai và mất lượt di chuyển.`);
-        game.phase = "ended";
-        game.pendingRoll = 0;
-        window.setTimeout(() => {
-          quizModal.classList.remove("is-open");
-          render();
-        }, 1100);
+        game.extraTurn = false;
       }
-      game.pendingQuestion = null;
+
+      moveCurrentPlayer(total);
       render();
     }
 
     function moveCurrentPlayer(steps) {
       const player = currentPlayer();
       const oldPosition = player.position;
-      const nextPosition = (player.position + steps) % tiles.length;
-      if (oldPosition + steps >= tiles.length) {
+      const nextPosition = (oldPosition + steps + tiles.length) % tiles.length;
+      if (steps > 0 && oldPosition + steps >= tiles.length) {
         player.cash += 200;
-        addJournal(`<strong>${player.name}</strong> đi qua Launch Gate và nhận 200 cr.`);
+        addJournal(`<strong>${player.name}</strong> đi qua Start Plaza và nhận 200 cr.`);
       }
       player.position = nextPosition;
-      game.pendingRoll = 0;
       updateTokenTargets();
       resolveLanding();
+    }
+
+    function moveToTile(player, target, collect = false) {
+      const oldPosition = player.position;
+      if (collect && target <= oldPosition) {
+        player.cash += 200;
+        addJournal(`<strong>${player.name}</strong> nhận 200 cr khi đi qua Start Plaza.`);
+      }
+      player.position = target;
+      updateTokenTargets();
+      resolveLanding();
+    }
+
+    function sendToJail(player) {
+      player.position = 10;
+      player.inJail = true;
+      player.jailTurns = 0;
+      game.extraTurn = false;
+      game.doublesInTurn = 0;
+      game.phase = "ended";
+      updateTokenTargets();
+      addJournal(`<strong>${player.name}</strong> vào Jail.`);
     }
 
     function resolveLanding() {
       const player = currentPlayer();
       const tile = currentTile(player);
       const ownerId = game.owners[tile.id];
+
+      if (tile.type === "go") {
+        addJournal(`<strong>${player.name}</strong> dừng tại Start Plaza.`);
+        game.phase = "ended";
+        render();
+        return;
+      }
+
+      if (tile.type === "goToJail") {
+        sendToJail(player);
+        render();
+        return;
+      }
 
       if (tile.type === "tax") {
         player.cash -= tile.amount;
@@ -1551,8 +1476,27 @@
         return;
       }
 
-      if (tile.type === "card") {
-        drawCard(player);
+      if (tile.type === "chance") {
+        drawCard(player, "chance");
+        render();
+        return;
+      }
+
+      if (tile.type === "chest") {
+        drawCard(player, "community");
+        render();
+        return;
+      }
+
+      if (tile.type === "jail") {
+        addJournal(`<strong>${player.name}</strong> ghé Jail như khách thăm.`);
+        game.phase = "ended";
+        render();
+        return;
+      }
+
+      if (tile.type === "parking") {
+        addJournal(`<strong>${player.name}</strong> nghỉ tại Free Parking.`);
         game.phase = "ended";
         render();
         return;
@@ -1567,7 +1511,7 @@
         }
         if (ownerId !== player.id) {
           const owner = game.players.find((entry) => entry.id === ownerId);
-          const rent = tile.rent;
+          const rent = rentFor(tile, ownerId);
           player.cash -= rent;
           owner.cash += rent;
           addJournal(`<strong>${player.name}</strong> trả ${currency(rent)} thuê cho <strong>${owner.name}</strong>.`);
@@ -1582,27 +1526,64 @@
       render();
     }
 
-    function drawCard(player) {
-      const card = cards[game.cardIndex % cards.length];
-      game.cardIndex += 1;
-      if (card.kind === "cash") {
-        player.cash += card.amount;
-      }
-      if (card.kind === "start") {
-        player.position = 0;
-        player.cash += 200;
-        updateTokenTargets();
-      }
-      if (card.kind === "move") {
-        player.position = (player.position + card.amount) % tiles.length;
-        updateTokenTargets();
-      }
+    function drawCard(player, deck) {
+      const pile = deck === "chance" ? chanceCards : communityCards;
+      const indexKey = deck === "chance" ? "chanceIndex" : "communityIndex";
+      const card = pile[game[indexKey] % pile.length];
+      game[indexKey] += 1;
       addJournal(`<strong>${player.name}</strong> rút "${card.title}": ${card.text}`);
       showToast(card.text);
+
+      if (card.kind === "cash") {
+        player.cash += card.amount;
+        game.phase = "ended";
+        return;
+      }
+
+      if (card.kind === "perProperty") {
+        const ownedCount = Object.values(game.owners).filter((ownerId) => ownerId === player.id).length;
+        player.cash += ownedCount * card.amount;
+        game.phase = "ended";
+        return;
+      }
+
+      if (card.kind === "collectFromPlayers") {
+        game.players.forEach((other) => {
+          if (other.id === player.id) return;
+          other.cash -= card.amount;
+          player.cash += card.amount;
+        });
+        game.phase = "ended";
+        return;
+      }
+
+      if (card.kind === "jail") {
+        sendToJail(player);
+        return;
+      }
+
+      if (card.kind === "moveTo") {
+        moveToTile(player, card.target, Boolean(card.collect));
+        return;
+      }
+
+      if (card.kind === "move") {
+        moveCurrentPlayer(card.amount);
+      }
     }
 
     function buyTile() {
       const player = currentPlayer();
+      if (canPayJail(player)) {
+        player.cash -= 50;
+        player.inJail = false;
+        player.jailTurns = 0;
+        addJournal(`<strong>${player.name}</strong> trả 50 cr để ra khỏi Jail.`);
+        showToast(`${player.name} đã ra khỏi Jail.`);
+        render();
+        return;
+      }
+
       const tile = currentTile(player);
       if (game.phase !== "landed" || !isBuyable(tile) || game.owners[tile.id]) return;
       if (player.cash < tile.cost) {
@@ -1619,16 +1600,26 @@
     }
 
     function endTurn() {
-      if (game.phase === "quiz") return;
+      const player = currentPlayer();
+      if (game.phase === "ready" && player.inJail) {
+        game.phase = "ended";
+      }
+      if (game.phase === "ready") return;
+      if (game.extraTurn && !player.inJail) {
+        game.phase = "ready";
+        game.extraTurn = false;
+        addJournal(`<strong>${player.name}</strong> được gieo thêm lượt vì gieo đôi.`);
+        render();
+        return;
+      }
       game.currentIndex += 1;
       if (game.currentIndex >= game.players.length) {
         game.currentIndex = 0;
         game.round += 1;
       }
       game.phase = "ready";
-      game.pendingRoll = 0;
-      game.pendingQuestion = null;
-      game.hintUsed = false;
+      game.extraTurn = false;
+      game.doublesInTurn = 0;
       addJournal(`Tới lượt <strong>${currentPlayer().name}</strong>.`);
       render();
     }
@@ -1637,10 +1628,11 @@
       const player = currentPlayer();
       const tile = currentTile(player);
       const theme = tileThemes[tile.type];
-      const buyAvailable = game.phase === "landed" && isBuyable(tile) && !game.owners[tile.id] && player.cash >= tile.cost;
+      const buyAvailable = canBuy(tile, player);
+      const payJailAvailable = canPayJail(player);
       const canEnd = game.phase === "landed" || game.phase === "ended";
 
-      roundMeta.textContent = `Vòng ${game.round} · Hot-seat local`;
+      roundMeta.textContent = `Vòng ${game.round} · Hot-seat local${game.extraTurn ? " · Double" : ""}`;
       turnToken.textContent = player.short;
       turnToken.style.setProperty("--player-color", player.color);
       turnName.textContent = player.name;
@@ -1650,35 +1642,50 @@
       turnState.textContent = phaseText();
 
       tileType.textContent = theme.label;
-      tileType.style.setProperty("--tile-color", theme.color);
+      tileType.style.setProperty("--tile-color", colorForTile(tile));
       tileName.textContent = tile.name;
       tileCost.textContent = isBuyable(tile) ? currency(tile.cost) : "-";
-      tileRent.textContent = isBuyable(tile) ? currency(tile.rent) : tile.type === "tax" ? currency(tile.amount) : "-";
+      tileRent.textContent = rentLabel(tile);
       tileOwner.textContent = isBuyable(tile) ? ownerName(tile) : "-";
       tileGroup.textContent = tile.group;
       tileBlurb.textContent = tile.blurb;
 
       diceTotal.textContent = String(game.dice[0] + game.dice[1]);
       rollDiceButton.disabled = game.phase !== "ready";
-      buyTileButton.disabled = !buyAvailable;
+      buyButtonLabel.textContent = payJailAvailable ? "Pay 50" : "Buy";
+      buyTileButton.disabled = !(buyAvailable || payJailAvailable);
       endTurnButton.disabled = !canEnd;
+      endTurnButton.textContent = game.extraTurn && canEnd ? "Roll again" : "End turn";
 
       renderPlayers();
       renderJournal();
       updateTokenTargets();
     }
 
+    function rentLabel(tile) {
+      if (tile.type === "tax") return currency(tile.amount);
+      if (!isBuyable(tile)) return "-";
+      const ownerId = game.owners[tile.id];
+      if (ownerId) return currency(rentFor(tile, ownerId));
+      if (tile.type === "utility") return "x4 / x10 dice";
+      if (tile.type === "railroad") return "25-200 cr";
+      return currency(tile.rent);
+    }
+
     function phaseText() {
       const player = currentPlayer();
       const tile = currentTile(player);
+      if (player.inJail && game.phase === "ready") {
+        return `Đang ở Jail (${player.jailTurns}/3). Gieo đôi hoặc trả 50 cr.`;
+      }
       if (game.phase === "ready") {
         return `Đang đứng tại ${tile.name}.`;
       }
-      if (game.phase === "quiz") {
-        return "Đang trả lời quiz trước khi di chuyển.";
-      }
       if (game.phase === "landed") {
         return `Có thể mua ${tile.name} hoặc kết thúc lượt.`;
+      }
+      if (game.extraTurn && !player.inJail) {
+        return `${player.name} đã xong lượt và được gieo thêm vì gieo đôi.`;
       }
       return `${player.name} đã xong lượt.`;
     }
@@ -1693,7 +1700,7 @@
           <span class="player-bar" style="--player-color: ${player.color}"></span>
           <div class="turn-main">
             <p class="row-title">${player.name}</p>
-            <p class="row-meta">${tile.name} · ${player.owned} tài sản</p>
+            <p class="row-meta">${player.inJail ? "Jail" : tile.name} · ${player.owned} tài sản</p>
           </div>
           <span class="row-cash">${currency(player.cash)}</span>
         `;
@@ -1714,7 +1721,6 @@
     rollDiceButton.addEventListener("click", rollDice);
     buyTileButton.addEventListener("click", buyTile);
     endTurnButton.addEventListener("click", endTurn);
-    hintButton.addEventListener("click", useHint);
     newGameButton.addEventListener("click", () => newGame(game.playerCount));
 
     countButtons.forEach((button) => {
