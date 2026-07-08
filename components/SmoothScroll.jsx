@@ -9,12 +9,39 @@ export default function SmoothScroll() {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let lenis;
     let rafId;
+    const parallax = {
+      far: 0,
+      mid: 0,
+      near: 0,
+      foreground: 0,
+    };
 
-    const updateScrollVars = () => {
+    const paintScrollVars = (y) => {
       const maxScroll = Math.max(1, root.scrollHeight - window.innerHeight);
-      const y = window.scrollY || root.scrollTop || 0;
       root.style.setProperty("--scroll-y", `${y}px`);
       root.style.setProperty("--scroll-progress", `${Math.min(1, y / maxScroll)}`);
+      root.style.setProperty("--parallax-far", `${parallax.far}px`);
+      root.style.setProperty("--parallax-mid", `${parallax.mid}px`);
+      root.style.setProperty("--parallax-near", `${parallax.near}px`);
+      root.style.setProperty("--parallax-foreground", `${parallax.foreground}px`);
+    };
+
+    const updateScrollVars = () => {
+      const y = window.scrollY || root.scrollTop || 0;
+      parallax.far = y;
+      parallax.mid = y;
+      parallax.near = y;
+      parallax.foreground = y;
+      paintScrollVars(y);
+    };
+
+    const updateLayeredScrollVars = () => {
+      const y = window.scrollY || root.scrollTop || 0;
+      parallax.far += (y - parallax.far) * 0.055;
+      parallax.mid += (y - parallax.mid) * 0.095;
+      parallax.near += (y - parallax.near) * 0.15;
+      parallax.foreground += (y - parallax.foreground) * 0.22;
+      paintScrollVars(y);
     };
 
     const revealObserver = new IntersectionObserver(
@@ -46,7 +73,7 @@ export default function SmoothScroll() {
 
       const frame = (time) => {
         lenis.raf(time);
-        updateScrollVars();
+        updateLayeredScrollVars();
         rafId = requestAnimationFrame(frame);
       };
 

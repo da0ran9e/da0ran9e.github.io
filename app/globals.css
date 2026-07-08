@@ -14,6 +14,10 @@
   --shadow: rgba(19, 21, 18, 0.18);
   --scroll-y: 0px;
   --scroll-progress: 0;
+  --parallax-far: 0px;
+  --parallax-mid: 0px;
+  --parallax-near: 0px;
+  --parallax-foreground: 0px;
 }
 
 :root[data-theme="dark"] {
@@ -67,7 +71,7 @@ body::before {
     linear-gradient(90deg, rgba(16, 18, 15, 0.06) 1px, transparent 1px);
   background-size: 64px 64px;
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.82), transparent 78%);
-  transform: translateY(calc(var(--scroll-y) * -0.025));
+  transform: translateY(calc(var(--parallax-far) * -0.018));
 }
 
 a {
@@ -289,7 +293,7 @@ main {
   inset: 0;
   z-index: -1;
   overflow: hidden;
-  transform: translateY(calc(var(--scroll-y) * -0.04));
+  transform: translateY(calc(var(--parallax-mid) * -0.055));
 }
 
 .network-field {
@@ -313,7 +317,7 @@ main {
     repeating-radial-gradient(circle, transparent 0 56px, rgba(16, 18, 15, 0.12) 57px 58px),
     conic-gradient(from 40deg, transparent, rgba(25, 199, 193, 0.18), transparent, rgba(142, 109, 255, 0.2), transparent);
   opacity: 0.85;
-  transform: rotate(-12deg);
+  transform: translate3d(0, calc(var(--parallax-far) * -0.024), 0) rotate(-12deg);
 }
 
 .signal-line {
@@ -329,14 +333,14 @@ main {
   top: 32%;
   left: 8%;
   width: 46%;
-  transform: rotate(-8deg);
+  transform: translate3d(0, calc(var(--parallax-near) * -0.07), 0) rotate(-8deg);
 }
 
 .signal-line-two {
   top: 58%;
   right: 12%;
   width: 42%;
-  transform: rotate(18deg);
+  transform: translate3d(0, calc(var(--parallax-mid) * -0.045), 0) rotate(18deg);
   animation-delay: -3s;
 }
 
@@ -344,7 +348,7 @@ main {
   top: 73%;
   left: 18%;
   width: 32%;
-  transform: rotate(7deg);
+  transform: translate3d(0, calc(var(--parallax-foreground) * -0.09), 0) rotate(7deg);
   animation-delay: -5s;
 }
 
@@ -358,7 +362,8 @@ main {
   border-radius: 50%;
   background: rgba(246, 247, 240, 0.62);
   box-shadow: 0 16px 44px var(--shadow);
-  transform: translate(-50%, -50%);
+  transform: translate3d(-50%, calc(-50% + (var(--parallax-near) * -0.045)), 0);
+  translate: 0 0;
   animation: nodeFloat 8s ease-in-out infinite;
   animation-delay: var(--delay);
   backdrop-filter: blur(12px);
@@ -387,14 +392,14 @@ main {
 .hero-content {
   display: grid;
   width: min(1180px, 100%);
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
-  gap: 56px;
   margin: auto;
 }
 
 .hero-copy {
   max-width: 860px;
+  transform: translateY(calc(var(--parallax-foreground) * -0.012));
 }
 
 .eyebrow,
@@ -444,48 +449,11 @@ main {
   margin-top: 34px;
 }
 
-.hero-panel {
-  align-self: stretch;
-  min-height: 430px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  box-shadow: 0 28px 90px var(--shadow);
-  backdrop-filter: blur(24px);
-}
-
-.panel-header,
 .card-title-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-}
-
-.panel-header {
-  align-items: center;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.focus-stack {
-  display: grid;
-  gap: 10px;
-  margin-top: 28px;
-}
-
-.focus-stack span {
-  display: block;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.18);
-  font-size: 1.04rem;
-  font-weight: 760;
-  transform: translateX(calc(var(--i) * 10px));
 }
 
 .content-section {
@@ -565,7 +533,7 @@ main {
     radial-gradient(circle, rgba(25, 199, 193, 0.22), transparent 68%);
   filter: blur(2px);
   opacity: 0.7;
-  transform: translateY(calc(var(--scroll-y) * -0.018));
+  transform: translateY(calc(var(--parallax-far) * -0.026));
 }
 
 .sticky-label {
@@ -815,7 +783,7 @@ main {
     linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
   background-size: 34px 34px;
-  transform: perspective(400px) rotateX(58deg) translateY(34px);
+  transform: perspective(400px) rotateX(58deg) translateY(calc(34px + (var(--parallax-far) * -0.012)));
   transform-origin: bottom;
 }
 
@@ -995,10 +963,10 @@ main {
 @keyframes nodeFloat {
   0%,
   100% {
-    transform: translate(-50%, -50%);
+    translate: 0 0;
   }
   50% {
-    transform: translate(-50%, calc(-50% - 14px));
+    translate: 0 -14px;
   }
 }
 
@@ -1025,10 +993,6 @@ main {
 
   .hero-copy h1 {
     font-size: 5.2rem;
-  }
-
-  .hero-panel {
-    min-height: 0;
   }
 
   .sticky-label {
@@ -1196,10 +1160,6 @@ main {
     min-height: 38px;
     padding: 0 14px;
     font-size: 0.86rem;
-  }
-
-  .focus-stack span {
-    transform: none;
   }
 }
 

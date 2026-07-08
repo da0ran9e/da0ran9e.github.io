@@ -4,9 +4,7 @@ import {
   BookOpenText,
   Layers3,
   Mail,
-  Network,
   RadioTower,
-  Sparkles,
 } from "lucide-react";
 import FloatingDock from "@/components/FloatingDock";
 import Header from "@/components/Header";
@@ -88,19 +86,6 @@ export default function HomePage() {
                 </a>
               </div>
             </div>
-            <aside className="hero-panel" data-reveal style={{ "--delay": "120ms" }}>
-              <div className="panel-header">
-                <span>Current Focus</span>
-                <Sparkles size={17} strokeWidth={1.8} />
-              </div>
-              <div className="focus-stack">
-                {profile.researchAreas.map((area, index) => (
-                  <span style={{ "--i": index }} key={area}>
-                    {area}
-                  </span>
-                ))}
-              </div>
-            </aside>
           </div>
         </section>
 
