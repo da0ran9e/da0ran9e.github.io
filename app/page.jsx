@@ -7,6 +7,7 @@ import {
   RadioTower,
 } from "lucide-react";
 import FloatingDock from "@/components/FloatingDock";
+import GatedAppTile from "@/components/GatedAppTile";
 import Header from "@/components/Header";
 import LogoBadge from "@/components/LogoBadge";
 import NetworkField from "@/components/NetworkField";
@@ -21,8 +22,6 @@ import {
   publications,
   skills,
 } from "@/lib/portfolio-data";
-
-const external = (href) => href.startsWith("http");
 
 function SectionIntro({ kicker, title, text }) {
   return (
@@ -233,19 +232,7 @@ export default function HomePage() {
           />
           <div className="apps-marquee" data-reveal>
             {apps.map((app, index) => (
-              <a
-                className="app-tile"
-                style={{ "--i": index }}
-                href={app.href}
-                target={external(app.href) ? "_blank" : undefined}
-                rel={external(app.href) ? "noopener noreferrer" : undefined}
-                key={app.title}
-              >
-                <span>{app.stack}</span>
-                <h3>{app.title}</h3>
-                <p>{app.summary}</p>
-                <ArrowUpRight size={17} strokeWidth={1.8} />
-              </a>
+              <GatedAppTile app={app} index={index} key={app.title} />
             ))}
           </div>
         </section>
