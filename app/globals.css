@@ -317,7 +317,7 @@ main {
     repeating-radial-gradient(circle, transparent 0 56px, rgba(16, 18, 15, 0.12) 57px 58px),
     conic-gradient(from 40deg, transparent, rgba(25, 199, 193, 0.18), transparent, rgba(142, 109, 255, 0.2), transparent);
   opacity: 0.85;
-  transform: translate3d(0, calc(var(--parallax-far) * -0.024), 0) rotate(-12deg);
+  transform: translate3d(0, calc(var(--parallax-far) * 0.078), 0) rotate(-12deg);
 }
 
 .signal-line {
