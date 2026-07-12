@@ -34,6 +34,11 @@ export default function GatedAppTile({ app, index }) {
   const handleClick = (event) => {
     event.preventDefault();
 
+    if (app.direct) {
+      openApp();
+      return;
+    }
+
     if (resetTimer.current) window.clearTimeout(resetTimer.current);
     resetTimer.current = window.setTimeout(resetGate, 6500);
 
