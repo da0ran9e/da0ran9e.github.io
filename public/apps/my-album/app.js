@@ -2,6 +2,7 @@
   "use strict";
 
   const STORAGE_KEY = "my-album-endpoint-v1";
+  const HIDDEN_ITEMS_STORAGE_KEY = "my-album-hidden-items-v1";
   const PAGE_SIZE = 80;
   const MAX_CONCURRENT_REQUESTS = 4;
   const PROBE_TIMEOUT_MS = 10000;
@@ -33,6 +34,7 @@
     stats: null,
     hasMore: false,
     filter: "all",
+    view: "library",
     query: "",
     sort: "newest",
     renderedCount: 0,
@@ -46,6 +48,13 @@
     viewerCacheTimer: null,
     viewerBlob: null,
     viewerCacheUrl: null,
+    hiddenIds: new Set(),
+    selectedIds: new Set(),
+    selectionMode: false,
+    lastSelectedIndex: -1,
+    isDownloading: false,
+    downloadAbortController: null,
+    toastTimer: null,
   };
 
   const elements = {
@@ -53,6 +62,8 @@
     openDirect: document.querySelector("#open-direct"),
     changeEndpoint: document.querySelector("#change-endpoint"),
     searchInput: document.querySelector("#search-input"),
+    viewButtons: [...document.querySelectorAll("[data-view]")],
+    hiddenCount: document.querySelector("#hidden-count"),
     filterButtons: [...document.querySelectorAll("[data-filter]")],
     sortSelect: document.querySelector("#sort-select"),
     sizeInput: document.querySelector("#size-input"),
@@ -62,10 +73,12 @@
     retryButton: document.querySelector("#retry-button"),
     noticeOpenDirect: document.querySelector("#notice-open-direct"),
     albumSummary: document.querySelector("#album-summary"),
+    albumTitle: document.querySelector("#album-title"),
     connectionMode: document.querySelector("#connection-mode"),
     scanStatus: document.querySelector("#scan-status"),
     scanStatusText: document.querySelector("#scan-status-text"),
     refreshButton: document.querySelector("#refresh-button"),
+    selectButton: document.querySelector("#select-button"),
     mediaGrid: document.querySelector("#media-grid"),
     emptyState: document.querySelector("#empty-state"),
     emptyTitle: document.querySelector("#empty-state h2"),
@@ -88,6 +101,17 @@
     viewerStage: document.querySelector("#viewer-stage"),
     viewerCount: document.querySelector("#viewer-count"),
     viewerOfflineStatus: document.querySelector("#viewer-offline-status"),
+    viewerDownload: document.querySelector("#viewer-download"),
+    selectionBar: document.querySelector("#selection-bar"),
+    selectionCancel: document.querySelector("#selection-cancel"),
+    selectionCount: document.querySelector("#selection-count"),
+    selectionProgress: document.querySelector("#selection-progress"),
+    selectionProgressBar: document.querySelector("#selection-progress-bar"),
+    selectAllButton: document.querySelector("#select-all-button"),
+    downloadSelected: document.querySelector("#download-selected"),
+    hideSelected: document.querySelector("#hide-selected"),
+    restoreSelected: document.querySelector("#restore-selected"),
+    toast: document.querySelector("#toast"),
     mediaCardTemplate: document.querySelector("#media-card-template"),
   };
 
@@ -143,6 +167,46 @@
 
   function saveEndpoint(endpoint) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(endpoint));
+  }
+
+  function hiddenItemsStorageKey() {
+    return `${HIDDEN_ITEMS_STORAGE_KEY}:${state.baseUrl}`;
+  }
+
+  function loadHiddenItems() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(hiddenItemsStorageKey()));
+      state.hiddenIds = new Set(Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : []);
+    } catch {
+      state.hiddenIds = new Set();
+    }
+    updateHiddenCount();
+  }
+
+  function saveHiddenItems() {
+    try {
+      localStorage.setItem(hiddenItemsStorageKey(), JSON.stringify([...state.hiddenIds]));
+      updateHiddenCount();
+      return true;
+    } catch {
+      showToast("Không thể lưu danh sách đã ẩn trong trình duyệt này.");
+      return false;
+    }
+  }
+
+  function updateHiddenCount() {
+    const count = state.hiddenIds.size;
+    elements.hiddenCount.textContent = numberFormatter.format(count);
+    elements.hiddenCount.hidden = count === 0;
+  }
+
+  function showToast(message, duration = 3200) {
+    clearTimeout(state.toastTimer);
+    elements.toast.textContent = message;
+    elements.toast.hidden = false;
+    state.toastTimer = window.setTimeout(() => {
+      elements.toast.hidden = true;
+    }, duration);
   }
 
   function endpointUrl(endpoint) {
@@ -591,7 +655,6 @@
       }
       const nextItems = payload.items.map(normalizeApiItem);
       state.items = reset ? nextItems : [...state.items, ...nextItems];
-      state.visibleItems = state.items;
       state.total = Number(payload.total) || 0;
       state.stats = payload.stats || null;
       state.hasMore = Boolean(payload.hasMore);
@@ -601,7 +664,8 @@
         clearMediaGrid();
         state.renderedCount = 0;
       }
-      renderNextPage(nextItems.length || PAGE_SIZE);
+      updateVisibleItems();
+      renderNextPage(Math.max(nextItems.length || PAGE_SIZE, state.visibleItems.length - state.renderedCount));
       updateSummary();
       updateEmptyState();
       saveCachedCatalog().catch(() => {});
@@ -779,15 +843,27 @@
     if (state.sort === "name-asc") {
       return collator.compare(left.name, right.name);
     }
+    if (state.sort === "newest" || state.sort === "oldest") {
+      const direction = state.sort === "newest" ? -1 : 1;
+      const dateDifference = ((left.modified || 0) - (right.modified || 0)) * direction;
+      if (dateDifference !== 0) {
+        return dateDifference;
+      }
+    }
     return collator.compare(left.relative, right.relative);
   }
 
-  function refreshDirectoryItems(keepRenderLimit = false) {
+  function updateVisibleItems() {
     const normalizedQuery = state.query.trim().toLocaleLowerCase("vi");
     state.visibleItems = state.items
+      .filter((item) => state.hiddenIds.has(item.id) === (state.view === "hidden"))
       .filter((item) => state.filter === "all" || item.type === state.filter)
       .filter((item) => !normalizedQuery || `${item.name} ${item.folder}`.toLocaleLowerCase("vi").includes(normalizedQuery))
       .sort(compareDirectoryItems);
+  }
+
+  function refreshDirectoryItems(keepRenderLimit = false) {
+    updateVisibleItems();
     if (state.mode !== "api") {
       state.total = state.visibleItems.length;
     }
@@ -909,6 +985,130 @@
     }
   }
 
+  function updateSelectionUi() {
+    const selectedCount = state.selectedIds.size;
+    const allVisibleSelected = state.visibleItems.length > 0 &&
+      state.visibleItems.every((item) => state.selectedIds.has(item.id));
+
+    elements.mediaGrid.classList.toggle("is-selecting", state.selectionMode);
+    document.body.classList.toggle("has-selection", state.selectionMode);
+    elements.selectionBar.hidden = !state.selectionMode;
+    elements.selectButton.hidden = !state.mode || state.visibleItems.length === 0 || state.selectionMode;
+    elements.selectionCount.textContent = `${numberFormatter.format(selectedCount)} mục đã chọn`;
+    elements.selectAllButton.textContent = allVisibleSelected ? "Bỏ chọn tất cả" : "Chọn tất cả";
+    elements.selectAllButton.disabled = state.visibleItems.length === 0 || state.isDownloading;
+    elements.downloadSelected.disabled = selectedCount === 0 || state.isDownloading;
+    elements.hideSelected.disabled = selectedCount === 0 || state.isDownloading;
+    elements.restoreSelected.disabled = selectedCount === 0 || state.isDownloading;
+    elements.hideSelected.hidden = state.view === "hidden";
+    elements.restoreSelected.hidden = state.view !== "hidden";
+
+    for (const card of elements.mediaGrid.querySelectorAll(".media-card:not(.is-skeleton)")) {
+      const item = state.visibleItems[Number(card.dataset.index)];
+      const isSelected = Boolean(item && state.selectedIds.has(item.id));
+      card.classList.toggle("is-selected", isSelected);
+      if (state.selectionMode) {
+        card.setAttribute("aria-pressed", String(isSelected));
+        card.setAttribute("aria-label", `${isSelected ? "Bỏ chọn" : "Chọn"} ${item?.name || "mục"}`);
+      } else {
+        card.removeAttribute("aria-pressed");
+        if (item) {
+          card.setAttribute("aria-label", `Mở ${item.name}`);
+        }
+      }
+    }
+  }
+
+  function enterSelectionMode(initialIndex = -1) {
+    if (state.visibleItems.length === 0) {
+      return;
+    }
+    state.selectionMode = true;
+    state.lastSelectedIndex = -1;
+    if (initialIndex >= 0 && state.visibleItems[initialIndex]) {
+      state.selectedIds.add(state.visibleItems[initialIndex].id);
+      state.lastSelectedIndex = initialIndex;
+    }
+    updateSelectionUi();
+  }
+
+  function exitSelectionMode() {
+    state.downloadAbortController?.abort();
+    state.downloadAbortController = null;
+    state.isDownloading = false;
+    state.selectionMode = false;
+    state.selectedIds.clear();
+    state.lastSelectedIndex = -1;
+    elements.selectionBar.classList.remove("is-busy");
+    elements.selectionProgress.hidden = true;
+    elements.selectionProgressBar.style.width = "0%";
+    updateSelectionUi();
+  }
+
+  function toggleItemSelection(index, useRange = false) {
+    const item = state.visibleItems[index];
+    if (!item) {
+      return;
+    }
+
+    if (useRange && state.lastSelectedIndex >= 0) {
+      const start = Math.min(state.lastSelectedIndex, index);
+      const end = Math.max(state.lastSelectedIndex, index);
+      for (let cursor = start; cursor <= end; cursor += 1) {
+        state.selectedIds.add(state.visibleItems[cursor].id);
+      }
+    } else if (state.selectedIds.has(item.id)) {
+      state.selectedIds.delete(item.id);
+    } else {
+      state.selectedIds.add(item.id);
+    }
+
+    state.lastSelectedIndex = index;
+    updateSelectionUi();
+  }
+
+  function toggleSelectAll() {
+    const allSelected = state.visibleItems.length > 0 &&
+      state.visibleItems.every((item) => state.selectedIds.has(item.id));
+    for (const item of state.visibleItems) {
+      if (allSelected) {
+        state.selectedIds.delete(item.id);
+      } else {
+        state.selectedIds.add(item.id);
+      }
+    }
+    state.lastSelectedIndex = -1;
+    updateSelectionUi();
+  }
+
+  function applyHiddenAction(shouldHide) {
+    const selectedIds = [...state.selectedIds];
+    if (selectedIds.length === 0) {
+      return;
+    }
+
+    const previousHiddenIds = new Set(state.hiddenIds);
+    for (const id of selectedIds) {
+      if (shouldHide) {
+        state.hiddenIds.add(id);
+      } else {
+        state.hiddenIds.delete(id);
+      }
+    }
+    if (!saveHiddenItems()) {
+      state.hiddenIds = previousHiddenIds;
+      updateHiddenCount();
+      return;
+    }
+
+    const count = selectedIds.length;
+    exitSelectionMode();
+    refreshDirectoryItems(false);
+    showToast(shouldHide
+      ? `Đã ẩn ${numberFormatter.format(count)} mục khỏi thư viện.`
+      : `Đã đưa ${numberFormatter.format(count)} mục trở lại thư viện.`);
+  }
+
   function createMediaCard(item, index) {
     const fragment = elements.mediaCardTemplate.content.cloneNode(true);
     const card = fragment.querySelector(".media-card");
@@ -918,6 +1118,7 @@
     const detail = fragment.querySelector(".media-detail");
 
     card.dataset.index = String(index);
+    card.dataset.itemId = item.id;
     card.setAttribute("aria-label", `Mở ${item.name}`);
     name.textContent = item.name;
     folder.textContent = item.folder;
@@ -928,6 +1129,11 @@
     typeBadge.textContent = item.extension;
     preview.append(typeBadge);
     addPreviewImage(preview, item);
+
+    if (state.selectedIds.has(item.id)) {
+      card.classList.add("is-selected");
+      card.setAttribute("aria-pressed", "true");
+    }
 
     return fragment;
   }
@@ -943,16 +1149,30 @@
     }
     elements.mediaGrid.append(fragment);
     state.renderedCount = end;
+    updateSelectionUi();
   }
 
   function updateSummary() {
+    elements.albumTitle.textContent = state.view === "hidden" ? "Đã ẩn" : "Thư viện";
     if (!state.endpoint) {
       elements.albumSummary.textContent = "Nhập IP và cổng của máy lưu album để bắt đầu.";
       return;
     }
 
+    if (state.view === "hidden") {
+      const qualifier = state.filter !== "all" || state.query.trim() ? " phù hợp" : "";
+      elements.albumSummary.textContent =
+        `${numberFormatter.format(state.visibleItems.length)} mục${qualifier} · Chỉ ẩn trên trình duyệt này`;
+      return;
+    }
+
     const stats = state.stats || { images: 0, videos: 0 };
-    const baseSummary = `${numberFormatter.format(stats.images || 0)} ảnh · ${numberFormatter.format(stats.videos || 0)} video`;
+    const hiddenLoadedItems = state.items.filter((item) => state.hiddenIds.has(item.id));
+    const hiddenImages = hiddenLoadedItems.filter((item) => item.type === "image").length;
+    const hiddenVideos = hiddenLoadedItems.filter((item) => item.type === "video").length;
+    const visibleImages = Math.max(0, (stats.images || 0) - hiddenImages);
+    const visibleVideos = Math.max(0, (stats.videos || 0) - hiddenVideos);
+    const baseSummary = `${numberFormatter.format(visibleImages)} ảnh · ${numberFormatter.format(visibleVideos)} video`;
     const hasActiveQuery = state.filter !== "all" || Boolean(state.query.trim());
     elements.albumSummary.textContent = hasActiveQuery
       ? `${numberFormatter.format(state.total)} kết quả · ${baseSummary}`
@@ -963,13 +1183,22 @@
     const hasVisibleItems = state.visibleItems.length > 0;
     elements.emptyState.hidden = hasVisibleItems || state.isLoading;
     elements.emptyConnect.textContent = state.endpoint ? "Đổi IP và cổng" : "Nhập IP và cổng";
-    if (state.endpoint && state.mode && !hasVisibleItems) {
+    elements.emptyConnect.hidden = Boolean(state.endpoint);
+    if (state.endpoint && state.mode && state.view === "hidden" && !hasVisibleItems) {
+      elements.emptyTitle.textContent = state.filter !== "all" || state.query.trim()
+        ? "Không có kết quả"
+        : "Chưa có mục đã ẩn";
+      elements.emptyCopy.textContent = state.filter !== "all" || state.query.trim()
+        ? "Thử từ khóa khác hoặc đổi bộ lọc nội dung."
+        : "Ảnh và video bạn ẩn sẽ xuất hiện ở đây để có thể khôi phục bất cứ lúc nào.";
+    } else if (state.endpoint && state.mode && !hasVisibleItems) {
       elements.emptyTitle.textContent = "Không có kết quả";
       elements.emptyCopy.textContent = "Thử từ khóa khác, đổi bộ lọc hoặc làm mới album.";
     } else {
       elements.emptyTitle.textContent = "Chưa có nội dung";
       elements.emptyCopy.textContent = "Kết nối tới máy lưu album để xem ảnh và video.";
     }
+    updateSelectionUi();
   }
 
   function releaseViewerMedia() {
@@ -1163,8 +1392,109 @@
     }
   }
 
+  function wait(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+
+  async function downloadMediaItem(item, signal) {
+    const response = await fetchMediaResponse(item.url, signal);
+    const blob = await response.blob();
+    if (signal?.aborted) {
+      throw new DOMException("Đã dừng tải xuống", "AbortError");
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = item.name.replaceAll("/", "_").replaceAll("\\", "_") || "media";
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    await wait(350);
+    URL.revokeObjectURL(objectUrl);
+  }
+
+  async function downloadViewerItem() {
+    const item = state.visibleItems[state.viewerIndex];
+    if (!item || elements.viewerDownload.disabled) {
+      return;
+    }
+
+    const controller = new AbortController();
+    elements.viewerDownload.disabled = true;
+    try {
+      await downloadMediaItem(item, controller.signal);
+      showToast(`Đã gửi ${item.name} tới trình tải xuống.`);
+    } catch (error) {
+      if (error?.name !== "AbortError") {
+        showToast(`Không tải được ${item.name}.`);
+      }
+    } finally {
+      elements.viewerDownload.disabled = false;
+    }
+  }
+
+  async function downloadSelectedItems() {
+    const selectedItems = state.items.filter((item) => state.selectedIds.has(item.id));
+    if (selectedItems.length === 0 || state.isDownloading) {
+      return;
+    }
+
+    const controller = new AbortController();
+    state.downloadAbortController = controller;
+    state.isDownloading = true;
+    elements.selectionBar.classList.add("is-busy");
+    elements.selectionProgress.hidden = false;
+    elements.selectionProgressBar.style.width = "0%";
+    updateSelectionUi();
+
+    let completed = 0;
+    let failed = 0;
+    for (const item of selectedItems) {
+      if (controller.signal.aborted) {
+        break;
+      }
+      const current = completed + failed + 1;
+      elements.selectionProgress.textContent =
+        `Đang chuẩn bị ${numberFormatter.format(current)} / ${numberFormatter.format(selectedItems.length)}`;
+      try {
+        await downloadMediaItem(item, controller.signal);
+        completed += 1;
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          break;
+        }
+        failed += 1;
+      }
+      const processed = completed + failed;
+      elements.selectionProgressBar.style.width = `${(processed / selectedItems.length) * 100}%`;
+    }
+
+    if (state.downloadAbortController === controller) {
+      state.downloadAbortController = null;
+      state.isDownloading = false;
+      elements.selectionBar.classList.remove("is-busy");
+      updateSelectionUi();
+    }
+
+    if (controller.signal.aborted) {
+      showToast("Đã dừng tải xuống.");
+      return;
+    }
+
+    elements.selectionProgress.textContent = failed > 0
+      ? `Đã gửi ${numberFormatter.format(completed)} mục · ${numberFormatter.format(failed)} lỗi`
+      : `Đã gửi ${numberFormatter.format(completed)} mục tới trình tải xuống`;
+    elements.selectionProgressBar.style.width = "100%";
+    showToast(failed > 0
+      ? `Đã tải ${numberFormatter.format(completed)} mục, ${numberFormatter.format(failed)} mục bị lỗi.`
+      : `Đã gửi ${numberFormatter.format(completed)} mục tới trình tải xuống.`);
+  }
+
   function resetAlbumState() {
     closeViewer();
+    exitSelectionMode();
     state.items = [];
     state.visibleItems = [];
     state.total = 0;
@@ -1272,9 +1602,12 @@
   function applyEndpoint(endpoint) {
     state.endpoint = endpoint;
     state.baseUrl = endpointUrl(endpoint);
+    state.view = "library";
+    elements.viewButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
+    loadHiddenItems();
     elements.endpointLabel.textContent = `${endpoint.ip}:${endpoint.port}`;
     elements.openDirect.hidden = false;
-    elements.changeEndpoint.textContent = "Đổi máy";
+    elements.changeEndpoint.querySelector("span").textContent = "Đổi máy";
     connectAlbum();
   }
 
@@ -1303,12 +1636,31 @@
   elements.refreshButton.addEventListener("click", () => connectAlbum({ force: true }));
 
   elements.searchInput.addEventListener("input", () => {
+    if (state.selectionMode) {
+      exitSelectionMode();
+    }
     state.query = elements.searchInput.value;
     reloadFromControls();
   });
 
+  for (const button of elements.viewButtons) {
+    button.addEventListener("click", () => {
+      if (button.dataset.view === state.view) {
+        return;
+      }
+      exitSelectionMode();
+      state.view = button.dataset.view;
+      elements.viewButtons.forEach((viewButton) =>
+        viewButton.classList.toggle("is-active", viewButton === button));
+      refreshDirectoryItems(false);
+    });
+  }
+
   for (const button of elements.filterButtons) {
     button.addEventListener("click", () => {
+      if (state.selectionMode) {
+        exitSelectionMode();
+      }
       state.filter = button.dataset.filter;
       elements.filterButtons.forEach((filterButton) => filterButton.classList.toggle("is-active", filterButton === button));
       reloadFromControls();
@@ -1316,6 +1668,9 @@
   }
 
   elements.sortSelect.addEventListener("change", () => {
+    if (state.selectionMode) {
+      exitSelectionMode();
+    }
     state.sort = elements.sortSelect.value;
     reloadFromControls();
   });
@@ -1326,12 +1681,28 @@
 
   elements.mediaGrid.addEventListener("click", (event) => {
     const card = event.target.closest(".media-card:not(.is-skeleton)");
-    if (card) {
-      showViewer(Number(card.dataset.index));
+    if (!card) {
+      return;
+    }
+    const index = Number(card.dataset.index);
+    if (state.selectionMode) {
+      toggleItemSelection(index, event.shiftKey);
+    } else if (event.target.closest(".selection-check")) {
+      enterSelectionMode(index);
+    } else {
+      showViewer(index);
     }
   });
 
+  elements.selectButton.addEventListener("click", () => enterSelectionMode());
+  elements.selectionCancel.addEventListener("click", exitSelectionMode);
+  elements.selectAllButton.addEventListener("click", toggleSelectAll);
+  elements.hideSelected.addEventListener("click", () => applyHiddenAction(true));
+  elements.restoreSelected.addEventListener("click", () => applyHiddenAction(false));
+  elements.downloadSelected.addEventListener("click", downloadSelectedItems);
+
   elements.viewerClose.addEventListener("click", closeViewer);
+  elements.viewerDownload.addEventListener("click", downloadViewerItem);
   elements.viewerPrevious.addEventListener("click", () => moveViewer(-1));
   elements.viewerNext.addEventListener("click", () => moveViewer(1));
   elements.viewerDialog.addEventListener("click", (event) => {
@@ -1345,13 +1716,16 @@
   });
 
   document.addEventListener("keydown", (event) => {
-    if (!elements.viewerDialog.open) {
+    if (elements.viewerDialog.open) {
+      if (event.key === "ArrowLeft") {
+        moveViewer(-1);
+      } else if (event.key === "ArrowRight") {
+        moveViewer(1);
+      }
       return;
     }
-    if (event.key === "ArrowLeft") {
-      moveViewer(-1);
-    } else if (event.key === "ArrowRight") {
-      moveViewer(1);
+    if (event.key === "Escape" && state.selectionMode) {
+      exitSelectionMode();
     }
   });
 
