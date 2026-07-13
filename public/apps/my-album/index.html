@@ -4,81 +4,157 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <meta http-equiv="refresh" content="0; url=https://album.vuducan.qzz.io/" />
+    <meta name="theme-color" content="#f5f7f7" />
     <title>My Album</title>
-    <style>
-      :root {
-        color-scheme: light;
-        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        letter-spacing: 0;
-      }
-
-      * {
-        box-sizing: border-box;
-      }
-
-      body {
-        display: grid;
-        min-height: 100vh;
-        margin: 0;
-        place-items: center;
-        color: #171a1c;
-        background: #f3f5f6;
-      }
-
-      main {
-        display: grid;
-        width: min(100% - 32px, 440px);
-        gap: 12px;
-        padding: 28px;
-        border: 1px solid #cfd7da;
-        border-radius: 4px;
-        background: #ffffff;
-      }
-
-      span {
-        color: #0a6d5b;
-        font-size: 12px;
-        font-weight: 800;
-        text-transform: uppercase;
-      }
-
-      h1,
-      p {
-        margin: 0;
-      }
-
-      h1 {
-        font-size: 24px;
-      }
-
-      p {
-        color: #5c656a;
-        font-size: 14px;
-      }
-
-      a {
-        display: inline-flex;
-        min-height: 40px;
-        align-items: center;
-        justify-content: center;
-        margin-top: 8px;
-        padding: 9px 14px;
-        border-radius: 4px;
-        color: #ffffff;
-        background: #0a6d5b;
-        font-size: 13px;
-        font-weight: 800;
-        text-decoration: none;
-      }
-    </style>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="./app.js" defer></script>
   </head>
   <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Về trang chủ">
+        <span class="brand-mark" aria-hidden="true">VA</span>
+        <span>
+          <strong>My Album</strong>
+          <small id="endpoint-label">Chưa kết nối</small>
+        </span>
+      </a>
+
+      <div class="topbar-actions">
+        <button id="open-direct" class="button button-secondary" type="button" hidden>
+          Mở trực tiếp
+        </button>
+        <button id="change-endpoint" class="button button-primary" type="button">
+          Kết nối
+        </button>
+      </div>
+    </header>
+
     <main>
-      <span>Khu vực riêng tư</span>
-      <h1>My Album</h1>
-      <p>Đang chuyển tới trang đăng nhập bảo mật.</p>
-      <a href="https://album.vuducan.qzz.io/">Tiếp tục</a>
+      <section class="toolbar" aria-label="Công cụ album">
+        <label class="search-field" for="search-input">
+          <span aria-hidden="true">⌕</span>
+          <input id="search-input" type="search" placeholder="Tìm theo tên hoặc thư mục" autocomplete="off" />
+        </label>
+
+        <div class="filter-group" role="group" aria-label="Loại nội dung">
+          <button class="filter-button is-active" type="button" data-filter="all">Tất cả</button>
+          <button class="filter-button" type="button" data-filter="image">Ảnh</button>
+          <button class="filter-button" type="button" data-filter="video">Video</button>
+        </div>
+
+        <label class="select-field">
+          <span>Sắp xếp</span>
+          <select id="sort-select">
+            <option value="path-asc">Thư mục A–Z</option>
+            <option value="name-asc">Tên A–Z</option>
+            <option value="name-desc">Tên Z–A</option>
+          </select>
+        </label>
+
+        <label class="size-field" for="size-input">
+          <span>Kích thước</span>
+          <input id="size-input" type="range" min="150" max="300" step="10" value="210" />
+        </label>
+      </section>
+
+      <section id="connection-notice" class="notice" hidden>
+        <div>
+          <strong id="notice-title">Không thể đọc album</strong>
+          <p id="notice-message"></p>
+        </div>
+        <div class="notice-actions">
+          <button id="retry-button" class="button button-primary" type="button">Thử lại</button>
+          <button id="notice-open-direct" class="button button-secondary" type="button">Mở trực tiếp</button>
+        </div>
+      </section>
+
+      <section class="album-heading" aria-live="polite">
+        <div>
+          <h1>Thư viện</h1>
+          <p id="album-summary">Nhập IP và cổng của máy lưu album để bắt đầu.</p>
+        </div>
+        <div id="scan-status" class="scan-status" hidden>
+          <span class="spinner" aria-hidden="true"></span>
+          <span id="scan-status-text">Đang quét…</span>
+        </div>
+      </section>
+
+      <section id="media-grid" class="media-grid" aria-label="Ảnh và video"></section>
+
+      <section id="empty-state" class="empty-state">
+        <span class="empty-symbol" aria-hidden="true">▧</span>
+        <h2>Chưa có nội dung</h2>
+        <p>Kết nối tới máy lưu album hoặc thay đổi bộ lọc để xem ảnh và video.</p>
+        <button id="empty-connect" class="button button-primary" type="button">Nhập IP và cổng</button>
+      </section>
+
+      <div id="load-sentinel" class="load-sentinel" aria-hidden="true"></div>
     </main>
+
+    <dialog id="connection-dialog" class="dialog connection-dialog">
+      <form id="connection-form" method="dialog">
+        <div class="dialog-header">
+          <div>
+            <small>Kết nối mạng nội bộ</small>
+            <h2>Máy lưu album</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Đóng">×</button>
+        </div>
+
+        <p class="dialog-copy">
+          Nhập địa chỉ máy Windows đang chia sẻ thư mục. Thông tin chỉ được lưu trong trình duyệt này.
+        </p>
+
+        <div class="connection-fields">
+          <label>
+            <span>Địa chỉ IP</span>
+            <input id="ip-input" name="ip" inputmode="decimal" placeholder="192.168.0.102" required />
+          </label>
+          <label>
+            <span>Cổng</span>
+            <input id="port-input" name="port" type="number" min="1" max="65535" placeholder="8000" required />
+          </label>
+        </div>
+
+        <p id="form-error" class="form-error" role="alert" hidden></p>
+
+        <div class="dialog-actions">
+          <button class="button button-secondary" type="button" data-close-dialog>Hủy</button>
+          <button class="button button-primary" type="submit">Lưu và kết nối</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="viewer-dialog" class="viewer-dialog">
+      <div class="viewer-shell">
+        <header class="viewer-header">
+          <div class="viewer-title">
+            <strong id="viewer-name"></strong>
+            <small id="viewer-folder"></small>
+          </div>
+          <div class="viewer-actions">
+            <a id="viewer-open-original" class="button button-dark" href="#" target="_blank" rel="noreferrer">
+              Mở file gốc
+            </a>
+            <button id="viewer-close" class="icon-button icon-button-dark" type="button" aria-label="Đóng">×</button>
+          </div>
+        </header>
+
+        <button id="viewer-previous" class="viewer-nav viewer-previous" type="button" aria-label="Nội dung trước">‹</button>
+        <div id="viewer-stage" class="viewer-stage"></div>
+        <button id="viewer-next" class="viewer-nav viewer-next" type="button" aria-label="Nội dung tiếp theo">›</button>
+        <div id="viewer-count" class="viewer-count"></div>
+      </div>
+    </dialog>
+
+    <template id="media-card-template">
+      <button class="media-card" type="button">
+        <span class="media-preview"></span>
+        <span class="media-meta">
+          <strong class="media-name"></strong>
+          <small class="media-folder"></small>
+        </span>
+      </button>
+    </template>
   </body>
 </html>
