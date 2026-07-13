@@ -15,6 +15,8 @@
   const VIEWED_IMAGE_CACHE_NAME = "my-album-viewed-images-v1";
   const CATALOG_CACHE_NAME = "my-album-catalog-v1";
   const VIEWED_IMAGE_CACHE_INDEX_KEY = "my-album-viewed-images-index-v1";
+  const IS_APPLE_MOBILE = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const IMAGE_EXTENSIONS = new Set([
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
   ]);
@@ -56,6 +58,7 @@
     isDownloading: false,
     downloadAbortController: null,
     toastTimer: null,
+    isLocalServer: false,
   };
 
   const elements = {
@@ -208,6 +211,17 @@
     return { ip, port };
   }
 
+  function localPageEndpoint() {
+    if (window.location.protocol !== "http:") {
+      return null;
+    }
+    try {
+      return validateEndpoint(window.location.hostname, window.location.port || "80");
+    } catch {
+      return null;
+    }
+  }
+
   function saveEndpoint(endpoint) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(endpoint));
   }
@@ -288,7 +302,11 @@
 
   function openDirectly() {
     if (state.baseUrl) {
-      window.open(state.baseUrl, "_blank", "noopener,noreferrer");
+      if (IS_APPLE_MOBILE && window.location.protocol === "https:") {
+        window.location.assign(state.baseUrl);
+      } else {
+        window.open(state.baseUrl, "_blank", "noopener,noreferrer");
+      }
     }
   }
 
@@ -310,10 +328,22 @@
 
   function hideNotice() {
     elements.connectionNotice.hidden = true;
+    elements.connectionNotice.classList.remove("is-local-fallback");
+    elements.noticeOpenDirect.textContent = "Mở trực tiếp";
   }
 
   function showConnectionError(error) {
     const detail = error instanceof Error ? error.message : String(error);
+    if (IS_APPLE_MOBILE && window.location.protocol === "https:") {
+      elements.noticeTitle.textContent = "Safari đã chặn kết nối nền tới máy Windows";
+      elements.noticeMessage.textContent =
+        `iPhone vẫn truy cập được ${state.baseUrl}, nhưng Safari không cho trang HTTPS tải dữ liệu HTTP trong mạng LAN (${detail}). ` +
+        "Mở album trong mạng LAN để tiếp tục bằng cùng giao diện.";
+      elements.noticeOpenDirect.textContent = "Mở album trên iPhone";
+      elements.connectionNotice.classList.add("is-local-fallback");
+      elements.connectionNotice.hidden = false;
+      return;
+    }
     elements.noticeTitle.textContent = "Chưa kết nối được server LAN";
     elements.noticeMessage.textContent =
       `Trình duyệt chưa đọc được API album tại ${state.baseUrl} (${detail}). ` +
@@ -327,6 +357,16 @@
     elements.noticeMessage.textContent =
       `Không kết nối được ${state.baseUrl} (${detail}). ` +
       "Những thumbnail và ảnh đã lưu vẫn có thể mở; bấm làm mới khi máy Windows hoạt động lại.";
+    elements.connectionNotice.hidden = false;
+  }
+
+  function showLegacyServerNotice() {
+    elements.noticeTitle.textContent = "Máy Windows đang dùng server album cũ";
+    elements.noticeMessage.textContent =
+      "Desktop vẫn có thể quét thư mục, nhưng iPhone không thể dùng giao diện My Album qua kết nối này. " +
+      "Tải gói Windows mới, dừng server cũ rồi chạy start_my_album.cmd; trạng thái đúng sẽ đổi thành LAN API.";
+    elements.noticeOpenDirect.textContent = "Mở server hiện tại";
+    elements.connectionNotice.classList.remove("is-local-fallback");
     elements.connectionNotice.hidden = false;
   }
 
@@ -363,7 +403,7 @@
   async function fetchMediaResponse(url, signal) {
     const response = await fetch(url, {
       cache: "no-store",
-      credentials: "omit",
+      credentials: state.isLocalServer ? "same-origin" : "omit",
       mode: "cors",
       signal,
       targetAddressSpace: "local",
@@ -627,7 +667,7 @@
     try {
       return await fetch(url, {
         cache: "no-store",
-        credentials: "omit",
+        credentials: state.isLocalServer ? "same-origin" : "omit",
         mode: "cors",
         signal: controller.signal,
         targetAddressSpace: "local",
@@ -1720,7 +1760,11 @@
       }
 
       if (version === state.requestVersion) {
-        hideNotice();
+        if (state.mode === "directory") {
+          showLegacyServerNotice();
+        } else {
+          hideNotice();
+        }
       }
     } catch (error) {
       if (version !== state.requestVersion) {
@@ -1789,9 +1833,15 @@
     state.filter = "all";
     updateNavigationUi();
     loadHiddenItems();
-    elements.endpointLabel.textContent = `${endpoint.ip}:${endpoint.port}`;
-    elements.openDirect.hidden = false;
-    elements.changeEndpoint.querySelector("span").textContent = "Đổi máy";
+    elements.endpointLabel.textContent = state.isLocalServer
+      ? `${endpoint.ip}:${endpoint.port} · Cục bộ`
+      : `${endpoint.ip}:${endpoint.port}`;
+    elements.openDirect.hidden = state.isLocalServer;
+    elements.changeEndpoint.hidden = state.isLocalServer;
+    elements.noticeOpenDirect.hidden = state.isLocalServer;
+    if (!state.isLocalServer) {
+      elements.changeEndpoint.querySelector("span").textContent = "Đổi máy";
+    }
     connectAlbum();
   }
 
@@ -1960,8 +2010,11 @@
     }, { once: true });
   }
 
-  const savedEndpoint = readSavedEndpoint();
+  const currentPageEndpoint = localPageEndpoint();
+  const savedEndpoint = currentPageEndpoint || readSavedEndpoint();
   if (savedEndpoint) {
+    state.isLocalServer = Boolean(currentPageEndpoint);
+    document.body.classList.toggle("is-local-server", state.isLocalServer);
     applyEndpoint(savedEndpoint);
   } else {
     updateSummary();
