@@ -25,7 +25,7 @@
   ]);
   const VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm", "avi", "mkv"]);
   const SKIPPED_DIRECTORIES = new Set([
-    "thumbs", "_thumbnails", ".my-album-cache", "__pycache__",
+    "thumbs", "_thumbnails", "_my-album", ".my-album-cache", "__pycache__",
   ]);
 
   class ApiUnavailableError extends Error {}
@@ -313,7 +313,7 @@
       elements.noticeTitle.textContent = "Kho ảnh không phản hồi";
       elements.noticeMessage.textContent =
         `Không đọc được ${state.baseUrl} (${detail}). ` +
-        "Hãy kiểm tra Album API và Cloudflare Tunnel trên máy Windows rồi thử lại.";
+        "Hãy kiểm tra server thư mục và Cloudflare Tunnel trên máy Windows rồi thử lại.";
     }
     elements.connectionNotice.hidden = false;
   }
@@ -324,14 +324,6 @@
     elements.noticeMessage.textContent =
       `Không kết nối được ${state.baseUrl} (${detail}). ` +
       "Những thumbnail và ảnh đã lưu vẫn có thể mở; bấm làm mới khi kho ảnh hoạt động lại.";
-    elements.connectionNotice.hidden = false;
-  }
-
-  function showLegacyServerNotice() {
-    elements.noticeTitle.textContent = "Đang dùng chế độ thư mục";
-    elements.noticeMessage.textContent =
-      "Kết nối Cloudflare đang hoạt động, nhưng máy Windows vẫn chạy server thư mục cơ bản. " +
-      "Ảnh vẫn xem được; chạy gói Windows mới để có thumbnail video, preview nhẹ và lọc thời gian chính xác.";
     elements.connectionNotice.hidden = false;
   }
 
@@ -1884,11 +1876,7 @@
       }
 
       if (version === state.requestVersion) {
-        if (state.mode === "directory") {
-          showLegacyServerNotice();
-        } else {
-          hideNotice();
-        }
+        hideNotice();
       }
     } catch (error) {
       if (version !== state.requestVersion) {
