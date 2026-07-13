@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = "my-album-endpoint-v1";
   const HIDDEN_ITEMS_STORAGE_KEY = "my-album-hidden-items-v1";
+  const THEME_STORAGE_KEY = "my-album-theme-v1";
   const PAGE_SIZE = 80;
   const MAX_CONCURRENT_REQUESTS = 4;
   const PROBE_TIMEOUT_MS = 10000;
@@ -61,8 +62,9 @@
     endpointLabel: document.querySelector("#endpoint-label"),
     openDirect: document.querySelector("#open-direct"),
     changeEndpoint: document.querySelector("#change-endpoint"),
+    themeToggle: document.querySelector("#theme-toggle"),
     searchInput: document.querySelector("#search-input"),
-    viewButtons: [...document.querySelectorAll("[data-view]")],
+    navigationButtons: [...document.querySelectorAll("[data-library-nav]")],
     hiddenCount: document.querySelector("#hidden-count"),
     filterButtons: [...document.querySelectorAll("[data-filter]")],
     sortSelect: document.querySelector("#sort-select"),
@@ -91,9 +93,15 @@
     portInput: document.querySelector("#port-input"),
     formError: document.querySelector("#form-error"),
     viewerDialog: document.querySelector("#viewer-dialog"),
+    viewerShell: document.querySelector("#viewer-shell"),
     viewerName: document.querySelector("#viewer-name"),
     viewerFolder: document.querySelector("#viewer-folder"),
     viewerDetails: document.querySelector("#viewer-details"),
+    viewerInfoName: document.querySelector("#viewer-info-name"),
+    viewerInfoFolder: document.querySelector("#viewer-info-folder"),
+    viewerInfoType: document.querySelector("#viewer-info-type"),
+    viewerInfoToggle: document.querySelector("#viewer-info-toggle"),
+    viewerInfoClose: document.querySelector("#viewer-info-close"),
     viewerOpenOriginal: document.querySelector("#viewer-open-original"),
     viewerClose: document.querySelector("#viewer-close"),
     viewerPrevious: document.querySelector("#viewer-previous"),
@@ -122,6 +130,12 @@
     month: "2-digit",
     year: "numeric",
   });
+  const timelineDateFormatter = new Intl.DateTimeFormat("vi-VN", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
   const thumbnailObserver = "IntersectionObserver" in window
     ? new IntersectionObserver((entries) => {
       for (const entry of entries) {
@@ -137,6 +151,35 @@
       }
     }, { rootMargin: "600px 0px" })
     : null;
+
+  function preferredTheme() {
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedTheme === "light" || savedTheme === "dark") {
+      return savedTheme;
+    }
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
+  function applyTheme(theme, persist = false) {
+    document.documentElement.dataset.theme = theme;
+    elements.themeToggle?.setAttribute(
+      "aria-label",
+      theme === "dark" ? "Dùng giao diện sáng" : "Dùng giao diện tối",
+    );
+    elements.themeToggle?.setAttribute(
+      "title",
+      theme === "dark" ? "Giao diện sáng" : "Giao diện tối",
+    );
+    document.querySelector('meta[name="theme-color"]')?.setAttribute(
+      "content",
+      theme === "dark" ? "#111618" : "#f7f8fa",
+    );
+    if (persist) {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    }
+  }
+
+  applyTheme(preferredTheme());
 
   function readSavedEndpoint() {
     try {
@@ -200,6 +243,21 @@
     elements.hiddenCount.hidden = count === 0;
   }
 
+  function updateNavigationUi() {
+    for (const button of elements.navigationButtons) {
+      const targetView = button.dataset.navView;
+      const targetFilter = button.dataset.navFilter;
+      const isActive = targetView === "hidden"
+        ? state.view === "hidden"
+        : state.view === "library" && targetFilter === state.filter;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-current", isActive ? "page" : "false");
+    }
+    for (const button of elements.filterButtons) {
+      button.classList.toggle("is-active", button.dataset.filter === state.filter);
+    }
+  }
+
   function showToast(message, duration = 3200) {
     clearTimeout(state.toastTimer);
     elements.toast.textContent = message;
@@ -245,7 +303,7 @@
   function setMode(mode) {
     state.mode = mode;
     elements.connectionMode.hidden = !mode;
-    const labels = { api: "LAN API", directory: "Directory", offline: "Offline" };
+    const labels = { api: "LAN API", directory: "Thư mục LAN", offline: "Ngoại tuyến" };
     elements.connectionMode.textContent = labels[mode] || "";
     elements.refreshButton.hidden = !mode;
   }
@@ -813,7 +871,9 @@
   function renderSkeletons() {
     clearMediaGrid();
     const fragment = document.createDocumentFragment();
-    for (let index = 0; index < 10; index += 1) {
+    const grid = document.createElement("div");
+    grid.className = "skeleton-grid";
+    for (let index = 0; index < 12; index += 1) {
       const card = document.createElement("div");
       card.className = "media-card is-skeleton";
       card.setAttribute("aria-hidden", "true");
@@ -827,8 +887,9 @@
       secondLine.className = "skeleton-line";
       meta.append(firstLine, secondLine);
       card.append(preview, meta);
-      fragment.append(card);
+      grid.append(card);
     }
+    fragment.append(grid);
     elements.mediaGrid.append(fragment);
   }
 
@@ -1017,6 +1078,23 @@
         }
       }
     }
+
+    const groupSelection = new Map();
+    for (const item of state.visibleItems) {
+      const key = timelineGroupKey(item);
+      const status = groupSelection.get(key) || { total: 0, selected: 0 };
+      status.total += 1;
+      if (state.selectedIds.has(item.id)) {
+        status.selected += 1;
+      }
+      groupSelection.set(key, status);
+    }
+    for (const button of elements.mediaGrid.querySelectorAll("[data-select-group]")) {
+      const status = groupSelection.get(button.dataset.selectGroup);
+      const isSelected = Boolean(status && status.total > 0 && status.selected === status.total);
+      button.classList.toggle("is-selected", isSelected);
+      button.setAttribute("aria-pressed", String(isSelected));
+    }
   }
 
   function enterSelectionMode(initialIndex = -1) {
@@ -1081,6 +1159,24 @@
     updateSelectionUi();
   }
 
+  function toggleTimelineGroup(groupKey) {
+    const groupItems = state.visibleItems.filter((item) => timelineGroupKey(item) === groupKey);
+    if (groupItems.length === 0) {
+      return;
+    }
+    const allSelected = groupItems.every((item) => state.selectedIds.has(item.id));
+    state.selectionMode = true;
+    state.lastSelectedIndex = -1;
+    for (const item of groupItems) {
+      if (allSelected) {
+        state.selectedIds.delete(item.id);
+      } else {
+        state.selectedIds.add(item.id);
+      }
+    }
+    updateSelectionUi();
+  }
+
   function applyHiddenAction(shouldHide) {
     const selectedIds = [...state.selectedIds];
     if (selectedIds.length === 0) {
@@ -1107,6 +1203,69 @@
     showToast(shouldHide
       ? `Đã ẩn ${numberFormatter.format(count)} mục khỏi thư viện.`
       : `Đã đưa ${numberFormatter.format(count)} mục trở lại thư viện.`);
+  }
+
+  function timelineGroupKey(item) {
+    if (state.sort === "name-asc" || state.sort === "name-desc") {
+      const firstCharacter = item.name.trim().charAt(0).toLocaleUpperCase("vi") || "#";
+      return `name:${firstCharacter}`;
+    }
+    if (Number.isFinite(item.modified) && item.modified > 0) {
+      const date = new Date(item.modified * 1000);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `date:${year}-${month}-${day}`;
+    }
+    return `folder:${item.folder || "Thư mục gốc"}`;
+  }
+
+  function timelineGroup(item) {
+    const key = timelineGroupKey(item);
+    if (key.startsWith("name:")) {
+      return { key, title: key.slice(5) };
+    }
+    if (key.startsWith("date:")) {
+      const date = new Date(item.modified * 1000);
+      const formatted = timelineDateFormatter.format(date);
+      return { key, title: formatted.charAt(0).toLocaleUpperCase("vi") + formatted.slice(1) };
+    }
+    return { key, title: item.folder || "Thư mục gốc" };
+  }
+
+  function createTimelineSection(group) {
+    const section = document.createElement("section");
+    section.className = "timeline-section";
+    section.dataset.groupKey = group.key;
+
+    const header = document.createElement("header");
+    header.className = "timeline-header";
+    const select = document.createElement("button");
+    select.type = "button";
+    select.className = "timeline-select-button";
+    select.dataset.selectGroup = group.key;
+    select.setAttribute("aria-label", `Chọn nhóm ${group.title}`);
+    select.setAttribute("aria-pressed", "false");
+    select.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 12 3 3 7-7" /></svg>';
+    const title = document.createElement("h2");
+    title.textContent = group.title;
+    const count = document.createElement("span");
+    count.className = "timeline-count";
+    count.dataset.count = "0";
+    count.textContent = "0 mục";
+    header.append(select, title, count);
+
+    const grid = document.createElement("div");
+    grid.className = "timeline-grid";
+    section.append(header, grid);
+    return section;
+  }
+
+  function increaseTimelineCount(section) {
+    const count = section.querySelector(".timeline-count");
+    const nextCount = Number(count.dataset.count || 0) + 1;
+    count.dataset.count = String(nextCount);
+    count.textContent = `${numberFormatter.format(nextCount)} mục`;
   }
 
   function createMediaCard(item, index) {
@@ -1143,17 +1302,31 @@
       return;
     }
     const end = Math.min(state.renderedCount + targetCount, state.visibleItems.length);
-    const fragment = document.createDocumentFragment();
+    let activeSection = elements.mediaGrid.lastElementChild?.classList.contains("timeline-section")
+      ? elements.mediaGrid.lastElementChild
+      : null;
     for (let index = state.renderedCount; index < end; index += 1) {
-      fragment.append(createMediaCard(state.visibleItems[index], index));
+      const item = state.visibleItems[index];
+      const group = timelineGroup(item);
+      if (!activeSection || activeSection.dataset.groupKey !== group.key) {
+        activeSection = createTimelineSection(group);
+        elements.mediaGrid.append(activeSection);
+      }
+      activeSection.querySelector(".timeline-grid").append(createMediaCard(item, index));
+      increaseTimelineCount(activeSection);
     }
-    elements.mediaGrid.append(fragment);
     state.renderedCount = end;
     updateSelectionUi();
   }
 
   function updateSummary() {
-    elements.albumTitle.textContent = state.view === "hidden" ? "Đã ẩn" : "Thư viện";
+    elements.albumTitle.textContent = state.view === "hidden"
+      ? "Đã ẩn"
+      : state.filter === "image"
+        ? "Ảnh"
+        : state.filter === "video"
+          ? "Video"
+          : "Dòng thời gian";
     if (!state.endpoint) {
       elements.albumSummary.textContent = "Nhập IP và cổng của máy lưu album để bắt đầu.";
       return;
@@ -1251,6 +1424,12 @@
     elements.viewerStage.replaceChildren(error);
   }
 
+  function setViewerInfoVisible(visible) {
+    elements.viewerShell.classList.toggle("show-info", visible);
+    elements.viewerInfoToggle.setAttribute("aria-pressed", String(visible));
+    elements.viewerInfoToggle.setAttribute("aria-label", visible ? "Ẩn thông tin" : "Hiện thông tin");
+  }
+
   async function loadViewerImage(item, index, token) {
     const viewUrl = item.preview || item.url;
     const controller = new AbortController();
@@ -1343,7 +1522,10 @@
     const viewerTotal = state.mode === "api" ? state.total : state.visibleItems.length;
     elements.viewerName.textContent = item.name;
     elements.viewerFolder.textContent = item.folder;
-    elements.viewerDetails.textContent = itemDetail(item) || item.extension.toUpperCase();
+    elements.viewerDetails.textContent = itemDetail(item) || "Server chưa cung cấp metadata";
+    elements.viewerInfoName.textContent = item.name;
+    elements.viewerInfoFolder.textContent = item.folder;
+    elements.viewerInfoType.textContent = `${item.type === "video" ? "Video" : "Ảnh"} · ${item.extension.toUpperCase()}`;
     elements.viewerOpenOriginal.href = item.url;
     elements.viewerCount.textContent = `${numberFormatter.format(index + 1)} / ${numberFormatter.format(viewerTotal)}`;
     elements.viewerPrevious.disabled = index === 0;
@@ -1387,6 +1569,7 @@
   function closeViewer() {
     releaseViewerMedia();
     state.viewerIndex = -1;
+    setViewerInfoVisible(false);
     if (elements.viewerDialog.open) {
       elements.viewerDialog.close();
     }
@@ -1603,7 +1786,8 @@
     state.endpoint = endpoint;
     state.baseUrl = endpointUrl(endpoint);
     state.view = "library";
-    elements.viewButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.view === state.view));
+    state.filter = "all";
+    updateNavigationUi();
     loadHiddenItems();
     elements.endpointLabel.textContent = `${endpoint.ip}:${endpoint.port}`;
     elements.openDirect.hidden = false;
@@ -1629,6 +1813,10 @@
   }
 
   elements.changeEndpoint.addEventListener("click", showConnectionDialog);
+  elements.themeToggle.addEventListener("click", () => {
+    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    applyTheme(nextTheme, true);
+  });
   elements.emptyConnect.addEventListener("click", showConnectionDialog);
   elements.openDirect.addEventListener("click", openDirectly);
   elements.noticeOpenDirect.addEventListener("click", openDirectly);
@@ -1643,16 +1831,18 @@
     reloadFromControls();
   });
 
-  for (const button of elements.viewButtons) {
+  for (const button of elements.navigationButtons) {
     button.addEventListener("click", () => {
-      if (button.dataset.view === state.view) {
+      const nextView = button.dataset.navView;
+      const nextFilter = button.dataset.navFilter;
+      if (nextView === state.view && (nextView === "hidden" || nextFilter === state.filter)) {
         return;
       }
       exitSelectionMode();
-      state.view = button.dataset.view;
-      elements.viewButtons.forEach((viewButton) =>
-        viewButton.classList.toggle("is-active", viewButton === button));
-      refreshDirectoryItems(false);
+      state.view = nextView;
+      state.filter = nextFilter;
+      updateNavigationUi();
+      reloadFromControls();
     });
   }
 
@@ -1662,7 +1852,7 @@
         exitSelectionMode();
       }
       state.filter = button.dataset.filter;
-      elements.filterButtons.forEach((filterButton) => filterButton.classList.toggle("is-active", filterButton === button));
+      updateNavigationUi();
       reloadFromControls();
     });
   }
@@ -1680,6 +1870,11 @@
   });
 
   elements.mediaGrid.addEventListener("click", (event) => {
+    const groupButton = event.target.closest("[data-select-group]");
+    if (groupButton) {
+      toggleTimelineGroup(groupButton.dataset.selectGroup);
+      return;
+    }
     const card = event.target.closest(".media-card:not(.is-skeleton)");
     if (!card) {
       return;
@@ -1702,6 +1897,10 @@
   elements.downloadSelected.addEventListener("click", downloadSelectedItems);
 
   elements.viewerClose.addEventListener("click", closeViewer);
+  elements.viewerInfoToggle.addEventListener("click", () => {
+    setViewerInfoVisible(!elements.viewerShell.classList.contains("show-info"));
+  });
+  elements.viewerInfoClose.addEventListener("click", () => setViewerInfoVisible(false));
   elements.viewerDownload.addEventListener("click", downloadViewerItem);
   elements.viewerPrevious.addEventListener("click", () => moveViewer(-1));
   elements.viewerNext.addEventListener("click", () => moveViewer(1));
@@ -1721,6 +1920,14 @@
         moveViewer(-1);
       } else if (event.key === "ArrowRight") {
         moveViewer(1);
+      }
+      return;
+    }
+    if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const target = event.target;
+      if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement) && !(target instanceof HTMLSelectElement)) {
+        event.preventDefault();
+        elements.searchInput.focus();
       }
       return;
     }
