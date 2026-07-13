@@ -79,6 +79,7 @@
   };
 
   const numberFormatter = new Intl.NumberFormat("vi-VN");
+  const textEncoder = new TextEncoder();
   const dateFormatter = new Intl.DateTimeFormat("vi-VN", {
     day: "2-digit",
     month: "2-digit",
@@ -216,6 +217,15 @@
     return new URL(`_thumbnails/${encoded}.jpg`, base).href;
   }
 
+  async function makeHashedDirectoryThumbnailUrl(relative) {
+    const digest = await crypto.subtle.digest("SHA-1", textEncoder.encode(relative));
+    const hash = [...new Uint8Array(digest)]
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 16);
+    return new URL(`thumbs/${hash}.jpg`, state.baseUrl).href;
+  }
+
   function directoryItemFromUrl(url) {
     const parsed = new URL(url);
     const extension = mediaExtension(parsed.pathname);
@@ -239,9 +249,11 @@
       relative,
       name,
       folder,
-      thumbnail: type === "image" ? makeDirectoryThumbnailUrl(relative) : null,
+      thumbnail: null,
       bytes: 0,
       modified: 0,
+      source: "directory",
+      thumbnailFallback: type === "image" ? makeDirectoryThumbnailUrl(relative) : null,
     };
   }
 
@@ -260,6 +272,8 @@
       folder,
       bytes: Number(rawItem.bytes) || 0,
       modified: Number(rawItem.modified) || 0,
+      source: "api",
+      thumbnailFallback: null,
     };
   }
 
@@ -559,35 +573,60 @@
     updateEmptyState();
   }
 
-  function addPreviewImage(preview, item) {
-    if (!item.thumbnail) {
+  async function thumbnailSources(item) {
+    if (item.source === "directory") {
       if (item.type === "video") {
-        preview.classList.add("video-preview");
+        return [];
       }
-      return;
+      let hashedThumbnail = null;
+      try {
+        hashedThumbnail = await makeHashedDirectoryThumbnailUrl(item.relative);
+      } catch {
+        // The mirrored _thumbnails layout remains a fallback for older setups.
+      }
+      return [hashedThumbnail, item.thumbnailFallback].filter(Boolean);
     }
 
-    const image = document.createElement("img");
-    image.alt = "";
-    image.loading = "lazy";
-    image.decoding = "async";
-    const fallbacks = item.type === "image"
-      ? [item.thumbnail, item.preview, item.url]
+    if (!item.thumbnail) {
+      return [];
+    }
+    return item.type === "image"
+      ? [item.thumbnail, item.preview]
       : [item.thumbnail];
-    let fallbackIndex = 0;
-    image.src = fallbacks[fallbackIndex];
-    image.addEventListener("error", () => {
-      fallbackIndex += 1;
-      if (fallbackIndex < fallbacks.length) {
-        image.src = fallbacks[fallbackIndex];
-      } else {
-        image.remove();
+  }
+
+  function addPreviewImage(preview, item) {
+    thumbnailSources(item).then((fallbacks) => {
+      if (fallbacks.length === 0) {
         if (item.type === "video") {
           preview.classList.add("video-preview");
         }
+        return;
+      }
+
+      const image = document.createElement("img");
+      image.alt = "";
+      image.loading = "lazy";
+      image.decoding = "async";
+      let fallbackIndex = 0;
+      image.src = fallbacks[fallbackIndex];
+      image.addEventListener("error", () => {
+        fallbackIndex += 1;
+        if (fallbackIndex < fallbacks.length) {
+          image.src = fallbacks[fallbackIndex];
+        } else {
+          image.remove();
+          if (item.type === "video") {
+            preview.classList.add("video-preview");
+          }
+        }
+      });
+      preview.prepend(image);
+    }).catch(() => {
+      if (item.type === "video") {
+        preview.classList.add("video-preview");
       }
     });
-    preview.prepend(image);
   }
 
   function createMediaCard(item, index) {
