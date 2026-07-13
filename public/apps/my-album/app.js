@@ -1,7 +1,12 @@
 (() => {
   "use strict";
 
-  const STORAGE_KEY = "my-album-endpoint-v1";
+  const CLOUD_ALBUM_URL = "https://photos.vuducan.qzz.io/";
+  const CLOUD_ENDPOINT = Object.freeze({
+    url: CLOUD_ALBUM_URL,
+    label: "photos.vuducan.qzz.io",
+    kind: "cloud",
+  });
   const HIDDEN_ITEMS_STORAGE_KEY = "my-album-hidden-items-v1";
   const THEME_STORAGE_KEY = "my-album-theme-v1";
   const PAGE_SIZE = 80;
@@ -15,8 +20,6 @@
   const VIEWED_IMAGE_CACHE_NAME = "my-album-viewed-images-v1";
   const CATALOG_CACHE_NAME = "my-album-catalog-v1";
   const VIEWED_IMAGE_CACHE_INDEX_KEY = "my-album-viewed-images-index-v1";
-  const IS_APPLE_MOBILE = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   const IMAGE_EXTENSIONS = new Set([
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
   ]);
@@ -65,8 +68,7 @@
 
   const elements = {
     endpointLabel: document.querySelector("#endpoint-label"),
-    openDirect: document.querySelector("#open-direct"),
-    changeEndpoint: document.querySelector("#change-endpoint"),
+    openCloud: document.querySelector("#open-cloud"),
     themeToggle: document.querySelector("#theme-toggle"),
     searchInput: document.querySelector("#search-input"),
     navigationButtons: [...document.querySelectorAll("[data-library-nav]")],
@@ -94,11 +96,6 @@
     emptyCopy: document.querySelector("#empty-state p"),
     emptyConnect: document.querySelector("#empty-connect"),
     loadSentinel: document.querySelector("#load-sentinel"),
-    connectionDialog: document.querySelector("#connection-dialog"),
-    connectionForm: document.querySelector("#connection-form"),
-    ipInput: document.querySelector("#ip-input"),
-    portInput: document.querySelector("#port-input"),
-    formError: document.querySelector("#form-error"),
     filterDialog: document.querySelector("#filter-dialog"),
     filterForm: document.querySelector("#filter-form"),
     filterClose: document.querySelector("#filter-close"),
@@ -198,46 +195,15 @@
 
   applyTheme(preferredTheme());
 
-  function readSavedEndpoint() {
-    try {
-      const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      return validateEndpoint(parsed?.ip ?? "", parsed?.port ?? "");
-    } catch {
-      return null;
-    }
-  }
-
-  function validateEndpoint(rawIp, rawPort) {
-    const ip = String(rawIp).trim();
-    const octets = ip.split(".");
-    const isIpv4 =
-      octets.length === 4 &&
-      octets.every((part) => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255);
-    const port = Number(rawPort);
-
-    if (!isIpv4) {
-      throw new Error("Địa chỉ IP chưa đúng định dạng, ví dụ 192.168.0.102.");
-    }
-    if (!Number.isInteger(port) || port < 1 || port > 65535) {
-      throw new Error("Cổng phải là một số từ 1 đến 65535.");
-    }
-
-    return { ip, port };
-  }
-
   function localPageEndpoint() {
     if (window.location.protocol !== "http:") {
       return null;
     }
-    try {
-      return validateEndpoint(window.location.hostname, window.location.port || "80");
-    } catch {
-      return null;
-    }
-  }
-
-  function saveEndpoint(endpoint) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(endpoint));
+    return {
+      url: new URL("/", window.location.href).href,
+      label: `${window.location.host} · Cục bộ`,
+      kind: "local",
+    };
   }
 
   function hiddenItemsStorageKey() {
@@ -310,31 +276,12 @@
   }
 
   function endpointUrl(endpoint) {
-    return `http://${endpoint.ip}:${endpoint.port}/`;
-  }
-
-  function showConnectionDialog() {
-    const endpoint = state.endpoint ?? readSavedEndpoint();
-    elements.ipInput.value = endpoint?.ip ?? "192.168.0.102";
-    elements.portInput.value = endpoint?.port ?? "8000";
-    elements.formError.hidden = true;
-    elements.connectionDialog.showModal();
-    requestAnimationFrame(() => elements.ipInput.select());
-  }
-
-  function closeConnectionDialog() {
-    if (elements.connectionDialog.open) {
-      elements.connectionDialog.close();
-    }
+    return new URL(endpoint.url).href;
   }
 
   function openDirectly() {
     if (state.baseUrl) {
-      if (IS_APPLE_MOBILE && window.location.protocol === "https:") {
-        window.location.assign(state.baseUrl);
-      } else {
-        window.open(state.baseUrl, "_blank", "noopener,noreferrer");
-      }
+      window.open(state.baseUrl, "_blank", "noopener,noreferrer");
     }
   }
 
@@ -349,7 +296,12 @@
   function setMode(mode) {
     state.mode = mode;
     elements.connectionMode.hidden = !mode;
-    const labels = { api: "LAN API", directory: "Thư mục LAN", offline: "Ngoại tuyến" };
+    const isCloud = state.endpoint?.kind === "cloud";
+    const labels = {
+      api: isCloud ? "Cloud API" : "LAN API",
+      directory: isCloud ? "Thư mục Cloud" : "Thư mục LAN",
+      offline: "Ngoại tuyến",
+    };
     elements.connectionMode.textContent = labels[mode] || "";
     elements.refreshButton.hidden = !mode;
     updateTimelineFilterUi();
@@ -357,26 +309,24 @@
 
   function hideNotice() {
     elements.connectionNotice.hidden = true;
-    elements.connectionNotice.classList.remove("is-local-fallback");
-    elements.noticeOpenDirect.textContent = "Mở trực tiếp";
+    elements.noticeOpenDirect.textContent = "Đăng nhập kho ảnh";
   }
 
   function showConnectionError(error) {
     const detail = error instanceof Error ? error.message : String(error);
-    if (IS_APPLE_MOBILE && window.location.protocol === "https:") {
-      elements.noticeTitle.textContent = "Safari đã chặn kết nối nền tới máy Windows";
+    if (state.isLocalServer) {
+      elements.noticeTitle.textContent = "Chưa kết nối được server album";
       elements.noticeMessage.textContent =
-        `iPhone vẫn truy cập được ${state.baseUrl}, nhưng Safari không cho trang HTTPS tải dữ liệu HTTP trong mạng LAN (${detail}). ` +
-        "Mở album trong mạng LAN để tiếp tục bằng cùng giao diện.";
-      elements.noticeOpenDirect.textContent = "Mở album trên iPhone";
-      elements.connectionNotice.classList.add("is-local-fallback");
-      elements.connectionNotice.hidden = false;
-      return;
+        `Không đọc được API tại ${state.baseUrl} (${detail}). Hãy kiểm tra cửa sổ My Album trên máy Windows rồi thử lại.`;
+      elements.noticeOpenDirect.hidden = true;
+    } else {
+      elements.noticeTitle.textContent = "Cần mở khóa kho ảnh";
+      elements.noticeMessage.textContent =
+        `Không đọc được ${state.baseUrl} (${detail}). ` +
+        "Hãy mở kho ảnh, hoàn tất đăng nhập Cloudflare Access rồi quay lại bấm Thử lại.";
+      elements.noticeOpenDirect.textContent = "Đăng nhập kho ảnh";
+      elements.noticeOpenDirect.hidden = false;
     }
-    elements.noticeTitle.textContent = "Chưa kết nối được server LAN";
-    elements.noticeMessage.textContent =
-      `Trình duyệt chưa đọc được API album tại ${state.baseUrl} (${detail}). ` +
-      "Hãy chạy gói My Album LAN trên máy Windows, cho phép Mạng riêng khi Firewall hỏi rồi thử lại.";
     elements.connectionNotice.hidden = false;
   }
 
@@ -385,17 +335,17 @@
     elements.noticeTitle.textContent = "Đang dùng album ngoại tuyến";
     elements.noticeMessage.textContent =
       `Không kết nối được ${state.baseUrl} (${detail}). ` +
-      "Những thumbnail và ảnh đã lưu vẫn có thể mở; bấm làm mới khi máy Windows hoạt động lại.";
+      "Những thumbnail và ảnh đã lưu vẫn có thể mở; bấm làm mới khi kho ảnh hoạt động lại.";
     elements.connectionNotice.hidden = false;
   }
 
   function showLegacyServerNotice() {
-    elements.noticeTitle.textContent = "Máy Windows đang dùng server album cũ";
+    elements.noticeTitle.textContent = "Đang dùng chế độ thư mục";
     elements.noticeMessage.textContent =
-      "Desktop vẫn có thể quét thư mục, nhưng iPhone không thể dùng giao diện My Album qua kết nối này. " +
-      "Tải gói Windows mới, dừng server cũ rồi chạy start_my_album.cmd; trạng thái đúng sẽ đổi thành LAN API.";
-    elements.noticeOpenDirect.textContent = "Mở server hiện tại";
-    elements.connectionNotice.classList.remove("is-local-fallback");
+      "Kết nối Cloudflare đang hoạt động, nhưng máy Windows vẫn chạy server thư mục cơ bản. " +
+      "Ảnh vẫn xem được; chạy gói Windows mới để có thumbnail video, preview nhẹ và lọc thời gian chính xác.";
+    elements.noticeOpenDirect.textContent = "Mở kho ảnh";
+    elements.noticeOpenDirect.hidden = state.isLocalServer;
     elements.connectionNotice.hidden = false;
   }
 
@@ -576,10 +526,9 @@
   async function fetchMediaResponse(url, signal) {
     const response = await fetch(url, {
       cache: "no-store",
-      credentials: state.isLocalServer ? "same-origin" : "omit",
+      credentials: state.endpoint?.kind === "cloud" ? "include" : "same-origin",
       mode: "cors",
       signal,
-      targetAddressSpace: "local",
     });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -847,10 +796,9 @@
     try {
       return await fetch(url, {
         cache: "no-store",
-        credentials: state.isLocalServer ? "same-origin" : "omit",
+        credentials: state.endpoint?.kind === "cloud" ? "include" : "same-origin",
         mode: "cors",
         signal: controller.signal,
-        targetAddressSpace: "local",
       });
     } catch (error) {
       if (controller.signal.aborted) {
@@ -1923,7 +1871,6 @@
 
   async function connectAlbum({ force = false } = {}) {
     if (!state.endpoint) {
-      showConnectionDialog();
       return;
     }
 
@@ -1932,7 +1879,7 @@
     resetAlbumState();
     hideNotice();
     renderSkeletons();
-    setLoading(true, "Đang tìm server LAN…");
+    setLoading(true, state.isLocalServer ? "Đang tìm server LAN…" : "Đang kết nối kho ảnh…");
 
     try {
       try {
@@ -2020,38 +1967,16 @@
   function applyEndpoint(endpoint) {
     state.endpoint = endpoint;
     state.baseUrl = endpointUrl(endpoint);
+    state.isLocalServer = endpoint.kind === "local";
     state.view = "library";
     state.filter = "all";
     state.timelineFilters = { folder: "", year: "", month: "", day: "" };
     updateNavigationUi();
     loadHiddenItems();
-    elements.endpointLabel.textContent = state.isLocalServer
-      ? `${endpoint.ip}:${endpoint.port} · Cục bộ`
-      : `${endpoint.ip}:${endpoint.port}`;
-    elements.openDirect.hidden = state.isLocalServer;
-    elements.changeEndpoint.hidden = state.isLocalServer;
+    elements.endpointLabel.textContent = endpoint.label;
+    elements.openCloud.hidden = state.isLocalServer;
     elements.noticeOpenDirect.hidden = state.isLocalServer;
-    if (!state.isLocalServer) {
-      elements.changeEndpoint.querySelector("span").textContent = "Đổi máy";
-    }
     connectAlbum();
-  }
-
-  elements.connectionForm.addEventListener("submit", (event) => {
-    event.preventDefault();
-    try {
-      const endpoint = validateEndpoint(elements.ipInput.value, elements.portInput.value);
-      saveEndpoint(endpoint);
-      closeConnectionDialog();
-      applyEndpoint(endpoint);
-    } catch (error) {
-      elements.formError.textContent = error.message;
-      elements.formError.hidden = false;
-    }
-  });
-
-  for (const closeButton of document.querySelectorAll("[data-close-dialog]")) {
-    closeButton.addEventListener("click", closeConnectionDialog);
   }
 
   elements.timelineFilterButton.addEventListener("click", showTimelineFilterDialog);
@@ -2091,13 +2016,12 @@
     }
   });
 
-  elements.changeEndpoint.addEventListener("click", showConnectionDialog);
+  elements.openCloud.addEventListener("click", openDirectly);
   elements.themeToggle.addEventListener("click", () => {
     const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     applyTheme(nextTheme, true);
   });
-  elements.emptyConnect.addEventListener("click", showConnectionDialog);
-  elements.openDirect.addEventListener("click", openDirectly);
+  elements.emptyConnect.addEventListener("click", () => connectAlbum());
   elements.noticeOpenDirect.addEventListener("click", openDirectly);
   elements.retryButton.addEventListener("click", () => connectAlbum());
   elements.refreshButton.addEventListener("click", () => connectAlbum({ force: true }));
@@ -2240,14 +2164,7 @@
   }
 
   const currentPageEndpoint = localPageEndpoint();
-  const savedEndpoint = currentPageEndpoint || readSavedEndpoint();
-  if (savedEndpoint) {
-    state.isLocalServer = Boolean(currentPageEndpoint);
-    document.body.classList.toggle("is-local-server", state.isLocalServer);
-    applyEndpoint(savedEndpoint);
-  } else {
-    updateSummary();
-    updateEmptyState();
-    showConnectionDialog();
-  }
+  const initialEndpoint = currentPageEndpoint || CLOUD_ENDPOINT;
+  document.body.classList.toggle("is-local-server", Boolean(currentPageEndpoint));
+  applyEndpoint(initialEndpoint);
 })();
