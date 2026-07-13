@@ -25,7 +25,7 @@
   ]);
   const VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm", "avi", "mkv"]);
   const SKIPPED_DIRECTORIES = new Set([
-    "thumbs", "_thumbnails", ".my-album-cache", "__pycache__",
+    "thumbs", "_thumbnails", "_my-album", ".my-album-cache", "__pycache__",
   ]);
 
   class ApiUnavailableError extends Error {}
@@ -68,7 +68,6 @@
 
   const elements = {
     endpointLabel: document.querySelector("#endpoint-label"),
-    openCloud: document.querySelector("#open-cloud"),
     themeToggle: document.querySelector("#theme-toggle"),
     searchInput: document.querySelector("#search-input"),
     navigationButtons: [...document.querySelectorAll("[data-library-nav]")],
@@ -82,7 +81,6 @@
     noticeTitle: document.querySelector("#notice-title"),
     noticeMessage: document.querySelector("#notice-message"),
     retryButton: document.querySelector("#retry-button"),
-    noticeOpenDirect: document.querySelector("#notice-open-direct"),
     albumSummary: document.querySelector("#album-summary"),
     albumTitle: document.querySelector("#album-title"),
     connectionMode: document.querySelector("#connection-mode"),
@@ -279,12 +277,6 @@
     return new URL(endpoint.url).href;
   }
 
-  function openDirectly() {
-    if (state.baseUrl) {
-      window.open(state.baseUrl, "_blank", "noopener,noreferrer");
-    }
-  }
-
   function setLoading(isLoading, message = "Đang tải…") {
     state.isLoading = isLoading;
     elements.scanStatus.hidden = !isLoading;
@@ -309,7 +301,6 @@
 
   function hideNotice() {
     elements.connectionNotice.hidden = true;
-    elements.noticeOpenDirect.textContent = "Đăng nhập kho ảnh";
   }
 
   function showConnectionError(error) {
@@ -318,14 +309,11 @@
       elements.noticeTitle.textContent = "Chưa kết nối được server album";
       elements.noticeMessage.textContent =
         `Không đọc được API tại ${state.baseUrl} (${detail}). Hãy kiểm tra cửa sổ My Album trên máy Windows rồi thử lại.`;
-      elements.noticeOpenDirect.hidden = true;
     } else {
-      elements.noticeTitle.textContent = "Cần mở khóa kho ảnh";
+      elements.noticeTitle.textContent = "Kho ảnh không phản hồi";
       elements.noticeMessage.textContent =
         `Không đọc được ${state.baseUrl} (${detail}). ` +
-        "Hãy mở kho ảnh, hoàn tất đăng nhập Cloudflare Access rồi quay lại bấm Thử lại.";
-      elements.noticeOpenDirect.textContent = "Đăng nhập kho ảnh";
-      elements.noticeOpenDirect.hidden = false;
+        "Hãy kiểm tra server thư mục và Cloudflare Tunnel trên máy Windows rồi thử lại.";
     }
     elements.connectionNotice.hidden = false;
   }
@@ -336,16 +324,6 @@
     elements.noticeMessage.textContent =
       `Không kết nối được ${state.baseUrl} (${detail}). ` +
       "Những thumbnail và ảnh đã lưu vẫn có thể mở; bấm làm mới khi kho ảnh hoạt động lại.";
-    elements.connectionNotice.hidden = false;
-  }
-
-  function showLegacyServerNotice() {
-    elements.noticeTitle.textContent = "Đang dùng chế độ thư mục";
-    elements.noticeMessage.textContent =
-      "Kết nối Cloudflare đang hoạt động, nhưng máy Windows vẫn chạy server thư mục cơ bản. " +
-      "Ảnh vẫn xem được; chạy gói Windows mới để có thumbnail video, preview nhẹ và lọc thời gian chính xác.";
-    elements.noticeOpenDirect.textContent = "Mở kho ảnh";
-    elements.noticeOpenDirect.hidden = state.isLocalServer;
     elements.connectionNotice.hidden = false;
   }
 
@@ -1898,11 +1876,7 @@
       }
 
       if (version === state.requestVersion) {
-        if (state.mode === "directory") {
-          showLegacyServerNotice();
-        } else {
-          hideNotice();
-        }
+        hideNotice();
       }
     } catch (error) {
       if (version !== state.requestVersion) {
@@ -1974,8 +1948,6 @@
     updateNavigationUi();
     loadHiddenItems();
     elements.endpointLabel.textContent = endpoint.label;
-    elements.openCloud.hidden = state.isLocalServer;
-    elements.noticeOpenDirect.hidden = state.isLocalServer;
     connectAlbum();
   }
 
@@ -2016,13 +1988,11 @@
     }
   });
 
-  elements.openCloud.addEventListener("click", openDirectly);
   elements.themeToggle.addEventListener("click", () => {
     const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     applyTheme(nextTheme, true);
   });
   elements.emptyConnect.addEventListener("click", () => connectAlbum());
-  elements.noticeOpenDirect.addEventListener("click", openDirectly);
   elements.retryButton.addEventListener("click", () => connectAlbum());
   elements.refreshButton.addEventListener("click", () => connectAlbum({ force: true }));
 
