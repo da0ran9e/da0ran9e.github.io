@@ -4,24 +4,35 @@
   const STORAGE_KEY = "my-album-endpoint-v1";
   const PAGE_SIZE = 80;
   const MAX_CONCURRENT_REQUESTS = 4;
-  const REQUEST_TIMEOUT_MS = 12000;
+  const PROBE_TIMEOUT_MS = 10000;
+  const API_TIMEOUT_MS = 120000;
+  const DIRECTORY_TIMEOUT_MS = 15000;
   const IMAGE_EXTENSIONS = new Set([
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
   ]);
   const VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm", "avi", "mkv"]);
-  const SKIPPED_DIRECTORIES = new Set(["_thumbnails", ".my-album-cache", "__pycache__"]);
+  const SKIPPED_DIRECTORIES = new Set([
+    "thumbs", "_thumbnails", ".my-album-cache", "__pycache__",
+  ]);
+
+  class ApiUnavailableError extends Error {}
 
   const state = {
     endpoint: null,
     baseUrl: "",
+    mode: null,
     items: [],
     visibleItems: [],
+    total: 0,
+    stats: null,
+    hasMore: false,
     filter: "all",
     query: "",
-    sort: "path-asc",
+    sort: "newest",
     renderedCount: 0,
-    scanId: 0,
-    isScanning: false,
+    requestVersion: 0,
+    isLoading: false,
+    isLoadingMore: false,
     viewerIndex: -1,
   };
 
@@ -39,10 +50,14 @@
     retryButton: document.querySelector("#retry-button"),
     noticeOpenDirect: document.querySelector("#notice-open-direct"),
     albumSummary: document.querySelector("#album-summary"),
+    connectionMode: document.querySelector("#connection-mode"),
     scanStatus: document.querySelector("#scan-status"),
     scanStatusText: document.querySelector("#scan-status-text"),
+    refreshButton: document.querySelector("#refresh-button"),
     mediaGrid: document.querySelector("#media-grid"),
     emptyState: document.querySelector("#empty-state"),
+    emptyTitle: document.querySelector("#empty-state h2"),
+    emptyCopy: document.querySelector("#empty-state p"),
     emptyConnect: document.querySelector("#empty-connect"),
     loadSentinel: document.querySelector("#load-sentinel"),
     connectionDialog: document.querySelector("#connection-dialog"),
@@ -53,6 +68,7 @@
     viewerDialog: document.querySelector("#viewer-dialog"),
     viewerName: document.querySelector("#viewer-name"),
     viewerFolder: document.querySelector("#viewer-folder"),
+    viewerDetails: document.querySelector("#viewer-details"),
     viewerOpenOriginal: document.querySelector("#viewer-open-original"),
     viewerClose: document.querySelector("#viewer-close"),
     viewerPrevious: document.querySelector("#viewer-previous"),
@@ -61,6 +77,13 @@
     viewerCount: document.querySelector("#viewer-count"),
     mediaCardTemplate: document.querySelector("#media-card-template"),
   };
+
+  const numberFormatter = new Intl.NumberFormat("vi-VN");
+  const dateFormatter = new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 
   function readSavedEndpoint() {
     try {
@@ -118,10 +141,19 @@
     }
   }
 
-  function setScanning(isScanning, message = "Đang quét…") {
-    state.isScanning = isScanning;
-    elements.scanStatus.hidden = !isScanning;
+  function setLoading(isLoading, message = "Đang tải…") {
+    state.isLoading = isLoading;
+    elements.scanStatus.hidden = !isLoading;
     elements.scanStatusText.textContent = message;
+    elements.refreshButton.disabled = isLoading;
+    updateEmptyState();
+  }
+
+  function setMode(mode) {
+    state.mode = mode;
+    elements.connectionMode.hidden = !mode;
+    elements.connectionMode.textContent = mode === "api" ? "LAN API" : "Directory";
+    elements.refreshButton.hidden = !mode;
   }
 
   function hideNotice() {
@@ -130,11 +162,29 @@
 
   function showConnectionError(error) {
     const detail = error instanceof Error ? error.message : String(error);
-    elements.noticeTitle.textContent = "Trình duyệt chưa đọc được album";
+    elements.noticeTitle.textContent = "Chưa kết nối được server LAN";
     elements.noticeMessage.textContent =
-      `Không thể tải ${state.baseUrl} (${detail}). Hãy chắc rằng máy Windows và thiết bị này cùng mạng, ` +
-      "server vẫn đang chạy, rồi cấp quyền truy cập mạng nội bộ nếu trình duyệt hỏi. Nếu server không hỗ trợ CORS, bạn vẫn có thể mở thư mục trực tiếp.";
+      `Trình duyệt chưa đọc được API album tại ${state.baseUrl} (${detail}). ` +
+      "Hãy chạy gói My Album LAN trên máy Windows, cho phép Mạng riêng khi Firewall hỏi rồi thử lại.";
     elements.connectionNotice.hidden = false;
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+      return "";
+    }
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const value = bytes / 1024 ** index;
+    return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+  }
+
+  function formatDate(timestamp) {
+    return Number.isFinite(timestamp) && timestamp > 0 ? dateFormatter.format(new Date(timestamp * 1000)) : "";
+  }
+
+  function itemDetail(item) {
+    return [formatDate(item.modified), formatBytes(item.bytes)].filter(Boolean).join(" · ");
   }
 
   function mediaExtension(pathname) {
@@ -157,7 +207,7 @@
     return pathname.slice(basePath.length).replace(/^\/+/, "");
   }
 
-  function makeThumbnailUrl(relative) {
+  function makeDirectoryThumbnailUrl(relative) {
     const base = new URL(state.baseUrl);
     const encoded = relative
       .split("/")
@@ -166,7 +216,7 @@
     return new URL(`_thumbnails/${encoded}.jpg`, base).href;
   }
 
-  function itemFromUrl(url) {
+  function directoryItemFromUrl(url) {
     const parsed = new URL(url);
     const extension = mediaExtension(parsed.pathname);
     const type = IMAGE_EXTENSIONS.has(extension) ? "image" : VIDEO_EXTENSIONS.has(extension) ? "video" : null;
@@ -181,14 +231,150 @@
     const folder = parts.map(safeDecode).join(" / ") || "Thư mục gốc";
 
     return {
+      id: url,
       url,
+      preview: url,
       type,
       extension,
       relative,
       name,
       folder,
-      thumbnail: type === "image" ? makeThumbnailUrl(relative) : null,
+      thumbnail: type === "image" ? makeDirectoryThumbnailUrl(relative) : null,
+      bytes: 0,
+      modified: 0,
     };
+  }
+
+  function normalizeApiItem(rawItem) {
+    const name = String(rawItem.fileName || rawItem.name || "Không tên");
+    const folder = rawItem.folder && rawItem.folder !== "." ? String(rawItem.folder).replaceAll("/", " / ") : "Thư mục gốc";
+    return {
+      id: String(rawItem.id),
+      url: new URL(String(rawItem.media), state.baseUrl).href,
+      preview: new URL(String(rawItem.view || rawItem.media), state.baseUrl).href,
+      thumbnail: new URL(String(rawItem.thumbnail), state.baseUrl).href,
+      type: rawItem.type === "video" ? "video" : "image",
+      extension: String(rawItem.extension || mediaExtension(name)),
+      relative: `${rawItem.folder || ""}/${name}`,
+      name,
+      folder,
+      bytes: Number(rawItem.bytes) || 0,
+      modified: Number(rawItem.modified) || 0,
+    };
+  }
+
+  async function fetchWithTimeout(url, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, {
+        cache: "no-store",
+        credentials: "omit",
+        mode: "cors",
+        signal: controller.signal,
+        targetAddressSpace: "local",
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new Error("quá thời gian chờ server");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function probeApi() {
+    const response = await fetchWithTimeout(new URL("healthz", state.baseUrl), PROBE_TIMEOUT_MS);
+    if (response.status === 404) {
+      throw new ApiUnavailableError("Không có API album");
+    }
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !contentType.includes("application/json")) {
+      throw new Error(`health check HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (payload.status !== "ok") {
+      throw new Error("health check không hợp lệ");
+    }
+  }
+
+  function apiItemsUrl({ offset, force }) {
+    const url = new URL("api/items", state.baseUrl);
+    url.searchParams.set("offset", String(offset));
+    url.searchParams.set("limit", String(PAGE_SIZE));
+    url.searchParams.set("type", state.filter);
+    url.searchParams.set("sort", state.sort);
+    if (state.query.trim()) {
+      url.searchParams.set("q", state.query.trim());
+    }
+    if (force) {
+      url.searchParams.set("refresh", "1");
+    }
+    return url;
+  }
+
+  async function fetchApiPage({ offset, force, version }) {
+    const response = await fetchWithTimeout(apiItemsUrl({ offset, force }), API_TIMEOUT_MS);
+    const contentType = response.headers.get("content-type") || "";
+    if (response.status === 404 || !contentType.includes("application/json")) {
+      throw new ApiUnavailableError("Server không trả API JSON");
+    }
+    if (!response.ok) {
+      throw new Error(`API HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (version !== state.requestVersion) {
+      return null;
+    }
+    if (!Array.isArray(payload.items)) {
+      throw new Error("Dữ liệu API không hợp lệ");
+    }
+    return payload;
+  }
+
+  async function loadApiPage({ reset = false, force = false, version = state.requestVersion } = {}) {
+    if (state.isLoadingMore && !reset) {
+      return false;
+    }
+    if (!reset && !state.hasMore) {
+      return false;
+    }
+
+    const offset = reset ? 0 : state.items.length;
+    state.isLoadingMore = !reset;
+    if (!reset) {
+      elements.scanStatus.hidden = false;
+      elements.scanStatusText.textContent = "Đang tải thêm…";
+    }
+
+    try {
+      const payload = await fetchApiPage({ offset, force, version });
+      if (!payload) {
+        return false;
+      }
+      const nextItems = payload.items.map(normalizeApiItem);
+      state.items = reset ? nextItems : [...state.items, ...nextItems];
+      state.visibleItems = state.items;
+      state.total = Number(payload.total) || 0;
+      state.stats = payload.stats || null;
+      state.hasMore = Boolean(payload.hasMore);
+      setMode("api");
+
+      if (reset) {
+        elements.mediaGrid.replaceChildren();
+        state.renderedCount = 0;
+      }
+      renderNextPage(nextItems.length || PAGE_SIZE);
+      updateSummary();
+      updateEmptyState();
+      return true;
+    } finally {
+      state.isLoadingMore = false;
+      if (!state.isLoading) {
+        elements.scanStatus.hidden = true;
+      }
+    }
   }
 
   function isInsideAlbum(candidate) {
@@ -231,7 +417,7 @@
       }
 
       const decodedParts = safeDecode(candidate.pathname).split("/").filter(Boolean);
-      const lastPart = decodedParts.at(-1) ?? "";
+      const lastPart = (decodedParts.at(-1) ?? "").toLocaleLowerCase("en");
       const appearsToBeDirectory = rawHref.endsWith("/") || anchor.textContent.trim().endsWith("/");
 
       if (appearsToBeDirectory) {
@@ -244,7 +430,7 @@
         continue;
       }
 
-      const item = itemFromUrl(candidate.href);
+      const item = directoryItemFromUrl(candidate.href);
       if (item) {
         media.push(item);
       }
@@ -253,126 +439,117 @@
     return { directories, media };
   }
 
-  async function fetchDirectory(url, scanId) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(url, {
-        cache: "no-store",
-        mode: "cors",
-        signal: controller.signal,
-        targetAddressSpace: "local",
-      });
-      if (scanId !== state.scanId) {
-        return null;
-      }
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const html = await response.text();
-      return parseDirectory(html, url);
-    } finally {
-      clearTimeout(timeout);
+  async function fetchDirectory(url, version) {
+    const response = await fetchWithTimeout(url, DIRECTORY_TIMEOUT_MS);
+    if (version !== state.requestVersion) {
+      return null;
     }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return parseDirectory(await response.text(), url);
   }
 
-  let refreshTimer = null;
-
-  function scheduleRefresh() {
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(() => refreshVisibleItems(false), 120);
-  }
-
-  async function scanAlbum() {
-    if (!state.endpoint) {
-      showConnectionDialog();
-      return;
-    }
-
-    state.scanId += 1;
-    const scanId = state.scanId;
-    state.items = [];
-    state.visibleItems = [];
-    state.renderedCount = 0;
-    elements.mediaGrid.replaceChildren();
-    hideNotice();
-    updateEmptyState();
-    setScanning(true, "Đang kết nối…");
-
+  async function scanDirectory(version) {
     const pending = [state.baseUrl];
     const queued = new Set(pending);
     const visited = new Set();
     const mediaUrls = new Set();
     let completedDirectories = 0;
 
-    try {
-      while (pending.length > 0 && scanId === state.scanId) {
-        const batch = pending.splice(0, MAX_CONCURRENT_REQUESTS);
-        const results = await Promise.all(batch.map((url) => fetchDirectory(url, scanId)));
+    state.items = [];
+    state.visibleItems = [];
+    state.total = 0;
+    state.stats = null;
+    state.hasMore = false;
+    setMode("directory");
 
-        for (let index = 0; index < batch.length; index += 1) {
-          const directoryUrl = batch[index];
-          const result = results[index];
-          visited.add(directoryUrl);
-          completedDirectories += 1;
-          if (!result) {
-            continue;
-          }
+    while (pending.length > 0 && version === state.requestVersion) {
+      const batch = pending.splice(0, MAX_CONCURRENT_REQUESTS);
+      const results = await Promise.all(batch.map((url) => fetchDirectory(url, version)));
 
-          for (const nestedUrl of result.directories) {
-            if (!visited.has(nestedUrl) && !queued.has(nestedUrl)) {
-              queued.add(nestedUrl);
-              pending.push(nestedUrl);
-            }
-          }
+      for (let index = 0; index < batch.length; index += 1) {
+        const directoryUrl = batch[index];
+        const result = results[index];
+        visited.add(directoryUrl);
+        completedDirectories += 1;
+        if (!result) {
+          continue;
+        }
 
-          for (const item of result.media) {
-            if (!mediaUrls.has(item.url)) {
-              mediaUrls.add(item.url);
-              state.items.push(item);
-            }
+        for (const nestedUrl of result.directories) {
+          if (!visited.has(nestedUrl) && !queued.has(nestedUrl)) {
+            queued.add(nestedUrl);
+            pending.push(nestedUrl);
           }
         }
 
-        elements.scanStatusText.textContent =
-          `${state.items.length.toLocaleString("vi-VN")} mục · ${completedDirectories} thư mục`;
-        scheduleRefresh();
+        for (const item of result.media) {
+          if (!mediaUrls.has(item.url)) {
+            mediaUrls.add(item.url);
+            state.items.push(item);
+          }
+        }
       }
 
-      if (scanId === state.scanId) {
-        clearTimeout(refreshTimer);
-        refreshVisibleItems(false);
-        setScanning(false);
-      }
-    } catch (error) {
-      if (scanId !== state.scanId) {
-        return;
-      }
-      clearTimeout(refreshTimer);
-      setScanning(false);
-      refreshVisibleItems(false);
-      showConnectionError(error);
+      elements.scanStatusText.textContent =
+        `${numberFormatter.format(state.items.length)} mục · ${completedDirectories} thư mục`;
     }
+
+    if (version !== state.requestVersion) {
+      return;
+    }
+    state.total = state.items.length;
+    state.stats = {
+      total: state.items.length,
+      images: state.items.filter((item) => item.type === "image").length,
+      videos: state.items.filter((item) => item.type === "video").length,
+    };
+    refreshDirectoryItems(false);
   }
 
-  function compareItems(left, right) {
-    const collator = compareItems.collator ??= new Intl.Collator("vi", { numeric: true, sensitivity: "base" });
-    if (state.sort === "name-asc") {
-      return collator.compare(left.name, right.name);
+  function renderSkeletons() {
+    elements.mediaGrid.replaceChildren();
+    const fragment = document.createDocumentFragment();
+    for (let index = 0; index < 10; index += 1) {
+      const card = document.createElement("div");
+      card.className = "media-card is-skeleton";
+      card.setAttribute("aria-hidden", "true");
+      const preview = document.createElement("span");
+      preview.className = "media-preview";
+      const meta = document.createElement("span");
+      meta.className = "media-meta";
+      const firstLine = document.createElement("span");
+      const secondLine = document.createElement("span");
+      firstLine.className = "skeleton-line";
+      secondLine.className = "skeleton-line";
+      meta.append(firstLine, secondLine);
+      card.append(preview, meta);
+      fragment.append(card);
     }
+    elements.mediaGrid.append(fragment);
+  }
+
+  function compareDirectoryItems(left, right) {
+    const collator = compareDirectoryItems.collator ??= new Intl.Collator("vi", {
+      numeric: true,
+      sensitivity: "base",
+    });
     if (state.sort === "name-desc") {
       return collator.compare(right.name, left.name);
+    }
+    if (state.sort === "name-asc") {
+      return collator.compare(left.name, right.name);
     }
     return collator.compare(left.relative, right.relative);
   }
 
-  function refreshVisibleItems(keepRenderLimit = false) {
+  function refreshDirectoryItems(keepRenderLimit = false) {
     const normalizedQuery = state.query.trim().toLocaleLowerCase("vi");
     state.visibleItems = state.items
       .filter((item) => state.filter === "all" || item.type === state.filter)
       .filter((item) => !normalizedQuery || `${item.name} ${item.folder}`.toLocaleLowerCase("vi").includes(normalizedQuery))
-      .sort(compareItems);
+      .sort(compareDirectoryItems);
 
     const targetCount = keepRenderLimit ? Math.max(state.renderedCount, PAGE_SIZE) : PAGE_SIZE;
     state.renderedCount = 0;
@@ -382,42 +559,56 @@
     updateEmptyState();
   }
 
+  function addPreviewImage(preview, item) {
+    if (!item.thumbnail) {
+      if (item.type === "video") {
+        preview.classList.add("video-preview");
+      }
+      return;
+    }
+
+    const image = document.createElement("img");
+    image.alt = "";
+    image.loading = "lazy";
+    image.decoding = "async";
+    const fallbacks = item.type === "image"
+      ? [item.thumbnail, item.preview, item.url]
+      : [item.thumbnail];
+    let fallbackIndex = 0;
+    image.src = fallbacks[fallbackIndex];
+    image.addEventListener("error", () => {
+      fallbackIndex += 1;
+      if (fallbackIndex < fallbacks.length) {
+        image.src = fallbacks[fallbackIndex];
+      } else {
+        image.remove();
+        if (item.type === "video") {
+          preview.classList.add("video-preview");
+        }
+      }
+    });
+    preview.prepend(image);
+  }
+
   function createMediaCard(item, index) {
     const fragment = elements.mediaCardTemplate.content.cloneNode(true);
     const card = fragment.querySelector(".media-card");
     const preview = fragment.querySelector(".media-preview");
     const name = fragment.querySelector(".media-name");
     const folder = fragment.querySelector(".media-folder");
+    const detail = fragment.querySelector(".media-detail");
 
     card.dataset.index = String(index);
     card.setAttribute("aria-label", `Mở ${item.name}`);
     name.textContent = item.name;
     folder.textContent = item.folder;
+    detail.textContent = itemDetail(item);
 
     const typeBadge = document.createElement("span");
     typeBadge.className = "media-type";
     typeBadge.textContent = item.extension;
     preview.append(typeBadge);
-
-    if (item.type === "image") {
-      const image = document.createElement("img");
-      image.alt = "";
-      image.loading = "lazy";
-      image.decoding = "async";
-      image.src = item.thumbnail;
-      image.addEventListener(
-        "error",
-        () => {
-          if (image.src !== item.url) {
-            image.src = item.url;
-          }
-        },
-        { once: true },
-      );
-      preview.prepend(image);
-    } else {
-      preview.classList.add("video-preview");
-    }
+    addPreviewImage(preview, item);
 
     return fragment;
   }
@@ -426,7 +617,6 @@
     if (state.renderedCount >= state.visibleItems.length) {
       return;
     }
-
     const end = Math.min(state.renderedCount + targetCount, state.visibleItems.length);
     const fragment = document.createDocumentFragment();
     for (let index = state.renderedCount; index < end; index += 1) {
@@ -442,17 +632,25 @@
       return;
     }
 
-    const imageCount = state.items.filter((item) => item.type === "image").length;
-    const videoCount = state.items.length - imageCount;
-    const filtered = state.visibleItems.length !== state.items.length ? ` · đang hiện ${state.visibleItems.length.toLocaleString("vi-VN")}` : "";
-    elements.albumSummary.textContent =
-      `${imageCount.toLocaleString("vi-VN")} ảnh · ${videoCount.toLocaleString("vi-VN")} video${filtered}`;
+    const stats = state.stats || { images: 0, videos: 0 };
+    const baseSummary = `${numberFormatter.format(stats.images || 0)} ảnh · ${numberFormatter.format(stats.videos || 0)} video`;
+    const hasActiveQuery = state.filter !== "all" || Boolean(state.query.trim());
+    elements.albumSummary.textContent = hasActiveQuery
+      ? `${numberFormatter.format(state.total)} kết quả · ${baseSummary}`
+      : baseSummary;
   }
 
   function updateEmptyState() {
     const hasVisibleItems = state.visibleItems.length > 0;
-    elements.emptyState.hidden = hasVisibleItems || state.isScanning;
+    elements.emptyState.hidden = hasVisibleItems || state.isLoading;
     elements.emptyConnect.textContent = state.endpoint ? "Đổi IP và cổng" : "Nhập IP và cổng";
+    if (state.endpoint && state.mode && !hasVisibleItems) {
+      elements.emptyTitle.textContent = "Không có kết quả";
+      elements.emptyCopy.textContent = "Thử từ khóa khác, đổi bộ lọc hoặc làm mới album.";
+    } else {
+      elements.emptyTitle.textContent = "Chưa có nội dung";
+      elements.emptyCopy.textContent = "Kết nối tới máy lưu album để xem ảnh và video.";
+    }
   }
 
   function showViewer(index) {
@@ -465,15 +663,16 @@
     elements.viewerStage.replaceChildren();
     elements.viewerName.textContent = item.name;
     elements.viewerFolder.textContent = item.folder;
+    elements.viewerDetails.textContent = itemDetail(item) || item.extension.toUpperCase();
     elements.viewerOpenOriginal.href = item.url;
-    elements.viewerCount.textContent = `${index + 1} / ${state.visibleItems.length}`;
+    elements.viewerCount.textContent = `${numberFormatter.format(index + 1)} / ${numberFormatter.format(state.total || state.visibleItems.length)}`;
     elements.viewerPrevious.disabled = index === 0;
-    elements.viewerNext.disabled = index === state.visibleItems.length - 1;
+    elements.viewerNext.disabled = index >= (state.total || state.visibleItems.length) - 1;
 
     if (item.type === "image") {
       const image = document.createElement("img");
       image.alt = item.name;
-      image.src = item.url;
+      image.src = item.preview || item.url;
       elements.viewerStage.append(image);
     } else {
       const video = document.createElement("video");
@@ -490,8 +689,18 @@
     }
   }
 
-  function moveViewer(offset) {
-    const nextIndex = state.viewerIndex + offset;
+  async function moveViewer(offset) {
+    let nextIndex = state.viewerIndex + offset;
+    if (offset > 0 && nextIndex >= state.visibleItems.length && state.mode === "api" && state.hasMore) {
+      try {
+        await loadApiPage();
+      } catch (error) {
+        showConnectionError(error);
+        elements.scanStatus.hidden = true;
+        return;
+      }
+      nextIndex = state.viewerIndex + offset;
+    }
     if (nextIndex >= 0 && nextIndex < state.visibleItems.length) {
       showViewer(nextIndex);
     }
@@ -504,13 +713,111 @@
     }
   }
 
+  function resetAlbumState() {
+    closeViewer();
+    state.items = [];
+    state.visibleItems = [];
+    state.total = 0;
+    state.stats = null;
+    state.hasMore = false;
+    state.renderedCount = 0;
+    state.viewerIndex = -1;
+    state.isLoadingMore = false;
+    elements.mediaGrid.replaceChildren();
+    setMode(null);
+  }
+
+  async function connectAlbum({ force = false } = {}) {
+    if (!state.endpoint) {
+      showConnectionDialog();
+      return;
+    }
+
+    state.requestVersion += 1;
+    const version = state.requestVersion;
+    resetAlbumState();
+    hideNotice();
+    renderSkeletons();
+    setLoading(true, "Đang tìm server LAN…");
+
+    try {
+      try {
+        await probeApi();
+        if (version !== state.requestVersion) {
+          return;
+        }
+        elements.scanStatusText.textContent = "Đang lập chỉ mục album…";
+        await loadApiPage({ reset: true, force, version });
+      } catch (error) {
+        if (!(error instanceof ApiUnavailableError)) {
+          throw error;
+        }
+        elements.scanStatusText.textContent = "Đang quét thư mục…";
+        await scanDirectory(version);
+      }
+
+      if (version === state.requestVersion) {
+        hideNotice();
+      }
+    } catch (error) {
+      if (version !== state.requestVersion) {
+        return;
+      }
+      resetAlbumState();
+      showConnectionError(error);
+    } finally {
+      if (version === state.requestVersion) {
+        setLoading(false);
+        updateSummary();
+        updateEmptyState();
+      }
+    }
+  }
+
+  let controlTimer = null;
+
+  function reloadFromControls() {
+    clearTimeout(controlTimer);
+    if (state.mode === "api") {
+      controlTimer = setTimeout(async () => {
+        state.requestVersion += 1;
+        const version = state.requestVersion;
+        closeViewer();
+        state.items = [];
+        state.visibleItems = [];
+        state.total = 0;
+        state.hasMore = false;
+        state.renderedCount = 0;
+        renderSkeletons();
+        setLoading(true, "Đang cập nhật kết quả…");
+        try {
+          await loadApiPage({ reset: true, version });
+          hideNotice();
+        } catch (error) {
+          if (version === state.requestVersion) {
+            resetAlbumState();
+            showConnectionError(error);
+          }
+        } finally {
+          if (version === state.requestVersion) {
+            setLoading(false);
+            updateSummary();
+            updateEmptyState();
+          }
+        }
+      }, 280);
+    } else if (state.mode === "directory") {
+      refreshDirectoryItems(false);
+    }
+  }
+
   function applyEndpoint(endpoint) {
     state.endpoint = endpoint;
     state.baseUrl = endpointUrl(endpoint);
     elements.endpointLabel.textContent = `${endpoint.ip}:${endpoint.port}`;
     elements.openDirect.hidden = false;
     elements.changeEndpoint.textContent = "Đổi máy";
-    scanAlbum();
+    connectAlbum();
   }
 
   elements.connectionForm.addEventListener("submit", (event) => {
@@ -534,24 +841,25 @@
   elements.emptyConnect.addEventListener("click", showConnectionDialog);
   elements.openDirect.addEventListener("click", openDirectly);
   elements.noticeOpenDirect.addEventListener("click", openDirectly);
-  elements.retryButton.addEventListener("click", scanAlbum);
+  elements.retryButton.addEventListener("click", () => connectAlbum());
+  elements.refreshButton.addEventListener("click", () => connectAlbum({ force: true }));
 
   elements.searchInput.addEventListener("input", () => {
     state.query = elements.searchInput.value;
-    refreshVisibleItems(false);
+    reloadFromControls();
   });
 
   for (const button of elements.filterButtons) {
     button.addEventListener("click", () => {
       state.filter = button.dataset.filter;
       elements.filterButtons.forEach((filterButton) => filterButton.classList.toggle("is-active", filterButton === button));
-      refreshVisibleItems(false);
+      reloadFromControls();
     });
   }
 
   elements.sortSelect.addEventListener("change", () => {
     state.sort = elements.sortSelect.value;
-    refreshVisibleItems(true);
+    reloadFromControls();
   });
 
   elements.sizeInput.addEventListener("input", () => {
@@ -559,7 +867,7 @@
   });
 
   elements.mediaGrid.addEventListener("click", (event) => {
-    const card = event.target.closest(".media-card");
+    const card = event.target.closest(".media-card:not(.is-skeleton)");
     if (card) {
       showViewer(Number(card.dataset.index));
     }
@@ -587,7 +895,15 @@
 
   const observer = new IntersectionObserver(
     (entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
+      if (!entries.some((entry) => entry.isIntersecting) || state.isLoading) {
+        return;
+      }
+      if (state.mode === "api") {
+        loadApiPage().catch((error) => {
+          showConnectionError(error);
+          elements.scanStatus.hidden = true;
+        });
+      } else if (state.mode === "directory") {
         renderNextPage();
       }
     },

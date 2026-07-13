@@ -45,7 +45,8 @@
         <label class="select-field">
           <span>Sắp xếp</span>
           <select id="sort-select">
-            <option value="path-asc">Thư mục A–Z</option>
+            <option value="newest">Mới nhất</option>
+            <option value="oldest">Cũ nhất</option>
             <option value="name-asc">Tên A–Z</option>
             <option value="name-desc">Tên Z–A</option>
           </select>
@@ -65,6 +66,7 @@
         <div class="notice-actions">
           <button id="retry-button" class="button button-primary" type="button">Thử lại</button>
           <button id="notice-open-direct" class="button button-secondary" type="button">Mở trực tiếp</button>
+          <a class="button button-secondary" href="./my-album-lan-server.zip" download>Tải server Windows</a>
         </div>
       </section>
 
@@ -73,9 +75,13 @@
           <h1>Thư viện</h1>
           <p id="album-summary">Nhập IP và cổng của máy lưu album để bắt đầu.</p>
         </div>
-        <div id="scan-status" class="scan-status" hidden>
-          <span class="spinner" aria-hidden="true"></span>
-          <span id="scan-status-text">Đang quét…</span>
+        <div class="album-heading-actions">
+          <span id="connection-mode" class="connection-mode" hidden></span>
+          <div id="scan-status" class="scan-status" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="scan-status-text">Đang quét…</span>
+          </div>
+          <button id="refresh-button" class="icon-button refresh-button" type="button" title="Làm mới album" aria-label="Làm mới album" hidden>↻</button>
         </div>
       </section>
 
@@ -102,7 +108,7 @@
         </div>
 
         <p class="dialog-copy">
-          Nhập địa chỉ máy Windows đang chia sẻ thư mục. Thông tin chỉ được lưu trong trình duyệt này.
+          Nhập địa chỉ máy Windows đang chạy My Album. Thông tin chỉ được lưu trong trình duyệt này.
         </p>
 
         <div class="connection-fields">
@@ -117,6 +123,11 @@
         </div>
 
         <p id="form-error" class="form-error" role="alert" hidden></p>
+
+        <a class="server-download" href="./my-album-lan-server.zip" download>
+          <span aria-hidden="true">↓</span>
+          <span><strong>My Album LAN cho Windows</strong><small>Gói server đọc ảnh và tạo preview nhẹ</small></span>
+        </a>
 
         <div class="dialog-actions">
           <button class="button button-secondary" type="button" data-close-dialog>Hủy</button>
@@ -143,7 +154,10 @@
         <button id="viewer-previous" class="viewer-nav viewer-previous" type="button" aria-label="Nội dung trước">‹</button>
         <div id="viewer-stage" class="viewer-stage"></div>
         <button id="viewer-next" class="viewer-nav viewer-next" type="button" aria-label="Nội dung tiếp theo">›</button>
-        <div id="viewer-count" class="viewer-count"></div>
+        <div class="viewer-footer">
+          <span id="viewer-details"></span>
+          <span id="viewer-count"></span>
+        </div>
       </div>
     </dialog>
 
@@ -153,6 +167,7 @@
         <span class="media-meta">
           <strong class="media-name"></strong>
           <small class="media-folder"></small>
+          <small class="media-detail"></small>
         </span>
       </button>
     </template>
