@@ -35,11 +35,13 @@
     visibleItems: [],
     total: 0,
     stats: null,
+    facets: { folders: [], dates: [] },
     hasMore: false,
     filter: "all",
     view: "library",
     query: "",
     sort: "newest",
+    timelineFilters: { folder: "", year: "", month: "", day: "" },
     renderedCount: 0,
     requestVersion: 0,
     isLoading: false,
@@ -71,6 +73,8 @@
     hiddenCount: document.querySelector("#hidden-count"),
     filterButtons: [...document.querySelectorAll("[data-filter]")],
     sortSelect: document.querySelector("#sort-select"),
+    timelineFilterButton: document.querySelector("#timeline-filter-button"),
+    timelineFilterCount: document.querySelector("#timeline-filter-count"),
     sizeInput: document.querySelector("#size-input"),
     connectionNotice: document.querySelector("#connection-notice"),
     noticeTitle: document.querySelector("#notice-title"),
@@ -95,6 +99,14 @@
     ipInput: document.querySelector("#ip-input"),
     portInput: document.querySelector("#port-input"),
     formError: document.querySelector("#form-error"),
+    filterDialog: document.querySelector("#filter-dialog"),
+    filterForm: document.querySelector("#filter-form"),
+    filterClose: document.querySelector("#filter-close"),
+    filterReset: document.querySelector("#filter-reset"),
+    folderFilter: document.querySelector("#folder-filter"),
+    yearFilter: document.querySelector("#year-filter"),
+    monthFilter: document.querySelector("#month-filter"),
+    dayFilter: document.querySelector("#day-filter"),
     viewerDialog: document.querySelector("#viewer-dialog"),
     viewerShell: document.querySelector("#viewer-shell"),
     viewerName: document.querySelector("#viewer-name"),
@@ -139,6 +151,8 @@
     month: "long",
     year: "numeric",
   });
+  const monthFormatter = new Intl.DateTimeFormat("vi-VN", { month: "long" });
+  const folderCollator = new Intl.Collator("vi", { numeric: true, sensitivity: "base" });
   const thumbnailObserver = "IntersectionObserver" in window
     ? new IntersectionObserver((entries) => {
       for (const entry of entries) {
@@ -272,6 +286,20 @@
     }
   }
 
+  function activeTimelineFilterCount() {
+    return Object.values(state.timelineFilters).filter(Boolean).length;
+  }
+
+  function updateTimelineFilterUi() {
+    const count = activeTimelineFilterCount();
+    const hasAvailableFilters = state.facets.folders.length > 0 || state.facets.dates.length > 0;
+    elements.timelineFilterButton.hidden = !state.mode || (!hasAvailableFilters && count === 0);
+    elements.timelineFilterButton.classList.toggle("is-active", count > 0);
+    elements.timelineFilterButton.setAttribute("aria-pressed", String(count > 0));
+    elements.timelineFilterCount.textContent = String(count);
+    elements.timelineFilterCount.hidden = count === 0;
+  }
+
   function showToast(message, duration = 3200) {
     clearTimeout(state.toastTimer);
     elements.toast.textContent = message;
@@ -324,6 +352,7 @@
     const labels = { api: "LAN API", directory: "Thư mục LAN", offline: "Ngoại tuyến" };
     elements.connectionMode.textContent = labels[mode] || "";
     elements.refreshButton.hidden = !mode;
+    updateTimelineFilterUi();
   }
 
   function hideNotice() {
@@ -384,8 +413,152 @@
     return Number.isFinite(timestamp) && timestamp > 0 ? dateFormatter.format(new Date(timestamp * 1000)) : "";
   }
 
+  function itemTimestamp(item) {
+    return Number(item.modified) || 0;
+  }
+
   function itemDetail(item) {
-    return [formatDate(item.modified), formatBytes(item.bytes)].filter(Boolean).join(" · ");
+    return [formatDate(itemTimestamp(item)), formatBytes(item.bytes)].filter(Boolean).join(" · ");
+  }
+
+  function localDateKey(timestamp) {
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
+      return "";
+    }
+    const date = new Date(timestamp * 1000);
+    const year = String(date.getFullYear());
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function itemFolderKey(item) {
+    return String(item.folderKey || item.folder || "Thư mục gốc");
+  }
+
+  function itemMatchesTimelineFilters(item) {
+    const filters = state.timelineFilters;
+    if (filters.folder && itemFolderKey(item) !== filters.folder) {
+      return false;
+    }
+    if (!filters.year) {
+      return true;
+    }
+    const dateKey = localDateKey(itemTimestamp(item));
+    if (!dateKey || dateKey.slice(0, 4) !== filters.year) {
+      return false;
+    }
+    if (filters.month && dateKey.slice(5, 7) !== filters.month.padStart(2, "0")) {
+      return false;
+    }
+    return !filters.day || dateKey.slice(8, 10) === filters.day.padStart(2, "0");
+  }
+
+  function deriveFacets(items) {
+    const folders = new Set();
+    const dates = new Set();
+    for (const item of items) {
+      folders.add(itemFolderKey(item));
+      const dateKey = localDateKey(itemTimestamp(item));
+      if (dateKey) {
+        dates.add(dateKey);
+      }
+    }
+    return {
+      folders: [...folders].sort(folderCollator.compare),
+      dates: [...dates].sort().reverse(),
+    };
+  }
+
+  function normalizeFacets(rawFacets) {
+    const folders = Array.isArray(rawFacets?.folders)
+      ? rawFacets.folders.map(String).filter(Boolean).sort(folderCollator.compare)
+      : [];
+    const dates = Array.isArray(rawFacets?.dates)
+      ? rawFacets.dates.map(String).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().reverse()
+      : [];
+    return { folders: [...new Set(folders)], dates: [...new Set(dates)] };
+  }
+
+  function folderFilterLabel(folder) {
+    return folder === "." ? "Thư mục gốc" : folder.replaceAll("/", " / ");
+  }
+
+  function setSelectOptions(select, placeholder, values, selected, labelForValue = String) {
+    const normalizedValues = [...new Set(values.map(String))];
+    if (selected && !normalizedValues.includes(selected)) {
+      normalizedValues.push(selected);
+    }
+    const fragment = document.createDocumentFragment();
+    fragment.append(new Option(placeholder, ""));
+    for (const value of normalizedValues) {
+      fragment.append(new Option(labelForValue(value), value));
+    }
+    select.replaceChildren(fragment);
+    select.value = selected && normalizedValues.includes(selected) ? selected : "";
+    return select.value;
+  }
+
+  function populateTimelineFilterDialog(filters = state.timelineFilters) {
+    const folders = [...state.facets.folders].sort(folderCollator.compare);
+    setSelectOptions(
+      elements.folderFilter,
+      "Tất cả thư mục",
+      folders,
+      filters.folder,
+      folderFilterLabel,
+    );
+
+    const years = [...new Set(state.facets.dates.map((date) => date.slice(0, 4)))].sort().reverse();
+    const year = setSelectOptions(elements.yearFilter, "Tất cả năm", years, filters.year);
+    const months = year
+      ? [...new Set(state.facets.dates
+        .filter((date) => date.startsWith(`${year}-`))
+        .map((date) => date.slice(5, 7)))].sort((left, right) => Number(left) - Number(right))
+      : [];
+    const month = setSelectOptions(
+      elements.monthFilter,
+      "Tất cả tháng",
+      months,
+      year ? filters.month : "",
+      (value) => monthFormatter.format(new Date(2024, Number(value) - 1, 1)),
+    );
+    elements.monthFilter.disabled = !year || months.length === 0;
+
+    const days = year && month
+      ? [...new Set(state.facets.dates
+        .filter((date) => date.startsWith(`${year}-${month.padStart(2, "0")}-`))
+        .map((date) => date.slice(8, 10)))].sort((left, right) => Number(left) - Number(right))
+      : [];
+    setSelectOptions(
+      elements.dayFilter,
+      "Tất cả ngày",
+      days,
+      year && month ? filters.day : "",
+      (value) => `Ngày ${Number(value)}`,
+    );
+    elements.dayFilter.disabled = !year || !month || days.length === 0;
+  }
+
+  function showTimelineFilterDialog() {
+    populateTimelineFilterDialog();
+    elements.filterDialog.showModal();
+    requestAnimationFrame(() => elements.folderFilter.focus());
+  }
+
+  function closeTimelineFilterDialog() {
+    if (elements.filterDialog.open) {
+      elements.filterDialog.close();
+    }
+  }
+
+  function readTimelineFilterForm() {
+    return {
+      folder: elements.folderFilter.value,
+      year: elements.yearFilter.value,
+      month: elements.yearFilter.value ? elements.monthFilter.value : "",
+      day: elements.yearFilter.value && elements.monthFilter.value ? elements.dayFilter.value : "",
+    };
   }
 
   function canUseCacheStorage() {
@@ -552,7 +725,8 @@
     const parts = relative.split("/");
     const encodedName = parts.pop() ?? relative;
     const name = safeDecode(encodedName);
-    const folder = parts.map(safeDecode).join(" / ") || "Thư mục gốc";
+    const folderKey = parts.map(safeDecode).join("/") || ".";
+    const folder = folderFilterLabel(folderKey);
 
     return {
       id: url,
@@ -566,6 +740,7 @@
       thumbnail: null,
       bytes: 0,
       modified: 0,
+      folderKey,
       source: "directory",
       thumbnailFallback: type === "image" ? makeDirectoryThumbnailUrl(relative) : null,
     };
@@ -573,7 +748,8 @@
 
   function normalizeApiItem(rawItem) {
     const name = String(rawItem.fileName || rawItem.name || "Không tên");
-    const folder = rawItem.folder && rawItem.folder !== "." ? String(rawItem.folder).replaceAll("/", " / ") : "Thư mục gốc";
+    const folderKey = rawItem.folder ? String(rawItem.folder) : ".";
+    const folder = folderKey !== "." ? folderKey.replaceAll("/", " / ") : "Thư mục gốc";
     return {
       id: String(rawItem.id),
       url: new URL(String(rawItem.media), state.baseUrl).href,
@@ -584,6 +760,7 @@
       relative: `${rawItem.folder || ""}/${name}`,
       name,
       folder,
+      folderKey,
       bytes: Number(rawItem.bytes) || 0,
       modified: Number(rawItem.modified) || 0,
       source: "api",
@@ -602,7 +779,9 @@
     if (!canUseCacheStorage() || !state.endpoint || !["api", "directory"].includes(state.mode)) {
       return;
     }
-    if (state.mode === "api" && (state.filter !== "all" || state.query.trim())) {
+    if (state.mode === "api" && (
+      state.filter !== "all" || state.query.trim() || activeTimelineFilterCount() > 0
+    )) {
       return;
     }
 
@@ -653,6 +832,7 @@
       };
       state.hasMore = false;
       state.renderedCount = 0;
+      state.facets = deriveFacets(items);
       setMode("offline");
       refreshDirectoryItems(false);
       return true;
@@ -706,6 +886,11 @@
     if (state.query.trim()) {
       url.searchParams.set("q", state.query.trim());
     }
+    for (const [name, value] of Object.entries(state.timelineFilters)) {
+      if (value) {
+        url.searchParams.set(name, value);
+      }
+    }
     if (force) {
       url.searchParams.set("refresh", "1");
     }
@@ -756,6 +941,9 @@
       state.total = Number(payload.total) || 0;
       state.stats = payload.stats || null;
       state.hasMore = Boolean(payload.hasMore);
+      if (payload.facets) {
+        state.facets = normalizeFacets(payload.facets);
+      }
       setMode("api");
 
       if (reset) {
@@ -904,6 +1092,8 @@
       images: state.items.filter((item) => item.type === "image").length,
       videos: state.items.filter((item) => item.type === "video").length,
     };
+    state.facets = deriveFacets(state.items);
+    updateTimelineFilterUi();
     refreshDirectoryItems(false);
     saveCachedCatalog().catch(() => {});
   }
@@ -946,7 +1136,7 @@
     }
     if (state.sort === "newest" || state.sort === "oldest") {
       const direction = state.sort === "newest" ? -1 : 1;
-      const dateDifference = ((left.modified || 0) - (right.modified || 0)) * direction;
+      const dateDifference = (itemTimestamp(left) - itemTimestamp(right)) * direction;
       if (dateDifference !== 0) {
         return dateDifference;
       }
@@ -959,6 +1149,7 @@
     state.visibleItems = state.items
       .filter((item) => state.hiddenIds.has(item.id) === (state.view === "hidden"))
       .filter((item) => state.filter === "all" || item.type === state.filter)
+      .filter(itemMatchesTimelineFilters)
       .filter((item) => !normalizedQuery || `${item.name} ${item.folder}`.toLocaleLowerCase("vi").includes(normalizedQuery))
       .sort(compareDirectoryItems);
   }
@@ -1250,12 +1441,9 @@
       const firstCharacter = item.name.trim().charAt(0).toLocaleUpperCase("vi") || "#";
       return `name:${firstCharacter}`;
     }
-    if (Number.isFinite(item.modified) && item.modified > 0) {
-      const date = new Date(item.modified * 1000);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `date:${year}-${month}-${day}`;
+    const timestamp = itemTimestamp(item);
+    if (timestamp > 0) {
+      return `date:${localDateKey(timestamp)}`;
     }
     return `folder:${item.folder || "Thư mục gốc"}`;
   }
@@ -1266,7 +1454,7 @@
       return { key, title: key.slice(5) };
     }
     if (key.startsWith("date:")) {
-      const date = new Date(item.modified * 1000);
+      const date = new Date(itemTimestamp(item) * 1000);
       const formatted = timelineDateFormatter.format(date);
       return { key, title: formatted.charAt(0).toLocaleUpperCase("vi") + formatted.slice(1) };
     }
@@ -1373,7 +1561,9 @@
     }
 
     if (state.view === "hidden") {
-      const qualifier = state.filter !== "all" || state.query.trim() ? " phù hợp" : "";
+      const qualifier = state.filter !== "all" || state.query.trim() || activeTimelineFilterCount() > 0
+        ? " phù hợp"
+        : "";
       elements.albumSummary.textContent =
         `${numberFormatter.format(state.visibleItems.length)} mục${qualifier} · Chỉ ẩn trên trình duyệt này`;
       return;
@@ -1386,7 +1576,7 @@
     const visibleImages = Math.max(0, (stats.images || 0) - hiddenImages);
     const visibleVideos = Math.max(0, (stats.videos || 0) - hiddenVideos);
     const baseSummary = `${numberFormatter.format(visibleImages)} ảnh · ${numberFormatter.format(visibleVideos)} video`;
-    const hasActiveQuery = state.filter !== "all" || Boolean(state.query.trim());
+    const hasActiveQuery = state.filter !== "all" || Boolean(state.query.trim()) || activeTimelineFilterCount() > 0;
     elements.albumSummary.textContent = hasActiveQuery
       ? `${numberFormatter.format(state.total)} kết quả · ${baseSummary}`
       : baseSummary;
@@ -1722,6 +1912,7 @@
     state.visibleItems = [];
     state.total = 0;
     state.stats = null;
+    state.facets = { folders: [], dates: [] };
     state.hasMore = false;
     state.renderedCount = 0;
     state.viewerIndex = -1;
@@ -1831,6 +2022,7 @@
     state.baseUrl = endpointUrl(endpoint);
     state.view = "library";
     state.filter = "all";
+    state.timelineFilters = { folder: "", year: "", month: "", day: "" };
     updateNavigationUi();
     loadHiddenItems();
     elements.endpointLabel.textContent = state.isLocalServer
@@ -1861,6 +2053,43 @@
   for (const closeButton of document.querySelectorAll("[data-close-dialog]")) {
     closeButton.addEventListener("click", closeConnectionDialog);
   }
+
+  elements.timelineFilterButton.addEventListener("click", showTimelineFilterDialog);
+  elements.filterClose.addEventListener("click", closeTimelineFilterDialog);
+  elements.yearFilter.addEventListener("change", () => {
+    const filters = readTimelineFilterForm();
+    filters.month = "";
+    filters.day = "";
+    populateTimelineFilterDialog(filters);
+  });
+  elements.monthFilter.addEventListener("change", () => {
+    const filters = readTimelineFilterForm();
+    filters.day = "";
+    populateTimelineFilterDialog(filters);
+  });
+  elements.filterForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const nextFilters = readTimelineFilterForm();
+    if (JSON.stringify(nextFilters) === JSON.stringify(state.timelineFilters)) {
+      closeTimelineFilterDialog();
+      return;
+    }
+    exitSelectionMode();
+    state.timelineFilters = nextFilters;
+    closeTimelineFilterDialog();
+    updateTimelineFilterUi();
+    reloadFromControls();
+  });
+  elements.filterReset.addEventListener("click", () => {
+    const hadActiveFilters = activeTimelineFilterCount() > 0;
+    state.timelineFilters = { folder: "", year: "", month: "", day: "" };
+    populateTimelineFilterDialog();
+    updateTimelineFilterUi();
+    if (hadActiveFilters) {
+      closeTimelineFilterDialog();
+      reloadFromControls();
+    }
+  });
 
   elements.changeEndpoint.addEventListener("click", showConnectionDialog);
   elements.themeToggle.addEventListener("click", () => {

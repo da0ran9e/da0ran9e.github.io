@@ -6,8 +6,8 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#f7f8fa" />
     <title>My Album</title>
-    <link rel="stylesheet" href="./styles.css?v=lan-api-12" />
-    <script src="./app.js?v=lan-api-12" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=lan-api-13" />
+    <script src="./app.js?v=lan-api-13" defer></script>
   </head>
   <body>
     <aside class="sidebar" aria-label="Điều hướng My Album">
@@ -92,7 +92,7 @@
           <div class="notice-actions">
             <button id="retry-button" class="button button-primary" type="button">Thử lại</button>
             <button id="notice-open-direct" class="button button-secondary" type="button">Mở trực tiếp</button>
-            <a class="button button-secondary" href="./my-album-lan-server.zip?v=lan-api-3" download>Tải server Windows</a>
+            <a class="button button-secondary" href="./my-album-lan-server.zip?v=lan-api-4" download>Tải server Windows</a>
           </div>
         </section>
 
@@ -122,6 +122,12 @@
           </div>
 
           <div class="toolbar-spacer"></div>
+
+          <button id="timeline-filter-button" class="button button-secondary timeline-filter-button" type="button" hidden>
+            <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+            <span>Lọc</span>
+            <span id="timeline-filter-count" class="timeline-filter-count" hidden></span>
+          </button>
 
           <label class="select-field">
             <span class="sr-only">Sắp xếp</span>
@@ -232,7 +238,7 @@
 
         <p id="form-error" class="form-error" role="alert" hidden></p>
 
-        <a class="server-download" href="./my-album-lan-server.zip?v=lan-api-3" download>
+        <a class="server-download" href="./my-album-lan-server.zip?v=lan-api-4" download>
           <span aria-hidden="true">↓</span>
           <span><strong>My Album LAN cho Windows</strong><small>Gói server đọc ảnh và tạo preview nhẹ</small></span>
         </a>
@@ -240,6 +246,50 @@
         <div class="dialog-actions">
           <button class="button button-secondary" type="button" data-close-dialog>Hủy</button>
           <button class="button button-primary" type="submit">Lưu và kết nối</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="filter-dialog" class="dialog filter-dialog">
+      <form id="filter-form" method="dialog">
+        <div class="dialog-header">
+          <div>
+            <small>Dòng thời gian</small>
+            <h2>Lọc thư viện</h2>
+          </div>
+          <button id="filter-close" class="icon-button" type="button" aria-label="Đóng">×</button>
+        </div>
+
+        <div class="timeline-filter-fields">
+          <label class="timeline-filter-folder">
+            <span>Thư mục</span>
+            <select id="folder-filter" name="folder">
+              <option value="">Tất cả thư mục</option>
+            </select>
+          </label>
+          <label>
+            <span>Năm</span>
+            <select id="year-filter" name="year">
+              <option value="">Tất cả năm</option>
+            </select>
+          </label>
+          <label>
+            <span>Tháng</span>
+            <select id="month-filter" name="month" disabled>
+              <option value="">Tất cả tháng</option>
+            </select>
+          </label>
+          <label>
+            <span>Ngày</span>
+            <select id="day-filter" name="day" disabled>
+              <option value="">Tất cả ngày</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="dialog-actions timeline-filter-actions">
+          <button id="filter-reset" class="button button-secondary" type="button">Xóa lọc</button>
+          <button class="button button-primary" type="submit">Áp dụng</button>
         </div>
       </form>
     </dialog>
