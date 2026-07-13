@@ -798,6 +798,33 @@ main {
   width: min(100%, 1200px);
 }
 
+.viewer-loader {
+  width: 34px;
+  height: 34px;
+  border: 3px solid #4c5659;
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: viewer-spin 0.8s linear infinite;
+}
+
+.viewer-error {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  color: #d9dfe0;
+  text-align: center;
+}
+
+.viewer-error p {
+  margin: 0;
+}
+
+@keyframes viewer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .viewer-nav {
   position: absolute;
   z-index: 3;
@@ -843,6 +870,16 @@ main {
 
 .viewer-footer span:last-child {
   flex: 0 0 auto;
+}
+
+.viewer-offline-status {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid #3d6c59;
+  border-radius: 4px;
+  color: #c2ead8;
+  background: #1f382e;
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {

@@ -7,6 +7,12 @@
   const PROBE_TIMEOUT_MS = 10000;
   const API_TIMEOUT_MS = 120000;
   const DIRECTORY_TIMEOUT_MS = 15000;
+  const VIEWER_CACHE_DELAY_MS = 8000;
+  const VIEWED_IMAGE_CACHE_MAX_BYTES = 512 * 1024 * 1024;
+  const THUMBNAIL_CACHE_NAME = "my-album-thumbnails-v1";
+  const VIEWED_IMAGE_CACHE_NAME = "my-album-viewed-images-v1";
+  const CATALOG_CACHE_NAME = "my-album-catalog-v1";
+  const VIEWED_IMAGE_CACHE_INDEX_KEY = "my-album-viewed-images-index-v1";
   const IMAGE_EXTENSIONS = new Set([
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
   ]);
@@ -34,6 +40,12 @@
     isLoading: false,
     isLoadingMore: false,
     viewerIndex: -1,
+    viewerLoadToken: 0,
+    viewerAbortController: null,
+    viewerObjectUrl: null,
+    viewerCacheTimer: null,
+    viewerBlob: null,
+    viewerCacheUrl: null,
   };
 
   const elements = {
@@ -75,6 +87,7 @@
     viewerNext: document.querySelector("#viewer-next"),
     viewerStage: document.querySelector("#viewer-stage"),
     viewerCount: document.querySelector("#viewer-count"),
+    viewerOfflineStatus: document.querySelector("#viewer-offline-status"),
     mediaCardTemplate: document.querySelector("#media-card-template"),
   };
 
@@ -85,6 +98,21 @@
     month: "2-digit",
     year: "numeric",
   });
+  const thumbnailObserver = "IntersectionObserver" in window
+    ? new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) {
+          continue;
+        }
+        const image = entry.target;
+        thumbnailObserver.unobserve(image);
+        const thumbnail = image.albumThumbnail;
+        if (thumbnail) {
+          loadThumbnailImage(image, thumbnail.preview, thumbnail.item);
+        }
+      }
+    }, { rootMargin: "600px 0px" })
+    : null;
 
   function readSavedEndpoint() {
     try {
@@ -153,7 +181,8 @@
   function setMode(mode) {
     state.mode = mode;
     elements.connectionMode.hidden = !mode;
-    elements.connectionMode.textContent = mode === "api" ? "LAN API" : "Directory";
+    const labels = { api: "LAN API", directory: "Directory", offline: "Offline" };
+    elements.connectionMode.textContent = labels[mode] || "";
     elements.refreshButton.hidden = !mode;
   }
 
@@ -167,6 +196,15 @@
     elements.noticeMessage.textContent =
       `Trình duyệt chưa đọc được API album tại ${state.baseUrl} (${detail}). ` +
       "Hãy chạy gói My Album LAN trên máy Windows, cho phép Mạng riêng khi Firewall hỏi rồi thử lại.";
+    elements.connectionNotice.hidden = false;
+  }
+
+  function showOfflineNotice(error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    elements.noticeTitle.textContent = "Đang dùng album ngoại tuyến";
+    elements.noticeMessage.textContent =
+      `Không kết nối được ${state.baseUrl} (${detail}). ` +
+      "Những thumbnail và ảnh đã lưu vẫn có thể mở; bấm làm mới khi máy Windows hoạt động lại.";
     elements.connectionNotice.hidden = false;
   }
 
@@ -186,6 +224,120 @@
 
   function itemDetail(item) {
     return [formatDate(item.modified), formatBytes(item.bytes)].filter(Boolean).join(" · ");
+  }
+
+  function canUseCacheStorage() {
+    return "caches" in window && typeof window.caches?.open === "function";
+  }
+
+  function blobCacheKey(cacheName, sourceUrl) {
+    const url = new URL("./__offline/blob", window.location.href);
+    url.search = "";
+    url.searchParams.set("cache", cacheName);
+    url.searchParams.set("source", sourceUrl);
+    return url.href;
+  }
+
+  async function fetchMediaResponse(url, signal) {
+    const response = await fetch(url, {
+      cache: "no-store",
+      credentials: "omit",
+      mode: "cors",
+      signal,
+      targetAddressSpace: "local",
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return response;
+  }
+
+  async function readCachedBlob(cacheName, url) {
+    if (!canUseCacheStorage()) {
+      return null;
+    }
+    const cache = await caches.open(cacheName);
+    const response = await cache.match(blobCacheKey(cacheName, url));
+    if (!response) {
+      return null;
+    }
+    return response.blob();
+  }
+
+  async function loadThumbnailBlob(url, signal) {
+    const cachedBlob = await readCachedBlob(THUMBNAIL_CACHE_NAME, url);
+    if (cachedBlob) {
+      return cachedBlob;
+    }
+
+    const response = await fetchMediaResponse(url, signal);
+    if (canUseCacheStorage()) {
+      const cache = await caches.open(THUMBNAIL_CACHE_NAME);
+      cache.put(blobCacheKey(THUMBNAIL_CACHE_NAME, url), response.clone()).catch(() => {});
+    }
+    return response.blob();
+  }
+
+  function readViewedImageCacheIndex() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(VIEWED_IMAGE_CACHE_INDEX_KEY));
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      return parsed.filter((entry) =>
+        entry && typeof entry.url === "string" && Number.isFinite(entry.bytes) && Number.isFinite(entry.lastAccess));
+    } catch {
+      return [];
+    }
+  }
+
+  function writeViewedImageCacheIndex(entries) {
+    try {
+      localStorage.setItem(VIEWED_IMAGE_CACHE_INDEX_KEY, JSON.stringify(entries));
+    } catch {
+      // The image remains cached even if the optional LRU index cannot be stored.
+    }
+  }
+
+  function touchViewedImageCache(url, bytes) {
+    const entries = readViewedImageCacheIndex();
+    const existing = entries.find((entry) => entry.url === url);
+    if (existing) {
+      existing.bytes = bytes || existing.bytes;
+      existing.lastAccess = Date.now();
+    } else {
+      entries.push({ url, bytes, lastAccess: Date.now() });
+    }
+    writeViewedImageCacheIndex(entries);
+  }
+
+  async function storeViewedImage(url, blob) {
+    if (!canUseCacheStorage()) {
+      return false;
+    }
+
+    const cache = await caches.open(VIEWED_IMAGE_CACHE_NAME);
+    const response = new Response(blob, {
+      headers: {
+        "Content-Length": String(blob.size),
+        "Content-Type": blob.type || "application/octet-stream",
+        "X-My-Album-Cached-At": new Date().toISOString(),
+      },
+    });
+    await cache.put(blobCacheKey(VIEWED_IMAGE_CACHE_NAME, url), response);
+
+    const entries = readViewedImageCacheIndex().filter((entry) => entry.url !== url);
+    entries.push({ url, bytes: blob.size, lastAccess: Date.now() });
+    entries.sort((left, right) => left.lastAccess - right.lastAccess);
+
+    let totalBytes = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+    while (totalBytes > VIEWED_IMAGE_CACHE_MAX_BYTES && entries.length > 0) {
+      const oldest = entries.shift();
+      totalBytes -= oldest.bytes;
+      await cache.delete(blobCacheKey(VIEWED_IMAGE_CACHE_NAME, oldest.url));
+    }
+    writeViewedImageCacheIndex(entries);
+    return entries.some((entry) => entry.url === url);
   }
 
   function mediaExtension(pathname) {
@@ -275,6 +427,76 @@
       source: "api",
       thumbnailFallback: null,
     };
+  }
+
+  function catalogCacheUrl() {
+    const url = new URL("./__offline/catalog.json", window.location.href);
+    url.search = "";
+    url.searchParams.set("endpoint", state.baseUrl);
+    return url.href;
+  }
+
+  async function saveCachedCatalog() {
+    if (!canUseCacheStorage() || !state.endpoint || !["api", "directory"].includes(state.mode)) {
+      return;
+    }
+    if (state.mode === "api" && (state.filter !== "all" || state.query.trim())) {
+      return;
+    }
+
+    const cache = await caches.open(CATALOG_CACHE_NAME);
+    const payload = {
+      version: 1,
+      endpoint: state.baseUrl,
+      savedAt: Date.now(),
+      sourceMode: state.mode,
+      items: state.items,
+      stats: state.stats,
+    };
+    await cache.put(catalogCacheUrl(), new Response(JSON.stringify(payload), {
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    }));
+  }
+
+  async function restoreCachedCatalog() {
+    if (!canUseCacheStorage() || !state.endpoint) {
+      return false;
+    }
+
+    try {
+      const cache = await caches.open(CATALOG_CACHE_NAME);
+      const response = await cache.match(catalogCacheUrl());
+      if (!response) {
+        return false;
+      }
+      const payload = await response.json();
+      if (payload?.version !== 1 || payload.endpoint !== state.baseUrl || !Array.isArray(payload.items)) {
+        return false;
+      }
+
+      const items = payload.items.filter((item) =>
+        item && typeof item.url === "string" && typeof item.name === "string" &&
+        (item.type === "image" || item.type === "video"));
+      if (items.length === 0) {
+        return false;
+      }
+
+      state.items = items;
+      state.visibleItems = items;
+      state.total = items.length;
+      state.stats = payload.stats || {
+        total: items.length,
+        images: items.filter((item) => item.type === "image").length,
+        videos: items.filter((item) => item.type === "video").length,
+      };
+      state.hasMore = false;
+      state.renderedCount = 0;
+      setMode("offline");
+      refreshDirectoryItems(false);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async function fetchWithTimeout(url, timeoutMs) {
@@ -376,12 +598,13 @@
       setMode("api");
 
       if (reset) {
-        elements.mediaGrid.replaceChildren();
+        clearMediaGrid();
         state.renderedCount = 0;
       }
       renderNextPage(nextItems.length || PAGE_SIZE);
       updateSummary();
       updateEmptyState();
+      saveCachedCatalog().catch(() => {});
       return true;
     } finally {
       state.isLoadingMore = false;
@@ -520,10 +743,11 @@
       videos: state.items.filter((item) => item.type === "video").length,
     };
     refreshDirectoryItems(false);
+    saveCachedCatalog().catch(() => {});
   }
 
   function renderSkeletons() {
-    elements.mediaGrid.replaceChildren();
+    clearMediaGrid();
     const fragment = document.createDocumentFragment();
     for (let index = 0; index < 10; index += 1) {
       const card = document.createElement("div");
@@ -564,10 +788,13 @@
       .filter((item) => state.filter === "all" || item.type === state.filter)
       .filter((item) => !normalizedQuery || `${item.name} ${item.folder}`.toLocaleLowerCase("vi").includes(normalizedQuery))
       .sort(compareDirectoryItems);
+    if (state.mode !== "api") {
+      state.total = state.visibleItems.length;
+    }
 
     const targetCount = keepRenderLimit ? Math.max(state.renderedCount, PAGE_SIZE) : PAGE_SIZE;
     state.renderedCount = 0;
-    elements.mediaGrid.replaceChildren();
+    clearMediaGrid();
     renderNextPage(targetCount);
     updateSummary();
     updateEmptyState();
@@ -575,58 +802,111 @@
 
   async function thumbnailSources(item) {
     if (item.source === "directory") {
-      if (item.type === "video") {
-        return [];
-      }
       let hashedThumbnail = null;
       try {
         hashedThumbnail = await makeHashedDirectoryThumbnailUrl(item.relative);
       } catch {
         // The mirrored _thumbnails layout remains a fallback for older setups.
       }
-      return [hashedThumbnail, item.thumbnailFallback].filter(Boolean);
+      return [hashedThumbnail, item.type === "image" ? item.thumbnailFallback : null].filter(Boolean);
     }
 
     if (!item.thumbnail) {
       return [];
     }
-    return item.type === "image"
-      ? [item.thumbnail, item.preview]
-      : [item.thumbnail];
+    return [item.thumbnail];
   }
 
-  function addPreviewImage(preview, item) {
-    thumbnailSources(item).then((fallbacks) => {
-      if (fallbacks.length === 0) {
-        if (item.type === "video") {
-          preview.classList.add("video-preview");
-        }
-        return;
-      }
+  function releaseThumbnailImage(image) {
+    thumbnailObserver?.unobserve(image);
+    image.albumThumbnailAbort?.abort();
+    image.albumThumbnailAbort = null;
+    if (image.albumThumbnailObjectUrl) {
+      URL.revokeObjectURL(image.albumThumbnailObjectUrl);
+      image.albumThumbnailObjectUrl = null;
+    }
+    image.removeAttribute("src");
+    image.albumThumbnail = null;
+  }
 
-      const image = document.createElement("img");
-      image.alt = "";
-      image.loading = "lazy";
-      image.decoding = "async";
-      let fallbackIndex = 0;
-      image.src = fallbacks[fallbackIndex];
+  function clearMediaGrid() {
+    for (const image of elements.mediaGrid.querySelectorAll(".media-preview img")) {
+      releaseThumbnailImage(image);
+    }
+    elements.mediaGrid.replaceChildren();
+  }
+
+  function showThumbnailBlob(image, blob) {
+    return new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(blob);
+      image.albumThumbnailObjectUrl = objectUrl;
+
+      const releaseObjectUrl = () => {
+        if (image.albumThumbnailObjectUrl === objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+          image.albumThumbnailObjectUrl = null;
+        }
+      };
+      image.addEventListener("load", () => {
+        releaseObjectUrl();
+        resolve();
+      }, { once: true });
       image.addEventListener("error", () => {
-        fallbackIndex += 1;
-        if (fallbackIndex < fallbacks.length) {
-          image.src = fallbacks[fallbackIndex];
-        } else {
-          image.remove();
-          if (item.type === "video") {
-            preview.classList.add("video-preview");
+        releaseObjectUrl();
+        reject(new Error("Thumbnail không hợp lệ"));
+      }, { once: true });
+      image.src = objectUrl;
+    });
+  }
+
+  async function loadThumbnailImage(image, preview, item) {
+    const controller = new AbortController();
+    image.albumThumbnailAbort = controller;
+    try {
+      const fallbacks = await thumbnailSources(item);
+      for (const url of fallbacks) {
+        try {
+          const blob = await loadThumbnailBlob(url, controller.signal);
+          if (!image.isConnected || controller.signal.aborted) {
+            return;
+          }
+          await showThumbnailBlob(image, blob);
+          image.albumThumbnailAbort = null;
+          return;
+        } catch (error) {
+          if (controller.signal.aborted) {
+            return;
           }
         }
-      });
-      preview.prepend(image);
-    }).catch(() => {
+      }
+
+      releaseThumbnailImage(image);
+      image.remove();
       if (item.type === "video") {
         preview.classList.add("video-preview");
       }
-    });
+    } catch {
+      releaseThumbnailImage(image);
+      image.remove();
+      if (item.type === "video") {
+        preview.classList.add("video-preview");
+      }
+    }
+  }
+
+  function addPreviewImage(preview, item) {
+    const image = document.createElement("img");
+    image.alt = "";
+    image.loading = "lazy";
+    image.decoding = "async";
+    image.albumThumbnail = { preview, item };
+    preview.prepend(image);
+
+    if (thumbnailObserver) {
+      thumbnailObserver.observe(image);
+    } else {
+      loadThumbnailImage(image, preview, item);
+    }
   }
 
   function createMediaCard(item, index) {
@@ -692,27 +972,161 @@
     }
   }
 
+  function releaseViewerMedia() {
+    state.viewerLoadToken += 1;
+    state.viewerAbortController?.abort();
+    state.viewerAbortController = null;
+    clearTimeout(state.viewerCacheTimer);
+    state.viewerCacheTimer = null;
+
+    const video = elements.viewerStage.querySelector("video");
+    if (video) {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    }
+    const image = elements.viewerStage.querySelector("img");
+    image?.removeAttribute("src");
+
+    if (state.viewerObjectUrl) {
+      URL.revokeObjectURL(state.viewerObjectUrl);
+    }
+    state.viewerObjectUrl = null;
+    state.viewerBlob = null;
+    state.viewerCacheUrl = null;
+    if (elements.viewerOfflineStatus) {
+      elements.viewerOfflineStatus.hidden = true;
+    }
+    elements.viewerStage.replaceChildren();
+  }
+
+  function renderViewerLoading() {
+    const loader = document.createElement("span");
+    loader.className = "viewer-loader";
+    loader.setAttribute("role", "status");
+    loader.setAttribute("aria-label", "Đang tải ảnh");
+    elements.viewerStage.replaceChildren(loader);
+  }
+
+  function renderViewerError(index) {
+    const error = document.createElement("div");
+    error.className = "viewer-error";
+    const message = document.createElement("p");
+    message.textContent = "Không tải được nội dung này.";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "button button-dark";
+    retry.textContent = "Thử lại";
+    retry.addEventListener("click", () => showViewer(index));
+    error.append(message, retry);
+    elements.viewerStage.replaceChildren(error);
+  }
+
+  async function loadViewerImage(item, index, token) {
+    const viewUrl = item.preview || item.url;
+    const controller = new AbortController();
+    state.viewerAbortController = controller;
+
+    try {
+      let blob = null;
+      let fromCache = false;
+      try {
+        blob = await readCachedBlob(VIEWED_IMAGE_CACHE_NAME, viewUrl);
+        fromCache = Boolean(blob);
+      } catch {
+        // Cache failures should not prevent a normal LAN request.
+      }
+
+      if (!blob) {
+        const response = await fetchMediaResponse(viewUrl, controller.signal);
+        blob = await response.blob();
+      }
+      if (token !== state.viewerLoadToken || controller.signal.aborted) {
+        return;
+      }
+
+      state.viewerAbortController = null;
+      state.viewerBlob = blob;
+      state.viewerCacheUrl = viewUrl;
+      state.viewerObjectUrl = URL.createObjectURL(blob);
+
+      const image = document.createElement("img");
+      image.alt = item.name;
+      image.decoding = "async";
+      image.addEventListener("load", () => {
+        if (token !== state.viewerLoadToken) {
+          return;
+        }
+        if (fromCache) {
+          touchViewedImageCache(viewUrl, blob.size);
+          if (elements.viewerOfflineStatus) {
+            elements.viewerOfflineStatus.hidden = false;
+          }
+          return;
+        }
+
+        state.viewerCacheTimer = window.setTimeout(async () => {
+          state.viewerCacheTimer = null;
+          if (token !== state.viewerLoadToken || state.viewerCacheUrl !== viewUrl || state.viewerBlob !== blob) {
+            return;
+          }
+          try {
+            const stored = await storeViewedImage(viewUrl, blob);
+            if (stored && token === state.viewerLoadToken && elements.viewerOfflineStatus) {
+              elements.viewerOfflineStatus.hidden = false;
+            }
+          } catch {
+            // Quota and browser policy errors leave the current viewer unaffected.
+          }
+        }, VIEWER_CACHE_DELAY_MS);
+      }, { once: true });
+      image.addEventListener("error", () => {
+        if (token === state.viewerLoadToken) {
+          image.removeAttribute("src");
+          if (state.viewerObjectUrl) {
+            URL.revokeObjectURL(state.viewerObjectUrl);
+          }
+          state.viewerObjectUrl = null;
+          state.viewerBlob = null;
+          state.viewerCacheUrl = null;
+          renderViewerError(index);
+        }
+      }, { once: true });
+      image.src = state.viewerObjectUrl;
+      elements.viewerStage.replaceChildren(image);
+    } catch (error) {
+      if (error?.name !== "AbortError" && token === state.viewerLoadToken) {
+        state.viewerAbortController = null;
+        renderViewerError(index);
+      }
+    }
+  }
+
   function showViewer(index) {
     const item = state.visibleItems[index];
     if (!item) {
       return;
     }
 
+    releaseViewerMedia();
     state.viewerIndex = index;
-    elements.viewerStage.replaceChildren();
+    const token = state.viewerLoadToken;
+    const viewerTotal = state.mode === "api" ? state.total : state.visibleItems.length;
     elements.viewerName.textContent = item.name;
     elements.viewerFolder.textContent = item.folder;
     elements.viewerDetails.textContent = itemDetail(item) || item.extension.toUpperCase();
     elements.viewerOpenOriginal.href = item.url;
-    elements.viewerCount.textContent = `${numberFormatter.format(index + 1)} / ${numberFormatter.format(state.total || state.visibleItems.length)}`;
+    elements.viewerCount.textContent = `${numberFormatter.format(index + 1)} / ${numberFormatter.format(viewerTotal)}`;
     elements.viewerPrevious.disabled = index === 0;
-    elements.viewerNext.disabled = index >= (state.total || state.visibleItems.length) - 1;
+    elements.viewerNext.disabled = index >= viewerTotal - 1;
+
+    if (!elements.viewerDialog.open) {
+      elements.viewerDialog.showModal();
+    }
 
     if (item.type === "image") {
-      const image = document.createElement("img");
-      image.alt = item.name;
-      image.src = item.preview || item.url;
-      elements.viewerStage.append(image);
+      renderViewerLoading();
+      loadViewerImage(item, index, token);
     } else {
       const video = document.createElement("video");
       video.controls = true;
@@ -721,10 +1135,6 @@
       video.preload = "metadata";
       video.src = item.url;
       elements.viewerStage.append(video);
-    }
-
-    if (!elements.viewerDialog.open) {
-      elements.viewerDialog.showModal();
     }
   }
 
@@ -746,7 +1156,8 @@
   }
 
   function closeViewer() {
-    elements.viewerStage.replaceChildren();
+    releaseViewerMedia();
+    state.viewerIndex = -1;
     if (elements.viewerDialog.open) {
       elements.viewerDialog.close();
     }
@@ -762,7 +1173,7 @@
     state.renderedCount = 0;
     state.viewerIndex = -1;
     state.isLoadingMore = false;
-    elements.mediaGrid.replaceChildren();
+    clearMediaGrid();
     setMode(null);
   }
 
@@ -803,7 +1214,11 @@
         return;
       }
       resetAlbumState();
-      showConnectionError(error);
+      if (await restoreCachedCatalog()) {
+        showOfflineNotice(error);
+      } else {
+        showConnectionError(error);
+      }
     } finally {
       if (version === state.requestVersion) {
         setLoading(false);
@@ -835,7 +1250,11 @@
         } catch (error) {
           if (version === state.requestVersion) {
             resetAlbumState();
-            showConnectionError(error);
+            if (await restoreCachedCatalog()) {
+              showOfflineNotice(error);
+            } else {
+              showConnectionError(error);
+            }
           }
         } finally {
           if (version === state.requestVersion) {
@@ -845,7 +1264,7 @@
           }
         }
       }, 280);
-    } else if (state.mode === "directory") {
+    } else if (state.mode === "directory" || state.mode === "offline") {
       refreshDirectoryItems(false);
     }
   }
@@ -920,6 +1339,10 @@
       closeViewer();
     }
   });
+  elements.viewerDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeViewer();
+  });
 
   document.addEventListener("keydown", (event) => {
     if (!elements.viewerDialog.open) {
@@ -942,13 +1365,19 @@
           showConnectionError(error);
           elements.scanStatus.hidden = true;
         });
-      } else if (state.mode === "directory") {
+      } else if (state.mode === "directory" || state.mode === "offline") {
         renderNextPage();
       }
     },
     { rootMargin: "500px 0px" },
   );
   observer.observe(elements.loadSentinel);
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js", { scope: "./", updateViaCache: "none" }).catch(() => {});
+    }, { once: true });
+  }
 
   const savedEndpoint = readSavedEndpoint();
   if (savedEndpoint) {
