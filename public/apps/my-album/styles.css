@@ -473,12 +473,13 @@ main {
 .media-preview img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  transition: transform 240ms ease;
+  object-fit: contain;
+  object-position: center;
+  transition: filter 160ms ease;
 }
 
 .media-card:hover .media-preview img {
-  transform: scale(1.025);
+  filter: brightness(0.96);
 }
 
 .video-preview {
