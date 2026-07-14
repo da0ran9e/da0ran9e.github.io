@@ -1,4 +1,4 @@
-(() => {
+(async () => {
   "use strict";
 
   const CLOUD_ALBUM_URL = "https://photos.vuducan.qzz.io/";
@@ -10,9 +10,11 @@
   const HIDDEN_ITEMS_STORAGE_KEY = "my-album-hidden-items-v1";
   const HIDDEN_ITEM_SNAPSHOTS_STORAGE_KEY = "my-album-hidden-item-snapshots-v1";
   const FAVORITE_ITEMS_STORAGE_KEY = "my-album-favorite-items-v1";
+  const CUSTOM_COLLECTIONS_STORAGE_KEY = "my-album-custom-collections-v1";
   const THEME_STORAGE_KEY = "my-album-theme-v1";
   const TILE_SIZE_STORAGE_KEY = "my-album-tile-size-v1";
   const PAGE_SIZE = 80;
+  const CATALOG_PAGE_SIZE = 200;
   const MAX_CONCURRENT_REQUESTS = 4;
   const MAX_FOLDER_SUMMARY_REQUESTS = 4;
   const PROBE_TIMEOUT_MS = 10000;
@@ -23,7 +25,14 @@
   const THUMBNAIL_CACHE_NAME = "my-album-thumbnails-v1";
   const VIEWED_IMAGE_CACHE_NAME = "my-album-viewed-images-v1";
   const CATALOG_CACHE_NAME = "my-album-catalog-v1";
+  const IMPORTED_METADATA_CACHE_NAME = "my-album-imported-metadata-v1";
+  const IMPORTED_METADATA_CACHE_VERSION = 1;
   const VIEWED_IMAGE_CACHE_INDEX_KEY = "my-album-viewed-images-index-v1";
+  const SMART_EVENT_GAP_SECONDS = 36 * 60 * 60;
+  const SMART_EVENT_MAX_SPAN_SECONDS = 5 * 24 * 60 * 60;
+  const MAPLIBRE_CSS_URL = "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css";
+  const MAPLIBRE_JS_URL = "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js";
+  const OPEN_FREE_MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
   const IMAGE_EXTENSIONS = new Set([
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
   ]);
@@ -70,6 +79,18 @@
     sort: "newest",
     timelineFilters: emptyTimelineFilters(),
     metadataStatus: { available: false, items: 0, generatedAt: "" },
+    serverMetadataStatus: { available: false, items: 0, generatedAt: "" },
+    localMetadataStatus: {
+      available: false,
+      items: 0,
+      generatedAt: "",
+      importedAt: 0,
+      fileName: "",
+      bytes: 0,
+    },
+    localMetadataByPath: new Map(),
+    clientCatalogComplete: false,
+    metadataImporting: false,
     renderedCount: 0,
     requestVersion: 0,
     isLoading: false,
@@ -84,6 +105,10 @@
     hiddenIds: new Set(),
     hiddenItems: new Map(),
     favoriteItems: new Map(),
+    customCollections: new Map(),
+    activeCollectionId: "",
+    activeEventId: "",
+    albumViewCounts: { folders: 0, collections: 0, events: 0 },
     folderSummaries: new Map(),
     folderViewCount: 0,
     selectedIds: new Set(),
@@ -93,10 +118,29 @@
     downloadAbortController: null,
     toastTimer: null,
     isLocalServer: false,
+    map: null,
+    mapReady: false,
+    mapItems: [],
+    mapRenderToken: 0,
+    mapLastDataKey: "",
   };
 
   const elements = {
     endpointLabel: document.querySelector("#endpoint-label"),
+    metadataButton: document.querySelector("#metadata-button"),
+    metadataButtonIndicator: document.querySelector("#metadata-button-indicator"),
+    metadataDialog: document.querySelector("#metadata-dialog"),
+    metadataClose: document.querySelector("#metadata-close"),
+    metadataStatusTitle: document.querySelector("#metadata-status-title"),
+    metadataStatusDetail: document.querySelector("#metadata-status-detail"),
+    metadataProgress: document.querySelector("#metadata-progress"),
+    metadataProgressText: document.querySelector("#metadata-progress-text"),
+    metadataProgressValue: document.querySelector("#metadata-progress-value"),
+    metadataProgressBar: document.querySelector("#metadata-progress-bar"),
+    metadataFileInput: document.querySelector("#metadata-file-input"),
+    metadataImport: document.querySelector("#metadata-import"),
+    metadataExport: document.querySelector("#metadata-export"),
+    metadataRemove: document.querySelector("#metadata-remove"),
     themeToggle: document.querySelector("#theme-toggle"),
     searchInput: document.querySelector("#search-input"),
     navigationButtons: [...document.querySelectorAll("[data-library-nav]")],
@@ -113,6 +157,10 @@
     libraryToolbar: document.querySelector(".library-toolbar"),
     activeFilters: document.querySelector("#active-filters"),
     timelineRail: document.querySelector("#timeline-rail"),
+    mapView: document.querySelector("#map-view"),
+    mapCanvas: document.querySelector("#map-canvas"),
+    mapEmpty: document.querySelector("#map-empty"),
+    mapItemCount: document.querySelector("#map-item-count"),
     connectionNotice: document.querySelector("#connection-notice"),
     noticeTitle: document.querySelector("#notice-title"),
     noticeMessage: document.querySelector("#notice-message"),
@@ -183,10 +231,17 @@
     selectionProgress: document.querySelector("#selection-progress"),
     selectionProgressBar: document.querySelector("#selection-progress-bar"),
     selectAllButton: document.querySelector("#select-all-button"),
+    collectionSelected: document.querySelector("#collection-selected"),
     favoriteSelected: document.querySelector("#favorite-selected"),
     downloadSelected: document.querySelector("#download-selected"),
     hideSelected: document.querySelector("#hide-selected"),
     restoreSelected: document.querySelector("#restore-selected"),
+    collectionDialog: document.querySelector("#collection-dialog"),
+    collectionForm: document.querySelector("#collection-form"),
+    collectionClose: document.querySelector("#collection-close"),
+    collectionCancel: document.querySelector("#collection-cancel"),
+    collectionSelect: document.querySelector("#collection-select"),
+    collectionName: document.querySelector("#collection-name"),
     toast: document.querySelector("#toast"),
     mediaCardTemplate: document.querySelector("#media-card-template"),
   };
@@ -231,6 +286,7 @@
   const folderSummaryQueue = [];
   const folderSummaryWaiters = new Map();
   let activeFolderSummaryRequests = 0;
+  let mapLibreLoadPromise = null;
   const folderSummaryObserver = "IntersectionObserver" in window
     ? new IntersectionObserver((entries) => {
       for (const entry of entries) {
@@ -280,6 +336,119 @@
   const initialTileSize = preferredTileSize();
   elements.sizeInput.value = String(initialTileSize);
   document.documentElement.style.setProperty("--tile-size", `${initialTileSize}px`);
+
+  function canonicalMetadataPath(value) {
+    if (typeof value !== "string") {
+      return "";
+    }
+    const parts = value.replaceAll("\\", "/").split("/").filter((part) => part && part !== ".");
+    if (!parts.length || parts.some((part) => part === "..")) {
+      return "";
+    }
+    return parts.map((part) => part.normalize("NFC")).join("/").toLocaleLowerCase("en");
+  }
+
+  function metadataPathForItem(item) {
+    const relative = canonicalMetadataPath(item.relative);
+    if (relative) {
+      return relative;
+    }
+    return canonicalMetadataPath(`${item.folderKey || "."}/${item.name || ""}`);
+  }
+
+  function sanitizeImportedMetadata(value) {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    const metadata = {};
+    if (value.metadata && typeof value.metadata === "object") {
+      for (const [key, fieldValue] of Object.entries(value.metadata)) {
+        if (ALLOWED_METADATA_FIELDS.has(key) && ["string", "number", "boolean"].includes(typeof fieldValue)) {
+          metadata[key] = fieldValue;
+        }
+      }
+    }
+    const latitude = Number(metadata.latitude);
+    const longitude = Number(metadata.longitude);
+    const hasLocation = Boolean(value.hasLocation) && Number.isFinite(latitude) &&
+      Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+    return {
+      hasMetadata: true,
+      hasLocation,
+      dateTaken: Number(value.dateTaken) || 0,
+      dateKey: /^\d{4}-\d{2}-\d{2}$/.test(value.dateKey || "") ? value.dateKey : "",
+      dateTakenText: String(value.dateTakenText || ""),
+      dateSource: String(value.dateSource || ""),
+      camera: String(value.camera || metadata.camera || ""),
+      metadata,
+    };
+  }
+
+  function mergeImportedMetadata(item) {
+    const imported = state.localMetadataByPath.get(metadataPathForItem(item));
+    if (!imported) {
+      return item;
+    }
+    const metadata = { ...(imported.metadata || {}), ...(item.metadata || {}) };
+    const latitude = Number(metadata.latitude);
+    const longitude = Number(metadata.longitude);
+    const hasLocation = (item.hasLocation || imported.hasLocation) && Number.isFinite(latitude) &&
+      Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+    return {
+      ...item,
+      dateTaken: item.dateTaken || imported.dateTaken || 0,
+      dateKey: item.dateKey || imported.dateKey || "",
+      dateTakenText: item.dateTakenText || imported.dateTakenText || "",
+      dateSource: item.dateSource || imported.dateSource || "",
+      camera: item.camera || imported.camera || metadata.camera || "",
+      hasMetadata: Boolean(item.hasMetadata || imported.hasMetadata),
+      hasLocation,
+      metadata,
+    };
+  }
+
+  function syncMetadataStatus() {
+    const local = state.localMetadataStatus;
+    const server = state.serverMetadataStatus;
+    state.metadataStatus = local.available
+      ? { ...local, source: server.available ? "local+server" : "local" }
+      : { ...server, source: server.available ? "server" : "" };
+    updateMetadataManagerUi();
+    if (state.mode) {
+      setMode(state.mode);
+    }
+  }
+
+  function updateMetadataManagerUi() {
+    const status = state.localMetadataStatus;
+    const hasMetadata = status.available && status.items > 0;
+    elements.metadataButton.classList.toggle("has-metadata", hasMetadata);
+    elements.metadataExport.hidden = !hasMetadata;
+    elements.metadataRemove.hidden = !hasMetadata;
+    elements.metadataImport.disabled = state.metadataImporting;
+    elements.metadataExport.disabled = state.metadataImporting;
+    elements.metadataRemove.disabled = state.metadataImporting;
+
+    if (state.metadataImporting) {
+      elements.metadataStatusTitle.textContent = "Đang xử lý metadata";
+      elements.metadataStatusDetail.textContent = "Ứng dụng vẫn có thể tiếp tục hiển thị ảnh.";
+      return;
+    }
+    if (!hasMetadata) {
+      elements.metadataStatusTitle.textContent = "Chưa nhập metadata";
+      elements.metadataStatusDetail.textContent = "Chọn file album-metadata.json để bắt đầu.";
+      elements.metadataButton.title = "Nhập metadata";
+      return;
+    }
+
+    elements.metadataStatusTitle.textContent = `${numberFormatter.format(status.items)} mục metadata`;
+    const details = [];
+    if (status.fileName) details.push(status.fileName);
+    if (status.importedAt) details.push(`nhập ${dateTimeFormatter.format(new Date(status.importedAt))}`);
+    if (status.bytes) details.push(formatBytes(status.bytes));
+    elements.metadataStatusDetail.textContent = details.join(" · ") || "Đã lưu trên thiết bị này.";
+    elements.metadataButton.title = `${numberFormatter.format(status.items)} mục metadata cục bộ`;
+  }
 
   function localPageEndpoint() {
     if (window.location.protocol !== "http:") {
@@ -354,6 +523,7 @@
   function loadLocalCollections() {
     state.hiddenItems = loadCollectionMap(HIDDEN_ITEM_SNAPSHOTS_STORAGE_KEY);
     state.favoriteItems = loadCollectionMap(FAVORITE_ITEMS_STORAGE_KEY);
+    loadCustomCollections();
     try {
       const legacyIds = JSON.parse(localStorage.getItem(scopedStorageKey(HIDDEN_ITEMS_STORAGE_KEY)));
       state.hiddenIds = new Set([
@@ -392,6 +562,91 @@
     return saved;
   }
 
+  function normalizeCustomCollection(value) {
+    if (!value || typeof value !== "object") {
+      return null;
+    }
+    const id = typeof value.id === "string" ? value.id.trim() : "";
+    const name = typeof value.name === "string" ? value.name.trim().slice(0, 80) : "";
+    if (!id || !name) {
+      return null;
+    }
+    const snapshotById = new Map(
+      (Array.isArray(value.items) ? value.items : [])
+        .filter(validCollectionItem)
+        .map((item) => [item.id, collectionItemSnapshot(item)]),
+    );
+    const itemIds = [];
+    for (const itemId of Array.isArray(value.itemIds) ? value.itemIds : []) {
+      if (typeof itemId === "string" && itemId && !itemIds.includes(itemId)) {
+        itemIds.push(itemId);
+      }
+    }
+    for (const itemId of snapshotById.keys()) {
+      if (!itemIds.includes(itemId)) {
+        itemIds.push(itemId);
+      }
+    }
+    return {
+      id,
+      name,
+      itemIds,
+      items: itemIds.map((itemId) => snapshotById.get(itemId)).filter(Boolean),
+      createdAt: Number(value.createdAt) || Date.now(),
+      updatedAt: Number(value.updatedAt) || Number(value.createdAt) || Date.now(),
+    };
+  }
+
+  function loadCustomCollections() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(scopedStorageKey(CUSTOM_COLLECTIONS_STORAGE_KEY)));
+      const collections = (Array.isArray(parsed) ? parsed : [])
+        .map(normalizeCustomCollection)
+        .filter(Boolean);
+      state.customCollections = new Map(collections.map((collection) => [collection.id, collection]));
+    } catch {
+      state.customCollections = new Map();
+    }
+  }
+
+  function saveCustomCollections() {
+    try {
+      localStorage.setItem(
+        scopedStorageKey(CUSTOM_COLLECTIONS_STORAGE_KEY),
+        JSON.stringify([...state.customCollections.values()]),
+      );
+      return true;
+    } catch {
+      showToast("Không thể lưu bộ sưu tập này trên thiết bị.");
+      return false;
+    }
+  }
+
+  function customCollectionsByRecentUpdate() {
+    return [...state.customCollections.values()]
+      .sort((left, right) => right.updatedAt - left.updatedAt || folderCollator.compare(left.name, right.name));
+  }
+
+  function customCollectionItems(collectionId) {
+    const collection = state.customCollections.get(collectionId);
+    if (!collection) {
+      return [];
+    }
+    const liveItems = new Map(state.items.map((item) => [item.id, item]));
+    const snapshots = new Map(collection.items.map((item) => [item.id, item]));
+    return collection.itemIds
+      .map((itemId) => liveItems.get(itemId) || snapshots.get(itemId))
+      .filter(validCollectionItem)
+      .map(mergeImportedMetadata);
+  }
+
+  function makeCustomCollectionId() {
+    if (typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    return `collection-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
   function updateCollectionCounts() {
     const hiddenCount = state.hiddenIds.size;
     elements.hiddenCount.textContent = numberFormatter.format(hiddenCount);
@@ -407,7 +662,9 @@
       const targetFilter = button.dataset.navFilter;
       const isActive = targetView === "library"
         ? state.view === "library" && targetFilter === state.filter
-        : state.view === targetView;
+        : targetView === "albums"
+          ? ["albums", "collection", "event"].includes(state.view)
+          : state.view === targetView;
       button.classList.toggle("is-active", isActive);
       button.setAttribute("aria-current", isActive ? "page" : "false");
     }
@@ -427,6 +684,13 @@
     if (state.view === "hidden") {
       return storedViewItems(state.hiddenItems, state.hiddenIds);
     }
+    if (state.view === "collection") {
+      return customCollectionItems(state.activeCollectionId).filter((item) => !state.hiddenIds.has(item.id));
+    }
+    if (state.view === "event") {
+      const event = smartEvents().find((candidate) => candidate.id === state.activeEventId);
+      return event ? event.items.filter((item) => !state.hiddenIds.has(item.id)) : [];
+    }
     return null;
   }
 
@@ -440,7 +704,7 @@
     const currentFacets = timelineFacetsForCurrentView();
     const hasAvailableFilters = currentFacets.folders.length > 0 || currentFacets.dates.length > 0 ||
       currentFacets.cameras.length > 0 || currentFacets.metadata > 0;
-    elements.timelineFilterButton.hidden = state.view === "albums" || !state.mode ||
+    elements.timelineFilterButton.hidden = ["albums", "map"].includes(state.view) || !state.mode ||
       (!hasAvailableFilters && count === 0);
     elements.timelineFilterButton.classList.toggle("is-active", count > 0);
     elements.timelineFilterButton.setAttribute("aria-pressed", String(count > 0));
@@ -477,7 +741,7 @@
     }
 
     elements.activeFilters.replaceChildren();
-    elements.activeFilters.hidden = filters.length === 0 || state.view === "albums";
+    elements.activeFilters.hidden = filters.length === 0 || ["albums", "map"].includes(state.view);
     if (elements.activeFilters.hidden) {
       return;
     }
@@ -510,7 +774,7 @@
   function renderTimelineRail() {
     const currentFacets = timelineFacetsForCurrentView();
     const years = [...new Set(currentFacets.dates.map((date) => date.slice(0, 4)))].sort().reverse();
-    const shouldShow = state.mode && state.view !== "albums" && years.length > 1 &&
+    const shouldShow = state.mode && !["albums", "map"].includes(state.view) && years.length > 1 &&
       state.sort !== "name-asc" && state.sort !== "name-desc";
     elements.timelineRail.hidden = !shouldShow;
     elements.timelineRail.replaceChildren();
@@ -538,12 +802,21 @@
 
   function updateViewUi() {
     const isAlbumsView = state.view === "albums";
-    elements.libraryToolbar.hidden = isAlbumsView;
+    const isMapView = state.view === "map";
+    const isCollectionView = ["collection", "event"].includes(state.view);
+    elements.libraryToolbar.hidden = isAlbumsView || isMapView;
+    elements.mediaGrid.hidden = isMapView;
+    elements.mapView.hidden = !isMapView;
     elements.searchInput.placeholder = isAlbumsView
-      ? "Tìm album theo tên thư mục"
-      : "Tìm ảnh, video hoặc thư mục";
+      ? "Tìm bộ sưu tập, sự kiện hoặc thư mục"
+      : isCollectionView
+        ? "Tìm trong bộ sưu tập"
+        : isMapView
+          ? "Tìm ảnh có vị trí"
+          : "Tìm ảnh, video hoặc thư mục";
     elements.mediaGrid.setAttribute("aria-label", isAlbumsView ? "Danh sách album" : "Ảnh và video");
     document.body.classList.toggle("view-albums", isAlbumsView);
+    document.body.classList.toggle("view-map", isMapView);
     updateTimelineFilterUi();
   }
 
@@ -721,6 +994,17 @@
     };
   }
 
+  function deriveStats(items) {
+    return {
+      total: items.length,
+      images: items.filter((item) => item.type === "image").length,
+      videos: items.filter((item) => item.type === "video").length,
+      metadata: items.filter((item) => item.hasMetadata).length,
+      captured: items.filter((item) => item.dateTaken).length,
+      locations: items.filter((item) => item.hasLocation).length,
+    };
+  }
+
   function normalizeFacets(rawFacets) {
     const folders = Array.isArray(rawFacets?.folders)
       ? rawFacets.folders.map(String).filter(Boolean).sort(folderCollator.compare)
@@ -875,9 +1159,247 @@
     reloadFromControls();
   }
 
+  function smartEventName(start, end) {
+    if (localDateKey(start) === localDateKey(end)) {
+      return `Sự kiện ${formatDate(start)}`;
+    }
+    return `Sự kiện ${formatDate(start)} - ${formatDate(end)}`;
+  }
+
+  function smartEvents() {
+    const candidates = state.items
+      .filter((item) => !state.hiddenIds.has(item.id))
+      .filter((item) => itemTimestamp(item) > 0)
+      .slice()
+      .sort((left, right) => itemTimestamp(left) - itemTimestamp(right));
+    const events = [];
+    let group = [];
+    let groupStart = 0;
+    let previous = 0;
+
+    const commit = () => {
+      if (group.length < 2) {
+        group = [];
+        return;
+      }
+      const items = group.slice().sort((left, right) => itemTimestamp(right) - itemTimestamp(left));
+      const start = itemTimestamp(group[0]);
+      const end = itemTimestamp(group.at(-1));
+      const folderKeys = [...new Set(items.map(itemFolderKey))];
+      const folderDetail = folderKeys.length === 1
+        ? folderFilterLabel(folderKeys[0])
+        : `${numberFormatter.format(folderKeys.length)} thư mục`;
+      events.push({
+        id: `event-${start}-${group[0].id}`,
+        items,
+        start,
+        end,
+        name: smartEventName(start, end),
+        detail: `${numberFormatter.format(items.length)} mục · ${folderDetail}`,
+        cover: items[0],
+      });
+      group = [];
+    };
+
+    for (const item of candidates) {
+      const timestamp = itemTimestamp(item);
+      const startsNewEvent = group.length > 0 && (
+        timestamp - previous > SMART_EVENT_GAP_SECONDS ||
+        timestamp - groupStart > SMART_EVENT_MAX_SPAN_SECONDS
+      );
+      if (startsNewEvent) {
+        commit();
+      }
+      if (group.length === 0) {
+        groupStart = timestamp;
+      }
+      group.push(item);
+      previous = timestamp;
+    }
+    commit();
+    return events.sort((left, right) => right.end - left.end);
+  }
+
+  function createCollectionCard({ kind, id, name, detail, cover }) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `folder-card collection-card collection-card-${kind}`;
+    if (kind === "custom") {
+      card.dataset.collectionCard = id;
+      card.setAttribute("aria-label", `Mở bộ sưu tập ${name}`);
+    } else {
+      card.dataset.eventCard = id;
+      card.setAttribute("aria-label", `Mở ${name}`);
+    }
+
+    const preview = document.createElement("span");
+    preview.className = "media-preview folder-cover collection-cover";
+    const iconPath = kind === "custom"
+      ? '<path d="M3 7h5l2 2h11v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2" /><path d="M12 12v6M9 15h6" />'
+      : '<path d="M12 3v3M12 18v3M4.2 7.2l2.1 2.1M17.7 16.7l2.1 2.1M3 12h3M18 12h3M4.2 16.8l2.1-2.1M17.7 7.3l2.1-2.1" /><circle cx="12" cy="12" r="4" />';
+    preview.innerHTML = `<span class="folder-cover-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24">${iconPath}</svg></span>`;
+
+    const copy = document.createElement("span");
+    copy.className = "folder-card-copy";
+    const title = document.createElement("strong");
+    title.textContent = name;
+    const count = document.createElement("small");
+    count.className = "folder-count";
+    count.textContent = detail;
+    copy.append(title, count);
+    card.append(preview, copy);
+    if (cover) {
+      preview.dataset.coverId = cover.id;
+      preview.classList.add("has-cover");
+      addPreviewImage(preview, cover);
+    }
+    return card;
+  }
+
+  function createOrganizeSection(title, description, cards, kind) {
+    const section = document.createElement("section");
+    section.className = `collection-section collection-section-${kind}`;
+    const header = document.createElement("header");
+    header.className = "collection-section-header";
+    const heading = document.createElement("h2");
+    heading.textContent = title;
+    const copy = document.createElement("p");
+    copy.textContent = description;
+    header.append(heading, copy);
+    const grid = document.createElement("div");
+    grid.className = "folder-grid collection-grid";
+    grid.append(...cards);
+    section.append(header, grid);
+    return section;
+  }
+
+  function openCustomCollection(collectionId) {
+    const collection = state.customCollections.get(collectionId);
+    if (!collection) {
+      return;
+    }
+    exitSelectionMode();
+    state.view = "collection";
+    state.activeCollectionId = collection.id;
+    state.activeEventId = "";
+    state.filter = "all";
+    state.query = "";
+    elements.searchInput.value = "";
+    state.timelineFilters = emptyTimelineFilters();
+    updateNavigationUi();
+    updateViewUi();
+    reloadFromControls();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function openSmartEvent(eventId) {
+    if (!smartEvents().some((event) => event.id === eventId)) {
+      return;
+    }
+    exitSelectionMode();
+    state.view = "event";
+    state.activeEventId = eventId;
+    state.activeCollectionId = "";
+    state.filter = "all";
+    state.query = "";
+    elements.searchInput.value = "";
+    state.timelineFilters = emptyTimelineFilters();
+    updateNavigationUi();
+    updateViewUi();
+    reloadFromControls();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function populateCollectionDialog() {
+    const selected = elements.collectionSelect.value;
+    const fragment = document.createDocumentFragment();
+    fragment.append(new Option("Tạo bộ sưu tập mới", ""));
+    for (const collection of customCollectionsByRecentUpdate()) {
+      fragment.append(new Option(collection.name, collection.id));
+    }
+    elements.collectionSelect.replaceChildren(fragment);
+    elements.collectionSelect.value = state.customCollections.has(selected) ? selected : "";
+    updateCollectionDialogName();
+  }
+
+  function updateCollectionDialogName() {
+    const existing = state.customCollections.get(elements.collectionSelect.value);
+    elements.collectionName.disabled = Boolean(existing);
+    elements.collectionName.required = !existing;
+    elements.collectionName.value = existing ? existing.name : "";
+    elements.collectionName.placeholder = existing ? "" : "Ví dụ: Da Lat mùa mưa";
+  }
+
+  function closeCollectionDialog() {
+    if (elements.collectionDialog.open) {
+      elements.collectionDialog.close();
+    }
+  }
+
+  function showCollectionDialog() {
+    const selectedItems = state.visibleItems.filter((item) => state.selectedIds.has(item.id));
+    if (selectedItems.length === 0) {
+      showToast("Chọn ít nhất một ảnh hoặc video trước.");
+      return;
+    }
+    elements.collectionSelect.value = "";
+    populateCollectionDialog();
+    elements.collectionDialog.showModal();
+    requestAnimationFrame(() => elements.collectionName.focus());
+  }
+
+  function saveSelectedToCollection() {
+    const selectedItems = state.visibleItems.filter((item) => state.selectedIds.has(item.id));
+    if (selectedItems.length === 0) {
+      closeCollectionDialog();
+      return;
+    }
+    const existing = state.customCollections.get(elements.collectionSelect.value);
+    const name = existing ? existing.name : elements.collectionName.value.trim().slice(0, 80);
+    if (!name) {
+      elements.collectionName.focus();
+      return;
+    }
+    const now = Date.now();
+    const itemIds = existing ? [...existing.itemIds] : [];
+    const snapshots = new Map((existing?.items || []).map((item) => [item.id, item]));
+    let addedCount = 0;
+    for (const item of selectedItems) {
+      if (!itemIds.includes(item.id)) {
+        itemIds.push(item.id);
+        addedCount += 1;
+      }
+      snapshots.set(item.id, collectionItemSnapshot(item));
+    }
+    const collection = {
+      id: existing?.id || makeCustomCollectionId(),
+      name,
+      itemIds,
+      items: itemIds.map((itemId) => snapshots.get(itemId)).filter(Boolean),
+      createdAt: existing?.createdAt || now,
+      updatedAt: now,
+    };
+    state.customCollections.set(collection.id, collection);
+    if (!saveCustomCollections()) {
+      return;
+    }
+    closeCollectionDialog();
+    exitSelectionMode();
+    if (state.view === "albums") {
+      renderFolderView();
+      updateSummary();
+      updateEmptyState();
+    }
+    showToast(addedCount > 0
+      ? `Đã thêm ${numberFormatter.format(addedCount)} mục vào ${collection.name}.`
+      : `Các mục đã có trong ${collection.name}.`);
+  }
+
   function openFolderAlbum(folder) {
     exitSelectionMode();
     state.view = "library";
+    state.activeCollectionId = "";
+    state.activeEventId = "";
     state.filter = "all";
     state.query = "";
     elements.searchInput.value = "";
@@ -890,6 +1412,250 @@
 
   function canUseCacheStorage() {
     return "caches" in window && typeof window.caches?.open === "function";
+  }
+
+  function importedMetadataCacheUrl() {
+    const url = new URL("./__offline/imported-metadata.json", window.location.href);
+    url.search = "";
+    return url.href;
+  }
+
+  function importedMetadataPayload() {
+    return {
+      format: "my-album-compact-metadata",
+      version: IMPORTED_METADATA_CACHE_VERSION,
+      generatedAt: state.localMetadataStatus.generatedAt,
+      importedAt: state.localMetadataStatus.importedAt,
+      fileName: state.localMetadataStatus.fileName,
+      sourceBytes: state.localMetadataStatus.bytes,
+      items: [...state.localMetadataByPath.entries()],
+    };
+  }
+
+  async function saveImportedMetadata() {
+    if (!canUseCacheStorage()) {
+      return false;
+    }
+    const cache = await caches.open(IMPORTED_METADATA_CACHE_NAME);
+    await cache.put(importedMetadataCacheUrl(), new Response(JSON.stringify(importedMetadataPayload()), {
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+    }));
+    return true;
+  }
+
+  async function loadImportedMetadata() {
+    if (!canUseCacheStorage()) {
+      updateMetadataManagerUi();
+      return false;
+    }
+    try {
+      const cache = await caches.open(IMPORTED_METADATA_CACHE_NAME);
+      const response = await cache.match(importedMetadataCacheUrl());
+      if (!response) {
+        updateMetadataManagerUi();
+        return false;
+      }
+      const payload = await response.json();
+      if (payload?.format !== "my-album-compact-metadata" ||
+        payload.version !== IMPORTED_METADATA_CACHE_VERSION || !Array.isArray(payload.items)) {
+        return false;
+      }
+      const entries = [];
+      for (const entry of payload.items) {
+        const path = canonicalMetadataPath(Array.isArray(entry) ? entry[0] : "");
+        const metadata = sanitizeImportedMetadata(Array.isArray(entry) ? entry[1] : null);
+        if (path && metadata) {
+          entries.push([path, metadata]);
+        }
+      }
+      state.localMetadataByPath = new Map(entries);
+      state.localMetadataStatus = {
+        available: entries.length > 0,
+        items: entries.length,
+        generatedAt: String(payload.generatedAt || ""),
+        importedAt: Number(payload.importedAt) || 0,
+        fileName: String(payload.fileName || "album-metadata.json"),
+        bytes: Number(payload.sourceBytes) || 0,
+      };
+      syncMetadataStatus();
+      return entries.length > 0;
+    } catch {
+      updateMetadataManagerUi();
+      return false;
+    }
+  }
+
+  function setMetadataProgress(percent, text, value = "") {
+    const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+    elements.metadataProgress.hidden = false;
+    elements.metadataProgressText.textContent = text;
+    elements.metadataProgressValue.textContent = value;
+    elements.metadataProgressBar.style.width = `${safePercent}%`;
+  }
+
+  function processMetadataFile(file) {
+    return new Promise(async (resolve, reject) => {
+      let worker = null;
+      try {
+        setMetadataProgress(4, "Đang đọc file…", formatBytes(file.size));
+        const buffer = await file.arrayBuffer();
+        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-24", window.location.href));
+        worker.addEventListener("message", (event) => {
+          const message = event.data || {};
+          if (message.type === "progress") {
+            const total = Math.max(1, Number(message.total) || 1);
+            const processed = Math.max(0, Number(message.processed) || 0);
+            setMetadataProgress(
+              12 + (processed / total) * 82,
+              "Đang rút gọn metadata…",
+              `${numberFormatter.format(processed)} / ${numberFormatter.format(total)}`,
+            );
+            return;
+          }
+          if (message.type === "complete") {
+            resolve({
+              entries: Array.isArray(message.entries) ? message.entries : [],
+              generatedAt: String(message.generatedAt || ""),
+            });
+            worker?.terminate();
+            return;
+          }
+          if (message.type === "error") {
+            reject(new Error(String(message.message || "Không đọc được metadata.")));
+            worker?.terminate();
+          }
+        });
+        worker.addEventListener("error", () => {
+          reject(new Error("Worker xử lý metadata gặp lỗi."));
+          worker?.terminate();
+        });
+        worker.postMessage({ buffer }, [buffer]);
+      } catch (error) {
+        worker?.terminate();
+        reject(error);
+      }
+    });
+  }
+
+  async function importMetadataFile(file) {
+    if (!file || state.metadataImporting) {
+      return;
+    }
+    state.metadataImporting = true;
+    updateMetadataManagerUi();
+    setMetadataProgress(1, "Đang chuẩn bị…");
+    try {
+      const result = await processMetadataFile(file);
+      const entries = [];
+      for (const entry of result.entries) {
+        const path = canonicalMetadataPath(Array.isArray(entry) ? entry[0] : "");
+        const metadata = sanitizeImportedMetadata(Array.isArray(entry) ? entry[1] : null);
+        if (path && metadata) entries.push([path, metadata]);
+      }
+      if (entries.length === 0) {
+        throw new Error("Không tìm thấy mục ảnh hoặc video có _album.path trong file JSON.");
+      }
+
+      setMetadataProgress(96, "Đang lưu bản rút gọn…", `${numberFormatter.format(entries.length)} mục`);
+      state.localMetadataByPath = new Map(entries);
+      state.localMetadataStatus = {
+        available: true,
+        items: entries.length,
+        generatedAt: result.generatedAt,
+        importedAt: Date.now(),
+        fileName: file.name,
+        bytes: file.size,
+      };
+      let persisted = false;
+      try {
+        persisted = await saveImportedMetadata();
+      } catch {
+        persisted = false;
+      }
+      state.clientCatalogComplete = false;
+      syncMetadataStatus();
+      setMetadataProgress(100, "Đã áp dụng metadata", `${numberFormatter.format(entries.length)} mục`);
+      showToast(persisted
+        ? `Đã lưu ${numberFormatter.format(entries.length)} mục metadata trên thiết bị này.`
+        : "Metadata đã áp dụng cho phiên này nhưng trình duyệt không cho phép lưu lâu dài.");
+      await connectAlbum();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không nhập được metadata.");
+      elements.metadataProgress.hidden = true;
+    } finally {
+      state.metadataImporting = false;
+      elements.metadataFileInput.value = "";
+      updateMetadataManagerUi();
+    }
+  }
+
+  async function exportImportedMetadata() {
+    if (!state.localMetadataStatus.available) {
+      return;
+    }
+    const blob = new Blob([JSON.stringify(importedMetadataPayload())], {
+      type: "application/json;charset=utf-8",
+    });
+    const file = new File([blob], "my-album-metadata-compact.json", { type: blob.type });
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file], title: "My Album metadata" });
+        return;
+      }
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        return;
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function removeImportedMetadata() {
+    if (!state.localMetadataStatus.available || state.metadataImporting) {
+      return;
+    }
+    if (!window.confirm("Xóa metadata đã lưu khỏi trình duyệt này?")) {
+      return;
+    }
+    if (canUseCacheStorage()) {
+      const cache = await caches.open(IMPORTED_METADATA_CACHE_NAME);
+      await cache.delete(importedMetadataCacheUrl());
+    }
+    state.localMetadataByPath = new Map();
+    state.localMetadataStatus = {
+      available: false,
+      items: 0,
+      generatedAt: "",
+      importedAt: 0,
+      fileName: "",
+      bytes: 0,
+    };
+    state.clientCatalogComplete = false;
+    syncMetadataStatus();
+    elements.metadataProgress.hidden = true;
+    showToast("Đã xóa metadata khỏi thiết bị này.");
+    await connectAlbum();
+  }
+
+  function showMetadataDialog() {
+    updateMetadataManagerUi();
+    if (!elements.metadataDialog.open) {
+      elements.metadataDialog.showModal();
+    }
+  }
+
+  function closeMetadataDialog() {
+    if (!state.metadataImporting && elements.metadataDialog.open) {
+      elements.metadataDialog.close();
+    }
   }
 
   function blobCacheKey(cacheName, sourceUrl) {
@@ -1054,7 +1820,7 @@
     const folderKey = parts.map(safeDecode).join("/") || ".";
     const folder = folderFilterLabel(folderKey);
 
-    return {
+    return mergeImportedMetadata({
       id: url,
       url,
       preview: url,
@@ -1067,9 +1833,17 @@
       bytes: 0,
       modified: 0,
       folderKey,
+      dateTaken: 0,
+      dateKey: "",
+      dateTakenText: "",
+      dateSource: "",
+      camera: "",
+      hasMetadata: false,
+      hasLocation: false,
+      metadata: {},
       source: "directory",
       thumbnailFallback: type === "image" ? makeDirectoryThumbnailUrl(relative) : null,
-    };
+    });
   }
 
   function normalizeApiItem(rawItem, baseUrl = state.baseUrl) {
@@ -1088,7 +1862,7 @@
     const longitude = Number(metadata.longitude);
     const hasLocation = Boolean(rawItem.hasLocation) && Number.isFinite(latitude) &&
       Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
-    return {
+    return mergeImportedMetadata({
       id: String(rawItem.id),
       url: new URL(String(rawItem.media), baseUrl).href,
       preview: new URL(String(rawItem.view || rawItem.media), baseUrl).href,
@@ -1111,7 +1885,7 @@
       metadata,
       source: "api",
       thumbnailFallback: null,
-    };
+    });
   }
 
   function catalogCacheUrl() {
@@ -1133,7 +1907,7 @@
 
     const cache = await caches.open(CATALOG_CACHE_NAME);
     const payload = {
-      version: 3,
+      version: 4,
       endpoint: state.baseUrl,
       savedAt: Date.now(),
       sourceMode: state.mode,
@@ -1141,6 +1915,8 @@
       stats: state.stats,
       facets: state.facets,
       metadataStatus: state.metadataStatus,
+      serverMetadataStatus: state.serverMetadataStatus,
+      catalogComplete: state.clientCatalogComplete,
     };
     await cache.put(catalogCacheUrl(), new Response(JSON.stringify(payload), {
       headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -1159,13 +1935,13 @@
         return false;
       }
       const payload = await response.json();
-      if (![1, 2, 3].includes(payload?.version) || payload.endpoint !== state.baseUrl || !Array.isArray(payload.items)) {
+      if (![1, 2, 3, 4].includes(payload?.version) || payload.endpoint !== state.baseUrl || !Array.isArray(payload.items)) {
         return false;
       }
 
       const items = payload.items.filter((item) =>
         item && typeof item.url === "string" && typeof item.name === "string" &&
-        (item.type === "image" || item.type === "video"));
+        (item.type === "image" || item.type === "video")).map(mergeImportedMetadata);
       if (items.length === 0) {
         return false;
       }
@@ -1173,20 +1949,20 @@
       state.items = items;
       state.visibleItems = items;
       state.total = items.length;
-      state.stats = payload.stats || {
-        total: items.length,
-        images: items.filter((item) => item.type === "image").length,
-        videos: items.filter((item) => item.type === "video").length,
-      };
+      state.stats = state.localMetadataStatus.available ? deriveStats(items) : (payload.stats || deriveStats(items));
       state.hasMore = false;
+      state.clientCatalogComplete = Boolean(payload.catalogComplete);
       state.renderedCount = 0;
-      state.facets = payload.version >= 2 && payload.facets
+      state.facets = state.localMetadataStatus.available ? deriveFacets(items) : (payload.version >= 2 && payload.facets
         ? normalizeFacets(payload.facets)
-        : deriveFacets(items);
+        : deriveFacets(items));
       state.folderFacets = state.facets;
-      state.metadataStatus = payload.version >= 3
+      state.serverMetadataStatus = payload.version >= 4
+        ? normalizeMetadataStatus(payload.serverMetadataStatus)
+        : (payload.version >= 3
         ? normalizeMetadataStatus(payload.metadataStatus)
-        : { available: false, items: 0, generatedAt: "" };
+        : { available: false, items: 0, generatedAt: "" });
+      syncMetadataStatus();
       setMode("offline");
       refreshDirectoryItems(false);
       return true;
@@ -1228,21 +2004,24 @@
     if (payload.status !== "ok") {
       throw new Error("health check không hợp lệ");
     }
-    state.metadataStatus = normalizeMetadataStatus(payload.metadata);
+    state.serverMetadataStatus = normalizeMetadataStatus(payload.metadata);
+    syncMetadataStatus();
   }
 
-  function apiItemsUrl({ offset, force }) {
+  function apiItemsUrl({ offset, force, catalog = false }) {
     const url = new URL("api/items", state.baseUrl);
     url.searchParams.set("offset", String(offset));
-    url.searchParams.set("limit", String(PAGE_SIZE));
-    url.searchParams.set("type", state.filter);
-    url.searchParams.set("sort", state.sort);
-    if (state.query.trim()) {
+    url.searchParams.set("limit", String(catalog ? CATALOG_PAGE_SIZE : PAGE_SIZE));
+    url.searchParams.set("type", catalog ? "all" : state.filter);
+    url.searchParams.set("sort", catalog ? "name-asc" : state.sort);
+    if (!catalog && state.query.trim()) {
       url.searchParams.set("q", state.query.trim());
     }
-    for (const [name, value] of Object.entries(state.timelineFilters)) {
-      if (value) {
-        url.searchParams.set(name, value);
+    if (!catalog) {
+      for (const [name, value] of Object.entries(state.timelineFilters)) {
+        if (value) {
+          url.searchParams.set(name, value);
+        }
       }
     }
     if (force) {
@@ -1251,8 +2030,8 @@
     return url;
   }
 
-  async function fetchApiPage({ offset, force, version }) {
-    const response = await fetchWithTimeout(apiItemsUrl({ offset, force }), API_TIMEOUT_MS);
+  async function fetchApiPage({ offset, force, version, catalog = false }) {
+    const response = await fetchWithTimeout(apiItemsUrl({ offset, force, catalog }), API_TIMEOUT_MS);
     const contentType = response.headers.get("content-type") || "";
     if (response.status === 404 || !contentType.includes("application/json")) {
       throw new ApiUnavailableError("Server không trả API JSON");
@@ -1293,13 +2072,16 @@
       const nextItems = payload.items.map((item) => normalizeApiItem(item));
       state.items = reset ? nextItems : [...state.items, ...nextItems];
       state.total = Number(payload.total) || 0;
-      state.stats = payload.stats || null;
+      state.stats = state.localMetadataStatus.available ? deriveStats(state.items) : (payload.stats || null);
       if (payload.metadata) {
-        state.metadataStatus = normalizeMetadataStatus(payload.metadata);
+        state.serverMetadataStatus = normalizeMetadataStatus(payload.metadata);
+        syncMetadataStatus();
       }
       state.hasMore = Boolean(payload.hasMore);
       if (payload.facets) {
-        state.facets = normalizeFacets(payload.facets);
+        state.facets = state.localMetadataStatus.available
+          ? deriveFacets(state.items)
+          : normalizeFacets(payload.facets);
         if (state.filter === "all" && !state.query.trim()) {
           state.folderFacets = state.facets;
         }
@@ -1312,6 +2094,8 @@
       }
       if (state.view === "albums") {
         renderFolderView();
+      } else if (state.view === "map") {
+        renderMapView();
       } else {
         updateVisibleItems();
         renderNextPage(Math.max(nextItems.length || PAGE_SIZE, state.visibleItems.length - state.renderedCount));
@@ -1325,6 +2109,68 @@
       if (!state.isLoading) {
         elements.scanStatus.hidden = true;
       }
+    }
+  }
+
+  async function loadFullApiCatalog({ force = false, version = state.requestVersion } = {}) {
+    const items = [];
+    let offset = 0;
+    let total = 0;
+    state.clientCatalogComplete = false;
+    state.isLoadingMore = true;
+
+    try {
+      do {
+        const payload = await fetchApiPage({
+          offset,
+          force: force && offset === 0,
+          version,
+          catalog: true,
+        });
+        if (!payload || version !== state.requestVersion) {
+          return false;
+        }
+        items.push(...payload.items.map((item) => normalizeApiItem(item)));
+        total = Number(payload.total) || items.length;
+        offset += payload.items.length;
+        if (payload.metadata) {
+          state.serverMetadataStatus = normalizeMetadataStatus(payload.metadata);
+          syncMetadataStatus();
+        }
+        elements.scanStatusText.textContent =
+          `Đang chuẩn bị ${numberFormatter.format(items.length)} / ${numberFormatter.format(total)} mục…`;
+        if (!payload.hasMore || payload.items.length === 0) {
+          break;
+        }
+      } while (offset < total);
+
+      if (version !== state.requestVersion) {
+        return false;
+      }
+      state.items = items;
+      state.total = items.length;
+      state.stats = deriveStats(items);
+      state.facets = deriveFacets(items);
+      state.folderFacets = state.facets;
+      state.hasMore = false;
+      state.clientCatalogComplete = true;
+      setMode("api");
+      clearMediaGrid();
+      state.renderedCount = 0;
+      if (state.view === "albums") {
+        renderFolderView();
+      } else if (state.view === "map") {
+        renderMapView();
+      } else {
+        updateVisibleItems();
+        renderNextPage(PAGE_SIZE);
+      }
+      updateSummary();
+      updateEmptyState();
+      saveCachedCatalog().catch(() => {});
+      return true;
+    } finally {
+      state.isLoadingMore = false;
     }
   }
 
@@ -1451,11 +2297,7 @@
       return;
     }
     state.total = state.items.length;
-    state.stats = {
-      total: state.items.length,
-      images: state.items.filter((item) => item.type === "image").length,
-      videos: state.items.filter((item) => item.type === "video").length,
-    };
+    state.stats = deriveStats(state.items);
     state.facets = deriveFacets(state.items);
     state.folderFacets = state.facets;
     updateTimelineFilterUi();
@@ -1516,7 +2358,7 @@
         merged.set(item.id, item);
       }
     }
-    return [...merged.values()].filter(validCollectionItem);
+    return [...merged.values()].filter(validCollectionItem).map(mergeImportedMetadata);
   }
 
   function itemSearchText(item) {
@@ -1528,11 +2370,8 @@
 
   function updateVisibleItems() {
     const normalizedQuery = state.query.trim().toLocaleLowerCase("vi");
-    const sourceItems = state.view === "favorites"
-      ? storedViewItems(state.favoriteItems)
-      : state.view === "hidden"
-        ? storedViewItems(state.hiddenItems, state.hiddenIds)
-        : state.items;
+    const collectionItems = collectionItemsForCurrentView();
+    const sourceItems = collectionItems || state.items;
     state.visibleItems = sourceItems
       .filter((item) => state.view === "hidden" || !state.hiddenIds.has(item.id))
       .filter((item) => state.filter === "all" || item.type === state.filter)
@@ -1549,6 +2388,12 @@
       updateEmptyState();
       return;
     }
+    if (state.view === "map") {
+      renderMapView();
+      updateSummary();
+      updateEmptyState();
+      return;
+    }
     updateVisibleItems();
     if (state.mode !== "api" || state.view !== "library") {
       state.total = state.visibleItems.length;
@@ -1560,6 +2405,275 @@
     renderNextPage(targetCount);
     updateSummary();
     updateEmptyState();
+  }
+
+  function itemCoordinates(item) {
+    const latitude = Number(item.metadata?.latitude);
+    const longitude = Number(item.metadata?.longitude);
+    if (!item.hasLocation || !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+      Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+      return null;
+    }
+    return [longitude, latitude];
+  }
+
+  function mapItemsForCurrentFilters() {
+    const normalizedQuery = state.query.trim().toLocaleLowerCase("vi");
+    return state.items
+      .filter((item) => !state.hiddenIds.has(item.id))
+      .filter((item) => state.filter === "all" || item.type === state.filter)
+      .filter(itemMatchesTimelineFilters)
+      .filter((item) => !normalizedQuery || itemSearchText(item).includes(normalizedQuery))
+      .filter((item) => itemCoordinates(item))
+      .sort(compareDirectoryItems);
+  }
+
+  function setMapEmptyState(title, copy) {
+    const heading = elements.mapEmpty.querySelector("strong");
+    const description = elements.mapEmpty.querySelector("p");
+    if (heading) heading.textContent = title;
+    if (description) description.textContent = copy;
+    elements.mapEmpty.hidden = false;
+    elements.mapCanvas.hidden = true;
+  }
+
+  function loadMapLibre() {
+    if (window.maplibregl) {
+      return Promise.resolve(window.maplibregl);
+    }
+    if (mapLibreLoadPromise) {
+      return mapLibreLoadPromise;
+    }
+    mapLibreLoadPromise = new Promise((resolve, reject) => {
+      if (!document.querySelector("#my-album-maplibre-css")) {
+        const stylesheet = document.createElement("link");
+        stylesheet.id = "my-album-maplibre-css";
+        stylesheet.rel = "stylesheet";
+        stylesheet.href = MAPLIBRE_CSS_URL;
+        document.head.append(stylesheet);
+      }
+      const existingScript = document.querySelector("#my-album-maplibre-js");
+      if (existingScript) {
+        existingScript.addEventListener("load", () => resolve(window.maplibregl), { once: true });
+        existingScript.addEventListener("error", () => reject(new Error("Không tải được thư viện bản đồ.")), { once: true });
+        return;
+      }
+      const script = document.createElement("script");
+      script.id = "my-album-maplibre-js";
+      script.src = MAPLIBRE_JS_URL;
+      script.async = true;
+      script.addEventListener("load", () => {
+        if (window.maplibregl) {
+          resolve(window.maplibregl);
+        } else {
+          reject(new Error("Thư viện bản đồ không hợp lệ."));
+        }
+      }, { once: true });
+      script.addEventListener("error", () => reject(new Error("Không tải được thư viện bản đồ.")), { once: true });
+      document.head.append(script);
+    }).catch((error) => {
+      mapLibreLoadPromise = null;
+      throw error;
+    });
+    return mapLibreLoadPromise;
+  }
+
+  function mapFeatureCollection() {
+    return {
+      type: "FeatureCollection",
+      features: state.mapItems.map((item) => ({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: itemCoordinates(item) },
+        properties: {
+          id: item.id,
+          name: item.name,
+          folder: item.folder,
+          detail: itemDetail(item),
+          type: item.type,
+        },
+      })),
+    };
+  }
+
+  function showMapItem(itemId) {
+    const index = state.mapItems.findIndex((item) => item.id === itemId);
+    if (index < 0) {
+      return;
+    }
+    state.visibleItems = state.mapItems;
+    showViewer(index);
+  }
+
+  function showMapPopup(feature, coordinates) {
+    const itemId = String(feature.properties?.id || "");
+    const item = state.mapItems.find((candidate) => candidate.id === itemId);
+    if (!item || !state.map || !window.maplibregl) {
+      return;
+    }
+    const content = document.createElement("button");
+    content.type = "button";
+    content.className = "map-popup";
+    const name = document.createElement("strong");
+    name.textContent = item.name;
+    const detail = document.createElement("span");
+    detail.textContent = [item.folder, itemDetail(item)].filter(Boolean).join(" · ");
+    content.append(name, detail);
+    content.addEventListener("click", () => showMapItem(item.id));
+    new window.maplibregl.Popup({ closeButton: false, offset: 16 })
+      .setLngLat(coordinates)
+      .setDOMContent(content)
+      .addTo(state.map);
+  }
+
+  function installMapLayers(map) {
+    if (map.getSource("album-media")) {
+      return;
+    }
+    map.addSource("album-media", {
+      type: "geojson",
+      data: mapFeatureCollection(),
+      cluster: true,
+      clusterMaxZoom: 14,
+      clusterRadius: 44,
+    });
+    map.addLayer({
+      id: "album-clusters",
+      type: "circle",
+      source: "album-media",
+      filter: ["has", "point_count"],
+      paint: {
+        "circle-color": "#197f6c",
+        "circle-radius": ["step", ["get", "point_count"], 17, 10, 21, 40, 26],
+        "circle-opacity": 0.92,
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#ffffff",
+      },
+    });
+    map.addLayer({
+      id: "album-cluster-count",
+      type: "symbol",
+      source: "album-media",
+      filter: ["has", "point_count"],
+      layout: {
+        "text-field": "{point_count_abbreviated}",
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 12,
+      },
+      paint: { "text-color": "#ffffff" },
+    });
+    map.addLayer({
+      id: "album-point",
+      type: "circle",
+      source: "album-media",
+      filter: ["!", ["has", "point_count"]],
+      paint: {
+        "circle-color": ["case", ["==", ["get", "type"], "video"], "#d4665b", "#216ea8"],
+        "circle-radius": 8,
+        "circle-stroke-width": 2,
+        "circle-stroke-color": "#ffffff",
+      },
+    });
+    map.on("click", "album-clusters", (event) => {
+      const feature = map.queryRenderedFeatures(event.point, { layers: ["album-clusters"] })[0];
+      const clusterId = feature?.properties?.cluster_id;
+      const source = map.getSource("album-media");
+      if (!source || clusterId === undefined) {
+        return;
+      }
+      Promise.resolve(source.getClusterExpansionZoom(Number(clusterId)))
+        .then((zoom) => {
+          if (feature?.geometry?.type === "Point") {
+            map.easeTo({ center: feature.geometry.coordinates, zoom });
+          }
+        })
+        .catch(() => {});
+    });
+    map.on("click", "album-point", (event) => {
+      const feature = event.features?.[0];
+      if (!feature || feature.geometry?.type !== "Point") {
+        return;
+      }
+      const coordinates = feature.geometry.coordinates.slice();
+      while (Math.abs(event.lngLat.lng - coordinates[0]) > 180) {
+        coordinates[0] += event.lngLat.lng > coordinates[0] ? 360 : -360;
+      }
+      showMapPopup(feature, coordinates);
+    });
+    for (const layerId of ["album-clusters", "album-point"]) {
+      map.on("mouseenter", layerId, () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", layerId, () => { map.getCanvas().style.cursor = ""; });
+    }
+  }
+
+  function updateMapData() {
+    if (!state.map || !state.mapReady) {
+      return;
+    }
+    try {
+      installMapLayers(state.map);
+      const data = mapFeatureCollection();
+      state.map.getSource("album-media")?.setData(data);
+      const dataKey = state.mapItems.map((item) => item.id).join("|");
+      if (data.features.length > 0 && dataKey !== state.mapLastDataKey) {
+        state.mapLastDataKey = dataKey;
+        if (data.features.length === 1) {
+          state.map.easeTo({ center: data.features[0].geometry.coordinates, zoom: 13 });
+        } else {
+          const bounds = data.features.reduce((result, feature) => result.extend(feature.geometry.coordinates),
+            new window.maplibregl.LngLatBounds(data.features[0].geometry.coordinates, data.features[0].geometry.coordinates));
+          state.map.fitBounds(bounds, { padding: 56, maxZoom: 13, duration: 550 });
+        }
+      }
+      window.setTimeout(() => state.map?.resize(), 0);
+    } catch {
+      setMapEmptyState("Chưa tải được bản đồ", "Thử lại khi có kết nối Internet.");
+    }
+  }
+
+  function ensureMap() {
+    if (state.map || !window.maplibregl) {
+      return state.map;
+    }
+    const map = new window.maplibregl.Map({
+      container: elements.mapCanvas,
+      style: OPEN_FREE_MAP_STYLE_URL,
+      center: [105.8342, 21.0285],
+      zoom: 4,
+      attributionControl: true,
+    });
+    state.map = map;
+    map.addControl(new window.maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    map.on("load", () => {
+      state.mapReady = true;
+      updateMapData();
+    });
+    return map;
+  }
+
+  function renderMapView() {
+    const mapItems = mapItemsForCurrentFilters();
+    state.mapItems = mapItems;
+    elements.mapItemCount.textContent = `${numberFormatter.format(mapItems.length)} mục có GPS`;
+    if (mapItems.length === 0) {
+      setMapEmptyState("Chưa có ảnh có GPS", "Nhập metadata có tọa độ để xem ảnh theo vị trí.");
+      return;
+    }
+    elements.mapEmpty.hidden = true;
+    elements.mapCanvas.hidden = false;
+    const renderToken = ++state.mapRenderToken;
+    loadMapLibre()
+      .then(() => {
+        if (renderToken !== state.mapRenderToken || state.view !== "map") {
+          return;
+        }
+        ensureMap();
+        updateMapData();
+      })
+      .catch(() => {
+        if (renderToken === state.mapRenderToken) {
+          setMapEmptyState("Chưa tải được bản đồ", "Thử lại khi có kết nối Internet.");
+        }
+      });
   }
 
   async function thumbnailSources(item) {
@@ -1581,6 +2695,7 @@
 
   function releaseThumbnailImage(image) {
     thumbnailObserver?.unobserve(image);
+    image.albumThumbnail?.preview?.classList.remove("is-thumbnail-ready");
     image.albumThumbnailAbort?.abort();
     image.albumThumbnailAbort = null;
     if (image.albumThumbnailObjectUrl) {
@@ -1614,6 +2729,7 @@
       };
       image.addEventListener("load", () => {
         releaseObjectUrl();
+        image.albumThumbnail?.preview?.classList.add("is-thumbnail-ready");
         resolve();
       }, { once: true });
       image.addEventListener("error", () => {
@@ -1677,9 +2793,10 @@
   function folderSummaryFromLoadedItems(folder) {
     const items = state.items.filter((item) => itemFolderKey(item) === folder);
     items.sort((left, right) => itemTimestamp(right) - itemTimestamp(left));
+    const complete = state.mode !== "api" || state.clientCatalogComplete;
     return {
-      complete: state.mode !== "api",
-      count: state.mode === "api" ? null : items.length,
+      complete,
+      count: complete ? items.length : null,
       cover: items[0] || null,
     };
   }
@@ -1856,13 +2973,71 @@
     const folders = availableFolders
       .filter((folder) => !query || folderFilterLabel(folder).toLocaleLowerCase("vi").includes(query))
       .sort(folderCollator.compare);
+    const customCollections = customCollectionsByRecentUpdate()
+      .filter((collection) => !query || collection.name.toLocaleLowerCase("vi").includes(query));
+    const events = smartEvents().filter((event) => !query ||
+      `${event.name} ${event.detail}`.toLocaleLowerCase("vi").includes(query));
     state.folderViewCount = folders.length;
-    if (folders.length === 0) {
+    state.albumViewCounts = {
+      folders: folders.length,
+      collections: customCollections.length,
+      events: events.length,
+    };
+    if (folders.length === 0 && customCollections.length === 0 && events.length === 0) {
       return;
     }
 
+    const fragment = document.createDocumentFragment();
+    if (customCollections.length > 0) {
+      const cards = customCollections.map((collection) => {
+        const items = customCollectionItems(collection.id);
+        const cover = items.slice().sort((left, right) => itemTimestamp(right) - itemTimestamp(left))[0] || collection.items[0];
+        return createCollectionCard({
+          kind: "custom",
+          id: collection.id,
+          name: collection.name,
+          detail: `${numberFormatter.format(items.length || collection.itemIds.length)} mục`,
+          cover,
+        });
+      });
+      fragment.append(createOrganizeSection(
+        "Bộ sưu tập",
+        `${numberFormatter.format(customCollections.length)} nhóm`,
+        cards,
+        "custom",
+      ));
+    }
+    if (events.length > 0) {
+      const cards = events.map((event) => createCollectionCard({
+        kind: "event",
+        id: event.id,
+        name: event.name,
+        detail: event.detail,
+        cover: event.cover,
+      }));
+      fragment.append(createOrganizeSection(
+        "Sự kiện",
+        `${numberFormatter.format(events.length)} nhóm`,
+        cards,
+        "events",
+      ));
+    }
+    if (folders.length === 0) {
+      elements.mediaGrid.append(fragment);
+      return;
+    }
+
+    const folderSection = document.createElement("section");
+    folderSection.className = "collection-section collection-section-folders";
+    const header = document.createElement("header");
+    header.className = "collection-section-header";
+    const heading = document.createElement("h2");
+    heading.textContent = "Thư mục";
+    const description = document.createElement("p");
+    description.textContent = `${numberFormatter.format(folders.length)} thư mục`;
+    header.append(heading, description);
     const grid = document.createElement("div");
-    grid.className = "folder-grid";
+    grid.className = "folder-grid collection-grid";
     for (const folder of folders) {
       const loadedSummary = folderSummaryFromLoadedItems(folder);
       const summary = state.folderSummaries.get(folder) || loadedSummary;
@@ -1879,7 +3054,9 @@
         }
       }
     }
-    elements.mediaGrid.append(grid);
+    folderSection.append(header, grid);
+    fragment.append(folderSection);
+    elements.mediaGrid.append(fragment);
   }
 
   function updateSelectionUi() {
@@ -1893,12 +3070,13 @@
     elements.mediaGrid.classList.toggle("is-selecting", state.selectionMode);
     document.body.classList.toggle("has-selection", state.selectionMode);
     elements.selectionBar.hidden = !state.selectionMode;
-    elements.selectButton.hidden = state.view === "albums" || !state.mode ||
+    elements.selectButton.hidden = ["albums", "map"].includes(state.view) || !state.mode ||
       state.visibleItems.length === 0 || state.selectionMode;
     elements.selectionCount.textContent = `${numberFormatter.format(selectedCount)} mục đã chọn`;
     elements.selectAllButton.textContent = allVisibleSelected ? "Bỏ chọn tất cả" : "Chọn tất cả";
     elements.selectAllButton.disabled = state.visibleItems.length === 0 || state.isDownloading;
     elements.downloadSelected.disabled = selectedCount === 0 || state.isDownloading;
+    elements.collectionSelected.disabled = selectedCount === 0 || state.isDownloading;
     elements.favoriteSelected.disabled = selectedCount === 0 || state.isDownloading;
     elements.favoriteSelected.querySelector("span").textContent = allSelectedFavorited
       ? "Bỏ yêu thích"
@@ -2164,6 +3342,39 @@
     count.textContent = `${numberFormatter.format(nextCount)} mục`;
   }
 
+  function metadataPlaceholderTone(item) {
+    const tones = ["#477d8a", "#66799f", "#8a6f59", "#667f6a", "#8a6679", "#847252"];
+    const source = `${item.relative || item.name || item.id}`;
+    let hash = 0;
+    for (const character of source) {
+      hash = ((hash * 31) + character.codePointAt(0)) >>> 0;
+    }
+    return tones[hash % tones.length];
+  }
+
+  function addMetadataPlaceholder(preview, item) {
+    if (!item.hasMetadata) {
+      return;
+    }
+    const metadata = item.metadata || {};
+    const width = Number(metadata.width);
+    const height = Number(metadata.height);
+    const dimensions = width > 0 && height > 0
+      ? `${numberFormatter.format(width)} × ${numberFormatter.format(height)}`
+      : item.type === "video" ? "Video" : "Ảnh";
+    const placeholder = document.createElement("span");
+    placeholder.className = "metadata-placeholder";
+    placeholder.style.setProperty("--metadata-placeholder-tone", metadataPlaceholderTone(item));
+    placeholder.dataset.orientation = width > height ? "landscape" : height > width ? "portrait" : "square";
+
+    const primary = document.createElement("strong");
+    primary.textContent = item.dateKey?.slice(0, 4) || item.camera || (item.type === "video" ? "Video" : "Ảnh");
+    const secondary = document.createElement("small");
+    secondary.textContent = dimensions;
+    placeholder.append(primary, secondary);
+    preview.prepend(placeholder);
+  }
+
   function createMediaCard(item, index) {
     const fragment = elements.mediaCardTemplate.content.cloneNode(true);
     const card = fragment.querySelector(".media-card");
@@ -2178,6 +3389,8 @@
     name.textContent = item.name;
     folder.textContent = item.folder;
     detail.textContent = itemDetail(item);
+    card.classList.toggle("has-metadata", Boolean(item.hasMetadata));
+    addMetadataPlaceholder(preview, item);
 
     const typeBadge = document.createElement("span");
     typeBadge.className = "media-type";
@@ -2221,8 +3434,15 @@
       albums: "Album",
       favorites: "Yêu thích",
       hidden: "Đã ẩn",
+      map: "Bản đồ ảnh",
     };
-    elements.albumTitle.textContent = collectionTitles[state.view] || (
+    const customCollection = state.view === "collection"
+      ? state.customCollections.get(state.activeCollectionId)
+      : null;
+    const event = state.view === "event"
+      ? smartEvents().find((candidate) => candidate.id === state.activeEventId)
+      : null;
+    elements.albumTitle.textContent = customCollection?.name || event?.name || collectionTitles[state.view] || (
       state.filter === "image" ? "Ảnh" : state.filter === "video" ? "Video" : "Dòng thời gian"
     );
     if (!state.endpoint) {
@@ -2232,8 +3452,36 @@
 
     if (state.view === "albums") {
       const total = Number(state.stats?.total) || state.items.length;
+      const groups = [];
+      if (state.albumViewCounts.collections) {
+        groups.push(`${numberFormatter.format(state.albumViewCounts.collections)} bộ sưu tập`);
+      }
+      if (state.albumViewCounts.events) {
+        groups.push(`${numberFormatter.format(state.albumViewCounts.events)} sự kiện`);
+      }
+      if (state.albumViewCounts.folders) {
+        groups.push(`${numberFormatter.format(state.albumViewCounts.folders)} thư mục`);
+      }
+      elements.albumSummary.textContent = `${groups.join(" · ") || "Chưa có nhóm"} · ${numberFormatter.format(total)} ảnh và video`;
+      return;
+    }
+
+    if (state.view === "map") {
+      elements.albumSummary.textContent = state.mapItems.length > 0
+        ? `${numberFormatter.format(state.mapItems.length)} ảnh và video có vị trí`
+        : "Ảnh và video có tọa độ sẽ xuất hiện ở đây.";
+      return;
+    }
+
+    if (state.view === "collection" || state.view === "event") {
+      const qualifier = state.filter !== "all" || state.query.trim() || activeTimelineFilterCount() > 0
+        ? " phù hợp"
+        : "";
+      const suffix = state.view === "collection"
+        ? "Lưu trên thiết bị này"
+        : event?.detail || "Theo thời điểm chụp";
       elements.albumSummary.textContent =
-        `${numberFormatter.format(state.folderViewCount)} album · ${numberFormatter.format(total)} ảnh và video`;
+        `${numberFormatter.format(state.visibleItems.length)} mục${qualifier} · ${suffix}`;
       return;
     }
 
@@ -2262,8 +3510,13 @@
   }
 
   function updateEmptyState() {
+    if (state.view === "map") {
+      elements.emptyState.hidden = true;
+      updateSelectionUi();
+      return;
+    }
     const hasVisibleItems = state.view === "albums"
-      ? state.folderViewCount > 0
+      ? Object.values(state.albumViewCounts).some(Boolean)
       : state.visibleItems.length > 0;
     elements.emptyState.hidden = hasVisibleItems || state.isLoading;
     elements.emptyConnect.textContent = state.endpoint ? "Đổi IP và cổng" : "Nhập IP và cổng";
@@ -2271,8 +3524,14 @@
     if (state.endpoint && state.mode && state.view === "albums" && !hasVisibleItems) {
       elements.emptyTitle.textContent = state.query.trim() ? "Không tìm thấy album" : "Chưa có album";
       elements.emptyCopy.textContent = state.query.trim()
-        ? "Thử một tên thư mục khác."
-        : "Các thư mục chứa ảnh và video sẽ xuất hiện ở đây.";
+        ? "Thử một tên bộ sưu tập, sự kiện hoặc thư mục khác."
+        : "Các nhóm ảnh và video sẽ xuất hiện ở đây.";
+    } else if (state.endpoint && state.mode && state.view === "collection" && !hasVisibleItems) {
+      elements.emptyTitle.textContent = "Bộ sưu tập này đang trống";
+      elements.emptyCopy.textContent = "Chọn ảnh hoặc video rồi thêm chúng vào bộ sưu tập.";
+    } else if (state.endpoint && state.mode && state.view === "event" && !hasVisibleItems) {
+      elements.emptyTitle.textContent = "Không còn mục trong sự kiện này";
+      elements.emptyCopy.textContent = "Có thể các mục đã bị ẩn hoặc không còn trong kho ảnh.";
     } else if (state.endpoint && state.mode && state.view === "favorites" && !hasVisibleItems) {
       elements.emptyTitle.textContent = state.query.trim() || activeTimelineFilterCount() > 0
         ? "Không có kết quả"
@@ -2749,15 +4008,20 @@
     state.stats = null;
     state.facets = emptyFacets();
     state.folderFacets = emptyFacets();
-    state.metadataStatus = { available: false, items: 0, generatedAt: "" };
+    state.serverMetadataStatus = { available: false, items: 0, generatedAt: "" };
     state.folderSummaries.clear();
     state.folderViewCount = 0;
+    state.albumViewCounts = { folders: 0, collections: 0, events: 0 };
     state.hasMore = false;
+    state.clientCatalogComplete = false;
+    state.mapItems = [];
+    state.mapLastDataKey = "";
     state.renderedCount = 0;
     state.viewerIndex = -1;
     state.isLoadingMore = false;
     clearMediaGrid();
     setMode(null);
+    syncMetadataStatus();
   }
 
   async function connectAlbum({ force = false } = {}) {
@@ -2778,8 +4042,14 @@
         if (version !== state.requestVersion) {
           return;
         }
-        elements.scanStatusText.textContent = "Đang lập chỉ mục album…";
-        await loadApiPage({ reset: true, force, version });
+        elements.scanStatusText.textContent = state.localMetadataStatus.available
+          ? "Đang tạo placeholder từ metadata…"
+          : "Đang lập chỉ mục album…";
+        if (state.localMetadataStatus.available) {
+          await loadFullApiCatalog({ force, version });
+        } else {
+          await loadApiPage({ reset: true, force, version });
+        }
       } catch (error) {
         if (!(error instanceof ApiUnavailableError)) {
           throw error;
@@ -2835,6 +4105,8 @@
           }
         }
       }, 120);
+    } else if (state.mode === "api" && ["library", "collection", "event", "map"].includes(state.view) && state.clientCatalogComplete) {
+      refreshDirectoryItems(false);
     } else if (state.mode === "api" && state.view === "library") {
       controlTimer = setTimeout(async () => {
         state.requestVersion += 1;
@@ -2877,6 +4149,8 @@
     state.baseUrl = endpointUrl(endpoint);
     state.isLocalServer = endpoint.kind === "local";
     state.view = "library";
+    state.activeCollectionId = "";
+    state.activeEventId = "";
     state.filter = "all";
     state.query = "";
     elements.searchInput.value = "";
@@ -2891,6 +4165,47 @@
 
   elements.timelineFilterButton.addEventListener("click", showTimelineFilterDialog);
   elements.filterClose.addEventListener("click", closeTimelineFilterDialog);
+  elements.metadataButton.addEventListener("click", showMetadataDialog);
+  elements.metadataClose.addEventListener("click", closeMetadataDialog);
+  elements.metadataImport.addEventListener("click", () => elements.metadataFileInput.click());
+  elements.metadataFileInput.addEventListener("change", () => {
+    const [file] = elements.metadataFileInput.files || [];
+    importMetadataFile(file);
+  });
+  elements.metadataExport.addEventListener("click", exportImportedMetadata);
+  elements.metadataRemove.addEventListener("click", () => {
+    removeImportedMetadata().catch(() => showToast("Không thể xóa metadata đã lưu."));
+  });
+  elements.metadataDialog.addEventListener("click", (event) => {
+    if (event.target === elements.metadataDialog) {
+      closeMetadataDialog();
+    }
+  });
+  elements.metadataDialog.addEventListener("cancel", (event) => {
+    if (state.metadataImporting) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    closeMetadataDialog();
+  });
+  elements.collectionSelected.addEventListener("click", showCollectionDialog);
+  elements.collectionClose.addEventListener("click", closeCollectionDialog);
+  elements.collectionCancel.addEventListener("click", closeCollectionDialog);
+  elements.collectionSelect.addEventListener("change", updateCollectionDialogName);
+  elements.collectionForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveSelectedToCollection();
+  });
+  elements.collectionDialog.addEventListener("click", (event) => {
+    if (event.target === elements.collectionDialog) {
+      closeCollectionDialog();
+    }
+  });
+  elements.collectionDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeCollectionDialog();
+  });
   elements.yearFilter.addEventListener("change", () => {
     const filters = readTimelineFilterForm();
     filters.month = "";
@@ -2964,12 +4279,16 @@
         return;
       }
       exitSelectionMode();
-      state.requestVersion += 1;
+      if (!state.isLoading) {
+        state.requestVersion += 1;
+      }
       state.query = "";
       elements.searchInput.value = "";
       state.timelineFilters = emptyTimelineFilters();
       state.view = nextView;
       state.filter = nextFilter;
+      state.activeCollectionId = "";
+      state.activeEventId = "";
       updateNavigationUi();
       updateViewUi();
       reloadFromControls();
@@ -3005,6 +4324,16 @@
   });
 
   elements.mediaGrid.addEventListener("click", (event) => {
+    const collectionCard = event.target.closest("[data-collection-card]");
+    if (collectionCard) {
+      openCustomCollection(collectionCard.dataset.collectionCard);
+      return;
+    }
+    const eventCard = event.target.closest("[data-event-card]");
+    if (eventCard) {
+      openSmartEvent(eventCard.dataset.eventCard);
+      return;
+    }
     const folderCard = event.target.closest("[data-folder-card]");
     if (folderCard) {
       openFolderAlbum(folderCard.dataset.folder);
@@ -3084,12 +4413,14 @@
       if (!entries.some((entry) => entry.isIntersecting) || state.isLoading) {
         return;
       }
-      if (state.mode === "api" && state.view === "library") {
+      if (state.mode === "api" && state.view === "library" && state.clientCatalogComplete) {
+        renderNextPage();
+      } else if (state.mode === "api" && state.view === "library") {
         loadApiPage().catch((error) => {
           showConnectionError(error);
           elements.scanStatus.hidden = true;
         });
-      } else if ((state.mode === "directory" || state.mode === "offline") && state.view !== "albums") {
+      } else if ((state.mode === "directory" || state.mode === "offline") && !["albums", "map"].includes(state.view)) {
         renderNextPage();
       }
     },
@@ -3103,6 +4434,7 @@
     }, { once: true });
   }
 
+  await loadImportedMetadata();
   const currentPageEndpoint = localPageEndpoint();
   const initialEndpoint = currentPageEndpoint || CLOUD_ENDPOINT;
   document.body.classList.toggle("is-local-server", Boolean(currentPageEndpoint));

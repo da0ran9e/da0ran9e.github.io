@@ -1,11 +1,12 @@
 "use strict";
 
 const SHELL_CACHE_PREFIX = "my-album-shell-";
-const SHELL_CACHE_NAME = `${SHELL_CACHE_PREFIX}v22`;
+const SHELL_CACHE_NAME = `${SHELL_CACHE_PREFIX}v24`;
 const SHELL_FILES = [
   "./index.html",
-  "./styles.css?v=album-ux-22",
-  "./app.js?v=album-ux-22",
+  "./styles.css?v=album-ux-24",
+  "./app.js?v=album-ux-24",
+  "./metadata-worker.js?v=album-ux-24",
 ];
 
 self.addEventListener("install", (event) => {
@@ -40,7 +41,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (request.destination === "script" || request.destination === "style") {
+  if (["script", "style", "worker"].includes(request.destination)) {
     event.respondWith(
       caches.match(request).then((cached) => cached || fetch(request)),
     );
