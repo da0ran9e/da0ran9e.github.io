@@ -90,6 +90,7 @@
     },
     localMetadataByPath: new Map(),
     clientCatalogComplete: false,
+    albumMetaToken: 0,
     metadataImporting: false,
     renderedCount: 0,
     requestVersion: 0,
@@ -847,11 +848,12 @@
     const isCloud = state.endpoint?.kind === "cloud";
     const labels = {
       api: isCloud ? "Cloud API" : "LAN API",
+      album: isCloud ? "Album Cloud" : "Album",
       directory: isCloud ? "Thư mục Cloud" : "Thư mục LAN",
       offline: "Ngoại tuyến",
     };
     const metadataLabel = state.metadataStatus.available ? " · EXIF" : "";
-    elements.connectionMode.textContent = `${labels[mode] || ""}${mode === "api" || mode === "offline" ? metadataLabel : ""}`;
+    elements.connectionMode.textContent = `${labels[mode] || ""}${mode === "api" || mode === "album" || mode === "offline" ? metadataLabel : ""}`;
     elements.connectionMode.title = state.metadataStatus.available
       ? `${numberFormatter.format(state.metadataStatus.items)} mục có metadata`
       : "";
@@ -1499,7 +1501,7 @@
       try {
         setMetadataProgress(4, "Đang đọc file…", formatBytes(file.size));
         const buffer = await file.arrayBuffer();
-        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-24", window.location.href));
+        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-25", window.location.href));
         worker.addEventListener("message", (event) => {
           const message = event.data || {};
           if (message.type === "progress") {
@@ -1888,6 +1890,254 @@
     });
   }
 
+  // === Album static index (album/layout.json + album/meta/NNNN.json) ===
+  // The cloud host at photos.vuducan.qzz.io is a plain static server (no /api).
+  // layout.json holds parallel arrays for instant placeholders; meta pages hold
+  // the per-item details filled in progressively. See memory: my-album-data-contract.
+  function albumIndexUrl() {
+    return new URL("album/layout.json", state.baseUrl).href;
+  }
+
+  function albumMetaUrl(page) {
+    return new URL(`album/meta/${String(page).padStart(4, "0")}.json`, state.baseUrl).href;
+  }
+
+  function albumThumbnailUrl(id) {
+    return new URL(`thumbs/${id}.jpg`, state.baseUrl).href;
+  }
+
+  function albumMediaUrl(dir, file) {
+    // macOS/APFS filenames on the server are stored NFD-decomposed; the meta JSON
+    // reports NFC, so normalize before encoding or the path 404s.
+    const relative = `${dir ? `${dir}/` : ""}${file}`.normalize("NFD");
+    const encoded = relative.split("/").map(encodeURIComponent).join("/");
+    return new URL(encoded, state.baseUrl).href;
+  }
+
+  function albumDateToTimestamp(dateKey) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey || "")) {
+      return 0;
+    }
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return Math.floor(new Date(year, month - 1, day, 12, 0, 0).getTime() / 1000);
+  }
+
+  function buildAlbumItem(layout, index, pageSize) {
+    const id = String(layout.id[index]);
+    const width = Number(layout.w?.[index]) || 0;
+    const height = Number(layout.h?.[index]) || 0;
+    const color = typeof layout.c?.[index] === "string" ? layout.c[index] : "";
+    const kind = Number(layout.k?.[index]) || 0;
+    const duration = Number(layout.dur?.[index]) || 0;
+    const dateKey = /^\d{4}-\d{2}-\d{2}$/.test(layout.d?.[index] || "") ? layout.d[index] : "";
+    const type = kind === 1 ? "video" : "image";
+    const metadata = {};
+    if (width > 0) metadata.width = width;
+    if (height > 0) metadata.height = height;
+    if (duration > 0) metadata.duration = duration;
+    return {
+      id,
+      url: "",
+      preview: "",
+      thumbnail: albumThumbnailUrl(id),
+      type,
+      extension: "",
+      relative: "",
+      name: "",
+      folder: "Thư mục gốc",
+      folderKey: ".",
+      bytes: 0,
+      modified: 0,
+      dateTaken: albumDateToTimestamp(dateKey),
+      dateKey,
+      dateTakenText: "",
+      dateSource: dateKey ? "album" : "",
+      camera: "",
+      hasMetadata: true,
+      hasLocation: false,
+      metadata,
+      color,
+      metaPage: Math.floor(index / pageSize),
+      metaPending: true,
+      source: "album",
+      thumbnailFallback: null,
+    };
+  }
+
+  function applyAlbumMeta(item, entry) {
+    if (!item || !entry) {
+      return;
+    }
+    const file = String(entry.f || "");
+    const dir = String(entry.dir || "");
+    const folderKey = dir || ".";
+    item.name = file || item.name;
+    item.folderKey = folderKey;
+    item.folder = folderKey !== "." ? folderKey.replaceAll("/", " / ") : "Thư mục gốc";
+    item.relative = `${dir ? `${dir}/` : ""}${file}`;
+    item.camera = String(entry.cam || "");
+    item.bytes = Number(entry.b) || 0;
+    const extension = String(entry.e || "").replace(/^\./, "");
+    if (extension) {
+      item.extension = extension;
+    }
+    const parsed = Date.parse(entry.t);
+    if (Number.isFinite(parsed)) {
+      item.dateTaken = Math.floor(parsed / 1000);
+      item.dateTakenText = String(entry.t);
+      item.dateSource = "exif";
+      const dateKey = localDateKey(item.dateTaken);
+      if (dateKey) {
+        item.dateKey = dateKey;
+      }
+    }
+    const mediaUrl = albumMediaUrl(dir, file);
+    item.url = mediaUrl;
+    item.preview = mediaUrl;
+    item.metaPending = false;
+
+    // If the user imported the richer album-metadata.json (which can carry GPS,
+    // lens, etc.), fold those fields in now that we know the item's path.
+    const imported = state.localMetadataByPath.get(metadataPathForItem(item));
+    if (imported) {
+      item.metadata = { ...(imported.metadata || {}), ...item.metadata };
+      const latitude = Number(item.metadata.latitude);
+      const longitude = Number(item.metadata.longitude);
+      item.hasLocation = Number.isFinite(latitude) && Number.isFinite(longitude) &&
+        Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+      if (!item.camera) {
+        item.camera = imported.camera || item.metadata.camera || "";
+      }
+    }
+  }
+
+  async function loadAlbumIndex(version) {
+    let response;
+    try {
+      response = await fetchWithTimeout(albumIndexUrl(), PROBE_TIMEOUT_MS);
+    } catch (error) {
+      throw new ApiUnavailableError(`album layout: ${error.message}`);
+    }
+    if (!response.ok) {
+      throw new ApiUnavailableError(`album layout HTTP ${response.status}`);
+    }
+    let layout;
+    try {
+      layout = await response.json();
+    } catch {
+      throw new ApiUnavailableError("album layout không hợp lệ");
+    }
+    if (!layout || !Array.isArray(layout.id) || layout.id.length === 0) {
+      throw new ApiUnavailableError("album layout trống");
+    }
+    if (version !== state.requestVersion) {
+      return true;
+    }
+
+    const pageSize = Number(layout.page) || 500;
+    const count = layout.id.length;
+    const items = new Array(count);
+    const byId = new Map();
+    for (let index = 0; index < count; index += 1) {
+      const item = buildAlbumItem(layout, index, pageSize);
+      items[index] = item;
+      byId.set(item.id, item);
+    }
+
+    state.items = items;
+    state.total = count;
+    state.stats = deriveStats(items);
+    state.facets = deriveFacets(items);
+    state.folderFacets = state.facets;
+    state.hasMore = false;
+    state.clientCatalogComplete = true;
+    state.serverMetadataStatus = { available: true, items: count, generatedAt: "" };
+    state.renderedCount = 0;
+    setMode("album");
+    syncMetadataStatus();
+    refreshDirectoryItems(false);
+
+    // Enrich progressively from the meta pages without blocking the first paint.
+    loadAlbumMeta(version, count, pageSize, byId).catch(() => {});
+    return true;
+  }
+
+  async function loadAlbumMeta(version, count, pageSize, byId) {
+    const pageCount = Math.ceil(count / pageSize);
+    const token = ++state.albumMetaToken;
+    const queue = [];
+    for (let page = 0; page < pageCount; page += 1) {
+      queue.push(page);
+    }
+    const worker = async () => {
+      while (queue.length > 0) {
+        if (token !== state.albumMetaToken || version !== state.requestVersion) {
+          return;
+        }
+        const page = queue.shift();
+        try {
+          const response = await fetchWithTimeout(albumMetaUrl(page), API_TIMEOUT_MS);
+          if (!response.ok) {
+            continue;
+          }
+          const entries = await response.json();
+          if (!Array.isArray(entries) || token !== state.albumMetaToken) {
+            continue;
+          }
+          for (const entry of entries) {
+            const item = byId.get(String(entry.id));
+            if (item) {
+              applyAlbumMeta(item, entry);
+            }
+          }
+        } catch {
+          // Skip a page we could not read; the rest still enrich the catalog.
+        }
+      }
+    };
+    const workerCount = Math.min(MAX_CONCURRENT_REQUESTS, pageCount);
+    await Promise.all(Array.from({ length: workerCount }, worker));
+    if (token !== state.albumMetaToken || version !== state.requestVersion) {
+      return;
+    }
+
+    // Reconcile once all detail is in: rebuild facets and re-render so folder
+    // labels, camera filters, smart events and precise ordering are correct.
+    state.facets = deriveFacets(state.items);
+    state.folderFacets = state.facets;
+    state.stats = deriveStats(state.items);
+    renderTimelineRail();
+    if (!["albums", "map"].includes(state.view)) {
+      refreshDirectoryItems(true);
+    }
+    updateSummary();
+    saveCachedCatalog().catch(() => {});
+  }
+
+  async function ensureAlbumItemMeta(item) {
+    if (!item || item.source !== "album" || !item.metaPending) {
+      return;
+    }
+    try {
+      const response = await fetchWithTimeout(albumMetaUrl(item.metaPage || 0), API_TIMEOUT_MS);
+      if (!response.ok) {
+        return;
+      }
+      const entries = await response.json();
+      if (!Array.isArray(entries)) {
+        return;
+      }
+      for (const entry of entries) {
+        if (String(entry.id) === item.id) {
+          applyAlbumMeta(item, entry);
+          break;
+        }
+      }
+    } catch {
+      // Leave metaPending set; the viewer will show its error state.
+    }
+  }
+
   function catalogCacheUrl() {
     const url = new URL("./__offline/catalog.json", window.location.href);
     url.search = "";
@@ -1896,7 +2146,7 @@
   }
 
   async function saveCachedCatalog() {
-    if (!canUseCacheStorage() || !state.endpoint || !["api", "directory"].includes(state.mode)) {
+    if (!canUseCacheStorage() || !state.endpoint || !["api", "album", "directory"].includes(state.mode)) {
       return;
     }
     if (state.mode === "api" && (state.view !== "library" ||
@@ -3364,7 +3614,10 @@
       : item.type === "video" ? "Video" : "Ảnh";
     const placeholder = document.createElement("span");
     placeholder.className = "metadata-placeholder";
-    placeholder.style.setProperty("--metadata-placeholder-tone", metadataPlaceholderTone(item));
+    const tone = /^[0-9a-fA-F]{6}$/.test(item.color || "")
+      ? `#${item.color}`
+      : metadataPlaceholderTone(item);
+    placeholder.style.setProperty("--metadata-placeholder-tone", tone);
     placeholder.dataset.orientation = width > height ? "landscape" : height > width ? "portrait" : "square";
 
     const primary = document.createElement("strong");
@@ -3858,6 +4111,31 @@
     }
     updateViewerActionUi(item);
 
+    // Album items resolve their original-media URL from a meta page, which may
+    // not have streamed in yet. Fetch just this item's page before loading.
+    if (item.source === "album" && item.metaPending) {
+      renderViewerLoading();
+      ensureAlbumItemMeta(item).then(() => {
+        if (state.viewerIndex !== index || !elements.viewerDialog.open) {
+          return;
+        }
+        elements.viewerName.textContent = item.name;
+        elements.viewerFolder.textContent = item.folder;
+        elements.viewerInfoName.textContent = item.name;
+        elements.viewerInfoFolder.textContent = item.folder;
+        elements.viewerInfoSize.textContent = formatBytes(item.bytes) || "Không có thông tin";
+        elements.viewerInfoType.textContent = `${item.type === "video" ? "Video" : "Ảnh"} · ${item.extension.toUpperCase()}`;
+        updateViewerMetadata(item);
+        elements.viewerOpenOriginal.href = item.url;
+        startViewerMedia(item, index, token);
+      });
+      return;
+    }
+
+    startViewerMedia(item, index, token);
+  }
+
+  function startViewerMedia(item, index, token) {
     if (item.type === "image") {
       renderViewerLoading();
       loadViewerImage(item, index, token);
@@ -4038,24 +4316,33 @@
 
     try {
       try {
-        await probeApi();
-        if (version !== state.requestVersion) {
-          return;
+        // Preferred path on the static cloud host: the pre-generated album index.
+        elements.scanStatusText.textContent = "Đang dựng placeholder từ metadata…";
+        await loadAlbumIndex(version);
+      } catch (albumError) {
+        if (!(albumError instanceof ApiUnavailableError)) {
+          throw albumError;
         }
-        elements.scanStatusText.textContent = state.localMetadataStatus.available
-          ? "Đang tạo placeholder từ metadata…"
-          : "Đang lập chỉ mục album…";
-        if (state.localMetadataStatus.available) {
-          await loadFullApiCatalog({ force, version });
-        } else {
-          await loadApiPage({ reset: true, force, version });
+        try {
+          await probeApi();
+          if (version !== state.requestVersion) {
+            return;
+          }
+          elements.scanStatusText.textContent = state.localMetadataStatus.available
+            ? "Đang tạo placeholder từ metadata…"
+            : "Đang lập chỉ mục album…";
+          if (state.localMetadataStatus.available) {
+            await loadFullApiCatalog({ force, version });
+          } else {
+            await loadApiPage({ reset: true, force, version });
+          }
+        } catch (error) {
+          if (!(error instanceof ApiUnavailableError)) {
+            throw error;
+          }
+          elements.scanStatusText.textContent = "Đang quét thư mục…";
+          await scanDirectory(version);
         }
-      } catch (error) {
-        if (!(error instanceof ApiUnavailableError)) {
-          throw error;
-        }
-        elements.scanStatusText.textContent = "Đang quét thư mục…";
-        await scanDirectory(version);
       }
 
       if (version === state.requestVersion) {
@@ -4139,7 +4426,7 @@
           }
         }
       }, 280);
-    } else if (["api", "directory", "offline"].includes(state.mode)) {
+    } else if (["api", "album", "directory", "offline"].includes(state.mode)) {
       refreshDirectoryItems(false);
     }
   }
@@ -4420,7 +4707,7 @@
           showConnectionError(error);
           elements.scanStatus.hidden = true;
         });
-      } else if ((state.mode === "directory" || state.mode === "offline") && !["albums", "map"].includes(state.view)) {
+      } else if ((state.mode === "album" || state.mode === "directory" || state.mode === "offline") && !["albums", "map"].includes(state.view)) {
         renderNextPage();
       }
     },
