@@ -8,9 +8,13 @@
     kind: "cloud",
   });
   const HIDDEN_ITEMS_STORAGE_KEY = "my-album-hidden-items-v1";
+  const HIDDEN_ITEM_SNAPSHOTS_STORAGE_KEY = "my-album-hidden-item-snapshots-v1";
+  const FAVORITE_ITEMS_STORAGE_KEY = "my-album-favorite-items-v1";
   const THEME_STORAGE_KEY = "my-album-theme-v1";
+  const TILE_SIZE_STORAGE_KEY = "my-album-tile-size-v1";
   const PAGE_SIZE = 80;
   const MAX_CONCURRENT_REQUESTS = 4;
+  const MAX_FOLDER_SUMMARY_REQUESTS = 4;
   const PROBE_TIMEOUT_MS = 10000;
   const API_TIMEOUT_MS = 120000;
   const DIRECTORY_TIMEOUT_MS = 15000;
@@ -39,6 +43,7 @@
     total: 0,
     stats: null,
     facets: { folders: [], dates: [] },
+    folderFacets: { folders: [], dates: [] },
     hasMore: false,
     filter: "all",
     view: "library",
@@ -57,6 +62,10 @@
     viewerBlob: null,
     viewerCacheUrl: null,
     hiddenIds: new Set(),
+    hiddenItems: new Map(),
+    favoriteItems: new Map(),
+    folderSummaries: new Map(),
+    folderViewCount: 0,
     selectedIds: new Set(),
     selectionMode: false,
     lastSelectedIndex: -1,
@@ -72,11 +81,18 @@
     searchInput: document.querySelector("#search-input"),
     navigationButtons: [...document.querySelectorAll("[data-library-nav]")],
     hiddenCount: document.querySelector("#hidden-count"),
+    favoriteCount: document.querySelector("#favorite-count"),
     filterButtons: [...document.querySelectorAll("[data-filter]")],
+    mediaFilterGroup: document.querySelector("#media-filter-group"),
     sortSelect: document.querySelector("#sort-select"),
+    sortField: document.querySelector("#sort-field"),
     timelineFilterButton: document.querySelector("#timeline-filter-button"),
     timelineFilterCount: document.querySelector("#timeline-filter-count"),
     sizeInput: document.querySelector("#size-input"),
+    sizeField: document.querySelector("#size-field"),
+    libraryToolbar: document.querySelector(".library-toolbar"),
+    activeFilters: document.querySelector("#active-filters"),
+    timelineRail: document.querySelector("#timeline-rail"),
     connectionNotice: document.querySelector("#connection-notice"),
     noticeTitle: document.querySelector("#notice-title"),
     noticeMessage: document.querySelector("#notice-message"),
@@ -106,10 +122,13 @@
     viewerShell: document.querySelector("#viewer-shell"),
     viewerName: document.querySelector("#viewer-name"),
     viewerFolder: document.querySelector("#viewer-folder"),
-    viewerDetails: document.querySelector("#viewer-details"),
     viewerInfoName: document.querySelector("#viewer-info-name"),
     viewerInfoFolder: document.querySelector("#viewer-info-folder"),
+    viewerInfoDate: document.querySelector("#viewer-info-date"),
+    viewerInfoSize: document.querySelector("#viewer-info-size"),
     viewerInfoType: document.querySelector("#viewer-info-type"),
+    viewerFavorite: document.querySelector("#viewer-favorite"),
+    viewerHide: document.querySelector("#viewer-hide"),
     viewerInfoToggle: document.querySelector("#viewer-info-toggle"),
     viewerInfoClose: document.querySelector("#viewer-info-close"),
     viewerOpenOriginal: document.querySelector("#viewer-open-original"),
@@ -126,6 +145,7 @@
     selectionProgress: document.querySelector("#selection-progress"),
     selectionProgressBar: document.querySelector("#selection-progress-bar"),
     selectAllButton: document.querySelector("#select-all-button"),
+    favoriteSelected: document.querySelector("#favorite-selected"),
     downloadSelected: document.querySelector("#download-selected"),
     hideSelected: document.querySelector("#hide-selected"),
     restoreSelected: document.querySelector("#restore-selected"),
@@ -163,6 +183,20 @@
       }
     }, { rootMargin: "600px 0px" })
     : null;
+  const folderSummaryQueue = [];
+  const folderSummaryWaiters = new Map();
+  let activeFolderSummaryRequests = 0;
+  const folderSummaryObserver = "IntersectionObserver" in window
+    ? new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) {
+          continue;
+        }
+        folderSummaryObserver.unobserve(entry.target);
+        queueFolderSummary(entry.target.dataset.folder, entry.target);
+      }
+    }, { rootMargin: "500px 0px" })
+    : null;
 
   function preferredTheme() {
     const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
@@ -193,6 +227,15 @@
 
   applyTheme(preferredTheme());
 
+  function preferredTileSize() {
+    const value = Number(localStorage.getItem(TILE_SIZE_STORAGE_KEY));
+    return Number.isFinite(value) && value >= 120 && value <= 280 ? value : 180;
+  }
+
+  const initialTileSize = preferredTileSize();
+  elements.sizeInput.value = String(initialTileSize);
+  document.documentElement.style.setProperty("--tile-size", `${initialTileSize}px`);
+
   function localPageEndpoint() {
     if (window.location.protocol !== "http:") {
       return null;
@@ -204,44 +247,114 @@
     };
   }
 
-  function hiddenItemsStorageKey() {
-    return `${HIDDEN_ITEMS_STORAGE_KEY}:${state.baseUrl}`;
+  function scopedStorageKey(key) {
+    return `${key}:${state.baseUrl}`;
   }
 
-  function loadHiddenItems() {
+  function collectionItemSnapshot(item) {
+    return {
+      id: item.id,
+      url: item.url,
+      preview: item.preview,
+      thumbnail: item.thumbnail,
+      type: item.type,
+      extension: item.extension,
+      relative: item.relative,
+      name: item.name,
+      folder: item.folder,
+      folderKey: item.folderKey,
+      bytes: item.bytes,
+      modified: item.modified,
+      source: item.source,
+      thumbnailFallback: item.thumbnailFallback,
+    };
+  }
+
+  function validCollectionItem(item) {
+    return item && typeof item.id === "string" && typeof item.url === "string" &&
+      typeof item.name === "string" && (item.type === "image" || item.type === "video");
+  }
+
+  function loadCollectionMap(key) {
     try {
-      const parsed = JSON.parse(localStorage.getItem(hiddenItemsStorageKey()));
-      state.hiddenIds = new Set(Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : []);
+      const parsed = JSON.parse(localStorage.getItem(scopedStorageKey(key)));
+      return new Map(
+        (Array.isArray(parsed) ? parsed : [])
+          .filter(validCollectionItem)
+          .map((item) => [item.id, item]),
+      );
     } catch {
-      state.hiddenIds = new Set();
+      return new Map();
     }
-    updateHiddenCount();
   }
 
-  function saveHiddenItems() {
+  function saveCollectionMap(key, collection, errorMessage) {
     try {
-      localStorage.setItem(hiddenItemsStorageKey(), JSON.stringify([...state.hiddenIds]));
-      updateHiddenCount();
+      localStorage.setItem(scopedStorageKey(key), JSON.stringify([...collection.values()]));
       return true;
     } catch {
-      showToast("Không thể lưu danh sách đã ẩn trong trình duyệt này.");
+      showToast(errorMessage);
       return false;
     }
   }
 
-  function updateHiddenCount() {
-    const count = state.hiddenIds.size;
-    elements.hiddenCount.textContent = numberFormatter.format(count);
-    elements.hiddenCount.hidden = count === 0;
+  function loadLocalCollections() {
+    state.hiddenItems = loadCollectionMap(HIDDEN_ITEM_SNAPSHOTS_STORAGE_KEY);
+    state.favoriteItems = loadCollectionMap(FAVORITE_ITEMS_STORAGE_KEY);
+    try {
+      const legacyIds = JSON.parse(localStorage.getItem(scopedStorageKey(HIDDEN_ITEMS_STORAGE_KEY)));
+      state.hiddenIds = new Set([
+        ...state.hiddenItems.keys(),
+        ...(Array.isArray(legacyIds) ? legacyIds.filter((id) => typeof id === "string") : []),
+      ]);
+    } catch {
+      state.hiddenIds = new Set(state.hiddenItems.keys());
+    }
+    updateCollectionCounts();
+  }
+
+  function saveHiddenItems() {
+    try {
+      localStorage.setItem(scopedStorageKey(HIDDEN_ITEMS_STORAGE_KEY), JSON.stringify([...state.hiddenIds]));
+    } catch {
+      showToast("Không thể lưu danh sách đã ẩn trong trình duyệt này.");
+      return false;
+    }
+    const saved = saveCollectionMap(
+      HIDDEN_ITEM_SNAPSHOTS_STORAGE_KEY,
+      state.hiddenItems,
+      "Không thể lưu thông tin các mục đã ẩn.",
+    );
+    updateCollectionCounts();
+    return saved;
+  }
+
+  function saveFavoriteItems() {
+    const saved = saveCollectionMap(
+      FAVORITE_ITEMS_STORAGE_KEY,
+      state.favoriteItems,
+      "Không thể lưu mục yêu thích trong trình duyệt này.",
+    );
+    updateCollectionCounts();
+    return saved;
+  }
+
+  function updateCollectionCounts() {
+    const hiddenCount = state.hiddenIds.size;
+    elements.hiddenCount.textContent = numberFormatter.format(hiddenCount);
+    elements.hiddenCount.hidden = hiddenCount === 0;
+    const favoriteCount = state.favoriteItems.size;
+    elements.favoriteCount.textContent = numberFormatter.format(favoriteCount);
+    elements.favoriteCount.hidden = favoriteCount === 0;
   }
 
   function updateNavigationUi() {
     for (const button of elements.navigationButtons) {
       const targetView = button.dataset.navView;
       const targetFilter = button.dataset.navFilter;
-      const isActive = targetView === "hidden"
-        ? state.view === "hidden"
-        : state.view === "library" && targetFilter === state.filter;
+      const isActive = targetView === "library"
+        ? state.view === "library" && targetFilter === state.filter
+        : state.view === targetView;
       button.classList.toggle("is-active", isActive);
       button.setAttribute("aria-current", isActive ? "page" : "false");
     }
@@ -254,14 +367,121 @@
     return Object.values(state.timelineFilters).filter(Boolean).length;
   }
 
+  function collectionItemsForCurrentView() {
+    if (state.view === "favorites") {
+      return storedViewItems(state.favoriteItems).filter((item) => !state.hiddenIds.has(item.id));
+    }
+    if (state.view === "hidden") {
+      return storedViewItems(state.hiddenItems, state.hiddenIds);
+    }
+    return null;
+  }
+
+  function timelineFacetsForCurrentView() {
+    const collectionItems = collectionItemsForCurrentView();
+    return collectionItems ? deriveFacets(collectionItems) : state.facets;
+  }
+
   function updateTimelineFilterUi() {
     const count = activeTimelineFilterCount();
-    const hasAvailableFilters = state.facets.folders.length > 0 || state.facets.dates.length > 0;
-    elements.timelineFilterButton.hidden = !state.mode || (!hasAvailableFilters && count === 0);
+    const currentFacets = timelineFacetsForCurrentView();
+    const hasAvailableFilters = currentFacets.folders.length > 0 || currentFacets.dates.length > 0;
+    elements.timelineFilterButton.hidden = state.view === "albums" || !state.mode ||
+      (!hasAvailableFilters && count === 0);
     elements.timelineFilterButton.classList.toggle("is-active", count > 0);
     elements.timelineFilterButton.setAttribute("aria-pressed", String(count > 0));
     elements.timelineFilterCount.textContent = String(count);
     elements.timelineFilterCount.hidden = count === 0;
+    renderActiveFilters();
+    renderTimelineRail();
+  }
+
+  function renderActiveFilters() {
+    const filters = [];
+    const { folder, year, month, day } = state.timelineFilters;
+    if (folder) {
+      filters.push({ key: "folder", label: folderFilterLabel(folder) });
+    }
+    if (year) {
+      filters.push({ key: "year", label: `Năm ${year}` });
+    }
+    if (month) {
+      const label = monthFormatter.format(new Date(2024, Number(month) - 1, 1));
+      filters.push({ key: "month", label: label.charAt(0).toLocaleUpperCase("vi") + label.slice(1) });
+    }
+    if (day) {
+      filters.push({ key: "day", label: `Ngày ${Number(day)}` });
+    }
+
+    elements.activeFilters.replaceChildren();
+    elements.activeFilters.hidden = filters.length === 0 || state.view === "albums";
+    if (elements.activeFilters.hidden) {
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const filter of filters) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "active-filter-chip";
+      button.dataset.clearFilter = filter.key;
+      button.setAttribute("aria-label", `Bỏ bộ lọc ${filter.label}`);
+      const label = document.createElement("span");
+      label.textContent = filter.label;
+      button.append(label);
+      button.insertAdjacentHTML(
+        "beforeend",
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12" /></svg>',
+      );
+      fragment.append(button);
+    }
+    const clearAll = document.createElement("button");
+    clearAll.type = "button";
+    clearAll.className = "active-filters-clear";
+    clearAll.dataset.clearFilter = "all";
+    clearAll.textContent = "Xóa tất cả";
+    fragment.append(clearAll);
+    elements.activeFilters.append(fragment);
+  }
+
+  function renderTimelineRail() {
+    const currentFacets = timelineFacetsForCurrentView();
+    const years = [...new Set(currentFacets.dates.map((date) => date.slice(0, 4)))].sort().reverse();
+    const shouldShow = state.mode && state.view !== "albums" && years.length > 1 &&
+      state.sort !== "name-asc" && state.sort !== "name-desc";
+    elements.timelineRail.hidden = !shouldShow;
+    elements.timelineRail.replaceChildren();
+    if (!shouldShow) {
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    const allYears = document.createElement("button");
+    allYears.type = "button";
+    allYears.dataset.timelineYear = "";
+    allYears.className = !state.timelineFilters.year ? "is-active" : "";
+    allYears.textContent = "Tất cả";
+    fragment.append(allYears);
+    for (const year of years) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.timelineYear = year;
+      button.className = state.timelineFilters.year === year ? "is-active" : "";
+      button.textContent = year;
+      fragment.append(button);
+    }
+    elements.timelineRail.append(fragment);
+  }
+
+  function updateViewUi() {
+    const isAlbumsView = state.view === "albums";
+    elements.libraryToolbar.hidden = isAlbumsView;
+    elements.searchInput.placeholder = isAlbumsView
+      ? "Tìm album theo tên thư mục"
+      : "Tìm ảnh, video hoặc thư mục";
+    elements.mediaGrid.setAttribute("aria-label", isAlbumsView ? "Danh sách album" : "Ảnh và video");
+    document.body.classList.toggle("view-albums", isAlbumsView);
+    updateTimelineFilterUi();
   }
 
   function showToast(message, duration = 3200) {
@@ -428,7 +648,8 @@
   }
 
   function populateTimelineFilterDialog(filters = state.timelineFilters) {
-    const folders = [...state.facets.folders].sort(folderCollator.compare);
+    const currentFacets = timelineFacetsForCurrentView();
+    const folders = [...currentFacets.folders].sort(folderCollator.compare);
     setSelectOptions(
       elements.folderFilter,
       "Tất cả thư mục",
@@ -437,10 +658,10 @@
       folderFilterLabel,
     );
 
-    const years = [...new Set(state.facets.dates.map((date) => date.slice(0, 4)))].sort().reverse();
+    const years = [...new Set(currentFacets.dates.map((date) => date.slice(0, 4)))].sort().reverse();
     const year = setSelectOptions(elements.yearFilter, "Tất cả năm", years, filters.year);
     const months = year
-      ? [...new Set(state.facets.dates
+      ? [...new Set(currentFacets.dates
         .filter((date) => date.startsWith(`${year}-`))
         .map((date) => date.slice(5, 7)))].sort((left, right) => Number(left) - Number(right))
       : [];
@@ -454,7 +675,7 @@
     elements.monthFilter.disabled = !year || months.length === 0;
 
     const days = year && month
-      ? [...new Set(state.facets.dates
+      ? [...new Set(currentFacets.dates
         .filter((date) => date.startsWith(`${year}-${month.padStart(2, "0")}-`))
         .map((date) => date.slice(8, 10)))].sort((left, right) => Number(left) - Number(right))
       : [];
@@ -487,6 +708,48 @@
       month: elements.yearFilter.value ? elements.monthFilter.value : "",
       day: elements.yearFilter.value && elements.monthFilter.value ? elements.dayFilter.value : "",
     };
+  }
+
+  function clearTimelineFilter(key) {
+    if (key === "all") {
+      state.timelineFilters = { folder: "", year: "", month: "", day: "" };
+    } else if (key === "year") {
+      state.timelineFilters = { ...state.timelineFilters, year: "", month: "", day: "" };
+    } else if (key === "month") {
+      state.timelineFilters = { ...state.timelineFilters, month: "", day: "" };
+    } else if (key === "day" || key === "folder") {
+      state.timelineFilters = { ...state.timelineFilters, [key]: "" };
+    } else {
+      return;
+    }
+    exitSelectionMode();
+    updateTimelineFilterUi();
+    reloadFromControls();
+  }
+
+  function selectTimelineYear(year) {
+    state.timelineFilters = {
+      ...state.timelineFilters,
+      year,
+      month: "",
+      day: "",
+    };
+    exitSelectionMode();
+    updateTimelineFilterUi();
+    reloadFromControls();
+  }
+
+  function openFolderAlbum(folder) {
+    exitSelectionMode();
+    state.view = "library";
+    state.filter = "all";
+    state.query = "";
+    elements.searchInput.value = "";
+    state.timelineFilters = { folder, year: "", month: "", day: "" };
+    updateNavigationUi();
+    updateViewUi();
+    reloadFromControls();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function canUseCacheStorage() {
@@ -673,15 +936,15 @@
     };
   }
 
-  function normalizeApiItem(rawItem) {
+  function normalizeApiItem(rawItem, baseUrl = state.baseUrl) {
     const name = String(rawItem.fileName || rawItem.name || "Không tên");
     const folderKey = rawItem.folder ? String(rawItem.folder) : ".";
     const folder = folderKey !== "." ? folderKey.replaceAll("/", " / ") : "Thư mục gốc";
     return {
       id: String(rawItem.id),
-      url: new URL(String(rawItem.media), state.baseUrl).href,
-      preview: new URL(String(rawItem.view || rawItem.media), state.baseUrl).href,
-      thumbnail: new URL(String(rawItem.thumbnail), state.baseUrl).href,
+      url: new URL(String(rawItem.media), baseUrl).href,
+      preview: new URL(String(rawItem.view || rawItem.media), baseUrl).href,
+      thumbnail: new URL(String(rawItem.thumbnail), baseUrl).href,
       type: rawItem.type === "video" ? "video" : "image",
       extension: String(rawItem.extension || mediaExtension(name)),
       relative: `${rawItem.folder || ""}/${name}`,
@@ -706,7 +969,7 @@
     if (!canUseCacheStorage() || !state.endpoint || !["api", "directory"].includes(state.mode)) {
       return;
     }
-    if (state.mode === "api" && (
+    if (state.mode === "api" && (state.view !== "library" ||
       state.filter !== "all" || state.query.trim() || activeTimelineFilterCount() > 0
     )) {
       return;
@@ -714,12 +977,13 @@
 
     const cache = await caches.open(CATALOG_CACHE_NAME);
     const payload = {
-      version: 1,
+      version: 2,
       endpoint: state.baseUrl,
       savedAt: Date.now(),
       sourceMode: state.mode,
       items: state.items,
       stats: state.stats,
+      facets: state.facets,
     };
     await cache.put(catalogCacheUrl(), new Response(JSON.stringify(payload), {
       headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -738,7 +1002,7 @@
         return false;
       }
       const payload = await response.json();
-      if (payload?.version !== 1 || payload.endpoint !== state.baseUrl || !Array.isArray(payload.items)) {
+      if (![1, 2].includes(payload?.version) || payload.endpoint !== state.baseUrl || !Array.isArray(payload.items)) {
         return false;
       }
 
@@ -759,7 +1023,10 @@
       };
       state.hasMore = false;
       state.renderedCount = 0;
-      state.facets = deriveFacets(items);
+      state.facets = payload.version >= 2 && payload.facets
+        ? normalizeFacets(payload.facets)
+        : deriveFacets(items);
+      state.folderFacets = state.facets;
       setMode("offline");
       refreshDirectoryItems(false);
       return true;
@@ -862,13 +1129,16 @@
       if (!payload) {
         return false;
       }
-      const nextItems = payload.items.map(normalizeApiItem);
+      const nextItems = payload.items.map((item) => normalizeApiItem(item));
       state.items = reset ? nextItems : [...state.items, ...nextItems];
       state.total = Number(payload.total) || 0;
       state.stats = payload.stats || null;
       state.hasMore = Boolean(payload.hasMore);
       if (payload.facets) {
         state.facets = normalizeFacets(payload.facets);
+        if (state.filter === "all" && !state.query.trim()) {
+          state.folderFacets = state.facets;
+        }
       }
       setMode("api");
 
@@ -876,8 +1146,12 @@
         clearMediaGrid();
         state.renderedCount = 0;
       }
-      updateVisibleItems();
-      renderNextPage(Math.max(nextItems.length || PAGE_SIZE, state.visibleItems.length - state.renderedCount));
+      if (state.view === "albums") {
+        renderFolderView();
+      } else {
+        updateVisibleItems();
+        renderNextPage(Math.max(nextItems.length || PAGE_SIZE, state.visibleItems.length - state.renderedCount));
+      }
       updateSummary();
       updateEmptyState();
       saveCachedCatalog().catch(() => {});
@@ -1019,6 +1293,7 @@
       videos: state.items.filter((item) => item.type === "video").length,
     };
     state.facets = deriveFacets(state.items);
+    state.folderFacets = state.facets;
     updateTimelineFilterUi();
     refreshDirectoryItems(false);
     saveCachedCatalog().catch(() => {});
@@ -1070,10 +1345,25 @@
     return collator.compare(left.relative, right.relative);
   }
 
+  function storedViewItems(collection, ids = new Set(collection.keys())) {
+    const merged = new Map(collection);
+    for (const item of state.items) {
+      if (ids.has(item.id)) {
+        merged.set(item.id, item);
+      }
+    }
+    return [...merged.values()].filter(validCollectionItem);
+  }
+
   function updateVisibleItems() {
     const normalizedQuery = state.query.trim().toLocaleLowerCase("vi");
-    state.visibleItems = state.items
-      .filter((item) => state.hiddenIds.has(item.id) === (state.view === "hidden"))
+    const sourceItems = state.view === "favorites"
+      ? storedViewItems(state.favoriteItems)
+      : state.view === "hidden"
+        ? storedViewItems(state.hiddenItems, state.hiddenIds)
+        : state.items;
+    state.visibleItems = sourceItems
+      .filter((item) => state.view === "hidden" || !state.hiddenIds.has(item.id))
       .filter((item) => state.filter === "all" || item.type === state.filter)
       .filter(itemMatchesTimelineFilters)
       .filter((item) => !normalizedQuery || `${item.name} ${item.folder}`.toLocaleLowerCase("vi").includes(normalizedQuery))
@@ -1081,8 +1371,15 @@
   }
 
   function refreshDirectoryItems(keepRenderLimit = false) {
+    updateViewUi();
+    if (state.view === "albums") {
+      renderFolderView();
+      updateSummary();
+      updateEmptyState();
+      return;
+    }
     updateVisibleItems();
-    if (state.mode !== "api") {
+    if (state.mode !== "api" || state.view !== "library") {
       state.total = state.visibleItems.length;
     }
 
@@ -1124,6 +1421,9 @@
   }
 
   function clearMediaGrid() {
+    for (const card of elements.mediaGrid.querySelectorAll("[data-folder-card]")) {
+      folderSummaryObserver?.unobserve(card);
+    }
     for (const image of elements.mediaGrid.querySelectorAll(".media-preview img")) {
       releaseThumbnailImage(image);
     }
@@ -1203,19 +1503,236 @@
     }
   }
 
+  function folderSummaryFromLoadedItems(folder) {
+    const items = state.items.filter((item) => itemFolderKey(item) === folder);
+    items.sort((left, right) => itemTimestamp(right) - itemTimestamp(left));
+    return {
+      complete: state.mode !== "api",
+      count: state.mode === "api" ? null : items.length,
+      cover: items[0] || null,
+    };
+  }
+
+  function updateFolderCard(card, summary) {
+    if (!card) {
+      return;
+    }
+    const count = card.querySelector(".folder-count");
+    count.textContent = Number.isFinite(summary.count)
+      ? `${numberFormatter.format(summary.count)} mục`
+      : "Đang tải ảnh bìa";
+
+    const cover = card.querySelector(".folder-cover");
+    if (!summary.cover || cover.dataset.coverId === summary.cover.id) {
+      cover.classList.toggle("has-cover", Boolean(summary.cover));
+      return;
+    }
+    const previousImage = cover.querySelector("img");
+    if (previousImage) {
+      releaseThumbnailImage(previousImage);
+      previousImage.remove();
+    }
+    cover.dataset.coverId = summary.cover.id;
+    cover.classList.add("has-cover");
+    addPreviewImage(cover, summary.cover);
+  }
+
+  function createFolderCard(folder, summary) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "folder-card";
+    card.dataset.folderCard = "";
+    card.dataset.folder = folder;
+    const label = folderFilterLabel(folder);
+    card.setAttribute("aria-label", `Mở album ${label}`);
+
+    const cover = document.createElement("span");
+    cover.className = "media-preview folder-cover";
+    cover.innerHTML = '<span class="folder-cover-placeholder" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7h5l2 2h11v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2" /></svg></span>';
+
+    const copy = document.createElement("span");
+    copy.className = "folder-card-copy";
+    const title = document.createElement("strong");
+    title.textContent = label;
+    const count = document.createElement("small");
+    count.className = "folder-count";
+    copy.append(title, count);
+    card.append(cover, copy);
+    updateFolderCard(card, summary);
+    return card;
+  }
+
+  function folderSummaryUrl(folder, baseUrl = state.baseUrl, offset = 1) {
+    const url = new URL("api/items", baseUrl);
+    url.searchParams.set("offset", String(offset));
+    url.searchParams.set("limit", "1");
+    url.searchParams.set("type", "all");
+    url.searchParams.set("sort", "newest");
+    url.searchParams.set("folder", folder);
+    return url;
+  }
+
+  async function fetchFolderSummaryPage(folder, baseUrl, offset) {
+    const response = await fetchWithTimeout(folderSummaryUrl(folder, baseUrl, offset), API_TIMEOUT_MS);
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !contentType.includes("application/json")) {
+      throw new Error(`Album HTTP ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async function fetchFolderSummary(folder, baseUrl) {
+    let payload = await fetchFolderSummaryPage(folder, baseUrl, 1);
+    const count = Number(payload.total) || 0;
+    if (count === 1 && (!Array.isArray(payload.items) || payload.items.length === 0)) {
+      payload = await fetchFolderSummaryPage(folder, baseUrl, 0);
+    }
+    return {
+      complete: true,
+      count,
+      cover: Array.isArray(payload.items) && payload.items[0]
+        ? normalizeApiItem(payload.items[0], baseUrl)
+        : null,
+    };
+  }
+
+  async function refreshFolderOverview(version) {
+    const url = new URL("api/items", state.baseUrl);
+    url.searchParams.set("offset", "0");
+    url.searchParams.set("limit", "1");
+    url.searchParams.set("type", "all");
+    url.searchParams.set("sort", "newest");
+    const response = await fetchWithTimeout(url, API_TIMEOUT_MS);
+    const contentType = response.headers.get("content-type") || "";
+    if (!response.ok || !contentType.includes("application/json")) {
+      throw new Error(`Danh sách album HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (version !== state.requestVersion || state.view !== "albums") {
+      return false;
+    }
+    state.folderFacets = normalizeFacets(payload.facets);
+    state.stats = payload.stats || state.stats;
+    renderFolderView();
+    updateSummary();
+    updateEmptyState();
+    return true;
+  }
+
+  function folderSummaryTaskKey(baseUrl, folder) {
+    return `${baseUrl}\n${folder}`;
+  }
+
+  function drainFolderSummaryQueue() {
+    while (activeFolderSummaryRequests < MAX_FOLDER_SUMMARY_REQUESTS && folderSummaryQueue.length > 0) {
+      const task = folderSummaryQueue.shift();
+      activeFolderSummaryRequests += 1;
+      fetchFolderSummary(task.folder, task.baseUrl)
+        .then((summary) => {
+          if (task.baseUrl === state.baseUrl) {
+            state.folderSummaries.set(task.folder, summary);
+          }
+          for (const card of folderSummaryWaiters.get(task.key) || []) {
+            if (card.isConnected && card.dataset.folder === task.folder) {
+              updateFolderCard(card, summary);
+            }
+          }
+        })
+        .catch(() => {
+          for (const card of folderSummaryWaiters.get(task.key) || []) {
+            if (card.isConnected) {
+              const count = card.querySelector(".folder-count");
+              count.textContent = "Không đọc được album";
+            }
+          }
+        })
+        .finally(() => {
+          activeFolderSummaryRequests -= 1;
+          folderSummaryWaiters.delete(task.key);
+          drainFolderSummaryQueue();
+        });
+    }
+  }
+
+  function queueFolderSummary(folder, card) {
+    if (!folder || !card) {
+      return;
+    }
+    const cached = state.folderSummaries.get(folder);
+    if (cached?.complete) {
+      updateFolderCard(card, cached);
+      return;
+    }
+    const key = folderSummaryTaskKey(state.baseUrl, folder);
+    const waiters = folderSummaryWaiters.get(key);
+    if (waiters) {
+      waiters.add(card);
+      return;
+    }
+    folderSummaryWaiters.set(key, new Set([card]));
+    folderSummaryQueue.push({ key, folder, baseUrl: state.baseUrl });
+    drainFolderSummaryQueue();
+  }
+
+  function renderFolderView() {
+    clearMediaGrid();
+    state.visibleItems = [];
+    state.renderedCount = 0;
+    const query = state.query.trim().toLocaleLowerCase("vi");
+    const availableFolders = state.folderFacets.folders.length > 0
+      ? state.folderFacets.folders
+      : state.facets.folders;
+    const folders = availableFolders
+      .filter((folder) => !query || folderFilterLabel(folder).toLocaleLowerCase("vi").includes(query))
+      .sort(folderCollator.compare);
+    state.folderViewCount = folders.length;
+    if (folders.length === 0) {
+      return;
+    }
+
+    const grid = document.createElement("div");
+    grid.className = "folder-grid";
+    for (const folder of folders) {
+      const loadedSummary = folderSummaryFromLoadedItems(folder);
+      const summary = state.folderSummaries.get(folder) || loadedSummary;
+      if (loadedSummary.complete && !state.folderSummaries.has(folder)) {
+        state.folderSummaries.set(folder, loadedSummary);
+      }
+      const card = createFolderCard(folder, summary);
+      grid.append(card);
+      if (state.mode === "api" && !summary.complete) {
+        if (folderSummaryObserver) {
+          folderSummaryObserver.observe(card);
+        } else {
+          queueFolderSummary(folder, card);
+        }
+      }
+    }
+    elements.mediaGrid.append(grid);
+  }
+
   function updateSelectionUi() {
     const selectedCount = state.selectedIds.size;
+    const selectedItems = state.visibleItems.filter((item) => state.selectedIds.has(item.id));
+    const allSelectedFavorited = selectedItems.length > 0 &&
+      selectedItems.every((item) => state.favoriteItems.has(item.id));
     const allVisibleSelected = state.visibleItems.length > 0 &&
       state.visibleItems.every((item) => state.selectedIds.has(item.id));
 
     elements.mediaGrid.classList.toggle("is-selecting", state.selectionMode);
     document.body.classList.toggle("has-selection", state.selectionMode);
     elements.selectionBar.hidden = !state.selectionMode;
-    elements.selectButton.hidden = !state.mode || state.visibleItems.length === 0 || state.selectionMode;
+    elements.selectButton.hidden = state.view === "albums" || !state.mode ||
+      state.visibleItems.length === 0 || state.selectionMode;
     elements.selectionCount.textContent = `${numberFormatter.format(selectedCount)} mục đã chọn`;
     elements.selectAllButton.textContent = allVisibleSelected ? "Bỏ chọn tất cả" : "Chọn tất cả";
     elements.selectAllButton.disabled = state.visibleItems.length === 0 || state.isDownloading;
     elements.downloadSelected.disabled = selectedCount === 0 || state.isDownloading;
+    elements.favoriteSelected.disabled = selectedCount === 0 || state.isDownloading;
+    elements.favoriteSelected.querySelector("span").textContent = allSelectedFavorited
+      ? "Bỏ yêu thích"
+      : "Yêu thích";
+    elements.favoriteSelected.classList.toggle("is-active", allSelectedFavorited);
     elements.hideSelected.disabled = selectedCount === 0 || state.isDownloading;
     elements.restoreSelected.disabled = selectedCount === 0 || state.isDownloading;
     elements.hideSelected.hidden = state.view === "hidden";
@@ -1225,6 +1742,7 @@
       const item = state.visibleItems[Number(card.dataset.index)];
       const isSelected = Boolean(item && state.selectedIds.has(item.id));
       card.classList.toggle("is-selected", isSelected);
+      card.classList.toggle("is-favorite", Boolean(item && state.favoriteItems.has(item.id)));
       if (state.selectionMode) {
         card.setAttribute("aria-pressed", String(isSelected));
         card.setAttribute("aria-label", `${isSelected ? "Bỏ chọn" : "Chọn"} ${item?.name || "mục"}`);
@@ -1334,27 +1852,80 @@
     updateSelectionUi();
   }
 
+  function updateFavoriteUi() {
+    updateCollectionCounts();
+    for (const card of elements.mediaGrid.querySelectorAll(".media-card:not(.is-skeleton)")) {
+      const item = state.visibleItems[Number(card.dataset.index)];
+      card.classList.toggle("is-favorite", Boolean(item && state.favoriteItems.has(item.id)));
+    }
+    const viewerItem = state.visibleItems[state.viewerIndex];
+    if (viewerItem && elements.viewerDialog.open) {
+      updateViewerActionUi(viewerItem);
+    }
+  }
+
+  function setItemsFavorite(items, shouldFavorite) {
+    if (items.length === 0) {
+      return false;
+    }
+    const previous = new Map(state.favoriteItems);
+    for (const item of items) {
+      if (shouldFavorite) {
+        state.favoriteItems.set(item.id, collectionItemSnapshot(item));
+      } else {
+        state.favoriteItems.delete(item.id);
+      }
+    }
+    if (!saveFavoriteItems()) {
+      state.favoriteItems = previous;
+      updateFavoriteUi();
+      return false;
+    }
+    updateFavoriteUi();
+    return true;
+  }
+
+  function toggleSelectedFavorites() {
+    const items = state.visibleItems.filter((item) => state.selectedIds.has(item.id));
+    const shouldFavorite = !items.every((item) => state.favoriteItems.has(item.id));
+    if (!setItemsFavorite(items, shouldFavorite)) {
+      return;
+    }
+    const count = items.length;
+    exitSelectionMode();
+    if (state.view === "favorites" && !shouldFavorite) {
+      refreshDirectoryItems(false);
+    }
+    showToast(shouldFavorite
+      ? `Đã thêm ${numberFormatter.format(count)} mục vào yêu thích.`
+      : `Đã bỏ yêu thích ${numberFormatter.format(count)} mục.`);
+  }
+
   function applyHiddenAction(shouldHide) {
-    const selectedIds = [...state.selectedIds];
-    if (selectedIds.length === 0) {
+    const selectedItems = state.visibleItems.filter((item) => state.selectedIds.has(item.id));
+    if (selectedItems.length === 0) {
       return;
     }
 
     const previousHiddenIds = new Set(state.hiddenIds);
-    for (const id of selectedIds) {
+    const previousHiddenItems = new Map(state.hiddenItems);
+    for (const item of selectedItems) {
       if (shouldHide) {
-        state.hiddenIds.add(id);
+        state.hiddenIds.add(item.id);
+        state.hiddenItems.set(item.id, collectionItemSnapshot(item));
       } else {
-        state.hiddenIds.delete(id);
+        state.hiddenIds.delete(item.id);
+        state.hiddenItems.delete(item.id);
       }
     }
     if (!saveHiddenItems()) {
       state.hiddenIds = previousHiddenIds;
-      updateHiddenCount();
+      state.hiddenItems = previousHiddenItems;
+      updateCollectionCounts();
       return;
     }
 
-    const count = selectedIds.length;
+    const count = selectedItems.length;
     exitSelectionMode();
     refreshDirectoryItems(false);
     showToast(shouldHide
@@ -1447,6 +2018,7 @@
       card.classList.add("is-selected");
       card.setAttribute("aria-pressed", "true");
     }
+    card.classList.toggle("is-favorite", state.favoriteItems.has(item.id));
 
     return fragment;
   }
@@ -1474,24 +2046,34 @@
   }
 
   function updateSummary() {
-    elements.albumTitle.textContent = state.view === "hidden"
-      ? "Đã ẩn"
-      : state.filter === "image"
-        ? "Ảnh"
-        : state.filter === "video"
-          ? "Video"
-          : "Dòng thời gian";
+    const collectionTitles = {
+      albums: "Album",
+      favorites: "Yêu thích",
+      hidden: "Đã ẩn",
+    };
+    elements.albumTitle.textContent = collectionTitles[state.view] || (
+      state.filter === "image" ? "Ảnh" : state.filter === "video" ? "Video" : "Dòng thời gian"
+    );
     if (!state.endpoint) {
       elements.albumSummary.textContent = "Nhập IP và cổng của máy lưu album để bắt đầu.";
       return;
     }
 
-    if (state.view === "hidden") {
+    if (state.view === "albums") {
+      const total = Number(state.stats?.total) || state.items.length;
+      elements.albumSummary.textContent =
+        `${numberFormatter.format(state.folderViewCount)} album · ${numberFormatter.format(total)} ảnh và video`;
+      return;
+    }
+
+    if (state.view === "favorites" || state.view === "hidden") {
       const qualifier = state.filter !== "all" || state.query.trim() || activeTimelineFilterCount() > 0
         ? " phù hợp"
         : "";
       elements.albumSummary.textContent =
-        `${numberFormatter.format(state.visibleItems.length)} mục${qualifier} · Chỉ ẩn trên trình duyệt này`;
+        state.view === "favorites"
+          ? `${numberFormatter.format(state.visibleItems.length)} mục${qualifier} · Lưu trên trình duyệt này`
+          : `${numberFormatter.format(state.visibleItems.length)} mục${qualifier} · Chỉ ẩn trên trình duyệt này`;
       return;
     }
 
@@ -1509,11 +2091,25 @@
   }
 
   function updateEmptyState() {
-    const hasVisibleItems = state.visibleItems.length > 0;
+    const hasVisibleItems = state.view === "albums"
+      ? state.folderViewCount > 0
+      : state.visibleItems.length > 0;
     elements.emptyState.hidden = hasVisibleItems || state.isLoading;
     elements.emptyConnect.textContent = state.endpoint ? "Đổi IP và cổng" : "Nhập IP và cổng";
     elements.emptyConnect.hidden = Boolean(state.endpoint);
-    if (state.endpoint && state.mode && state.view === "hidden" && !hasVisibleItems) {
+    if (state.endpoint && state.mode && state.view === "albums" && !hasVisibleItems) {
+      elements.emptyTitle.textContent = state.query.trim() ? "Không tìm thấy album" : "Chưa có album";
+      elements.emptyCopy.textContent = state.query.trim()
+        ? "Thử một tên thư mục khác."
+        : "Các thư mục chứa ảnh và video sẽ xuất hiện ở đây.";
+    } else if (state.endpoint && state.mode && state.view === "favorites" && !hasVisibleItems) {
+      elements.emptyTitle.textContent = state.query.trim() || activeTimelineFilterCount() > 0
+        ? "Không có kết quả"
+        : "Chưa có mục yêu thích";
+      elements.emptyCopy.textContent = state.query.trim() || activeTimelineFilterCount() > 0
+        ? "Thử từ khóa khác hoặc xóa bớt bộ lọc."
+        : "Nhấn biểu tượng trái tim trong trình xem hoặc khi chọn nhiều mục.";
+    } else if (state.endpoint && state.mode && state.view === "hidden" && !hasVisibleItems) {
       elements.emptyTitle.textContent = state.filter !== "all" || state.query.trim()
         ? "Không có kết quả"
         : "Chưa có mục đã ẩn";
@@ -1666,6 +2262,65 @@
     }
   }
 
+  function updateViewerActionUi(item) {
+    const isFavorite = state.favoriteItems.has(item.id);
+    const isHidden = state.hiddenIds.has(item.id);
+    elements.viewerFavorite.setAttribute("aria-pressed", String(isFavorite));
+    elements.viewerFavorite.setAttribute(
+      "aria-label",
+      isFavorite ? "Bỏ khỏi yêu thích" : "Thêm vào yêu thích",
+    );
+    elements.viewerFavorite.title = isFavorite ? "Bỏ yêu thích" : "Yêu thích";
+    elements.viewerHide.classList.toggle("is-restore", isHidden);
+    elements.viewerHide.innerHTML = isHidden
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-6 10-6 10 6 10 6-3 6-10 6S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20M6.7 6.7C4.9 7.9 3.3 9.7 2 12c2.1 3.8 5.7 6 10 6 1.6 0 3-.3 4.3-.9M10.7 4.1c.4-.1.9-.1 1.3-.1 4.3 0 7.9 2.2 10 6-.7 1.3-1.6 2.4-2.6 3.3M14.1 14.1a3 3 0 0 1-4.2-4.2" /></svg>';
+    elements.viewerHide.setAttribute("aria-label", isHidden ? "Hiện lại trong thư viện" : "Ẩn khỏi thư viện");
+    elements.viewerHide.title = isHidden ? "Hiện lại" : "Ẩn khỏi thư viện";
+  }
+
+  function toggleViewerFavorite() {
+    const item = state.visibleItems[state.viewerIndex];
+    if (!item) {
+      return;
+    }
+    const shouldFavorite = !state.favoriteItems.has(item.id);
+    if (!setItemsFavorite([item], shouldFavorite)) {
+      return;
+    }
+    showToast(shouldFavorite ? "Đã thêm vào yêu thích." : "Đã bỏ khỏi yêu thích.");
+    if (!shouldFavorite && state.view === "favorites") {
+      closeViewer();
+      refreshDirectoryItems(false);
+    }
+  }
+
+  function toggleViewerHidden() {
+    const item = state.visibleItems[state.viewerIndex];
+    if (!item) {
+      return;
+    }
+    const shouldHide = !state.hiddenIds.has(item.id);
+    const previousHiddenIds = new Set(state.hiddenIds);
+    const previousHiddenItems = new Map(state.hiddenItems);
+    if (shouldHide) {
+      state.hiddenIds.add(item.id);
+      state.hiddenItems.set(item.id, collectionItemSnapshot(item));
+    } else {
+      state.hiddenIds.delete(item.id);
+      state.hiddenItems.delete(item.id);
+    }
+    if (!saveHiddenItems()) {
+      state.hiddenIds = previousHiddenIds;
+      state.hiddenItems = previousHiddenItems;
+      updateCollectionCounts();
+      return;
+    }
+    closeViewer();
+    refreshDirectoryItems(false);
+    showToast(shouldHide ? "Đã ẩn mục khỏi thư viện." : "Đã đưa mục trở lại thư viện.");
+  }
+
   function showViewer(index) {
     const item = state.visibleItems[index];
     if (!item) {
@@ -1675,12 +2330,15 @@
     releaseViewerMedia();
     state.viewerIndex = index;
     const token = state.viewerLoadToken;
-    const viewerTotal = state.mode === "api" ? state.total : state.visibleItems.length;
+    const viewerTotal = state.mode === "api" && state.view === "library"
+      ? state.total
+      : state.visibleItems.length;
     elements.viewerName.textContent = item.name;
     elements.viewerFolder.textContent = item.folder;
-    elements.viewerDetails.textContent = itemDetail(item) || "Server chưa cung cấp metadata";
     elements.viewerInfoName.textContent = item.name;
     elements.viewerInfoFolder.textContent = item.folder;
+    elements.viewerInfoDate.textContent = formatDate(itemTimestamp(item)) || "Không có thông tin";
+    elements.viewerInfoSize.textContent = formatBytes(item.bytes) || "Không có thông tin";
     elements.viewerInfoType.textContent = `${item.type === "video" ? "Video" : "Ảnh"} · ${item.extension.toUpperCase()}`;
     elements.viewerOpenOriginal.href = item.url;
     elements.viewerCount.textContent = `${numberFormatter.format(index + 1)} / ${numberFormatter.format(viewerTotal)}`;
@@ -1690,6 +2348,7 @@
     if (!elements.viewerDialog.open) {
       elements.viewerDialog.showModal();
     }
+    updateViewerActionUi(item);
 
     if (item.type === "image") {
       renderViewerLoading();
@@ -1707,7 +2366,8 @@
 
   async function moveViewer(offset) {
     let nextIndex = state.viewerIndex + offset;
-    if (offset > 0 && nextIndex >= state.visibleItems.length && state.mode === "api" && state.hasMore) {
+    if (offset > 0 && nextIndex >= state.visibleItems.length && state.mode === "api" &&
+      state.view === "library" && state.hasMore) {
       try {
         await loadApiPage();
       } catch (error) {
@@ -1775,7 +2435,7 @@
   }
 
   async function downloadSelectedItems() {
-    const selectedItems = state.items.filter((item) => state.selectedIds.has(item.id));
+    const selectedItems = state.visibleItems.filter((item) => state.selectedIds.has(item.id));
     if (selectedItems.length === 0 || state.isDownloading) {
       return;
     }
@@ -1839,6 +2499,9 @@
     state.total = 0;
     state.stats = null;
     state.facets = { folders: [], dates: [] };
+    state.folderFacets = { folders: [], dates: [] };
+    state.folderSummaries.clear();
+    state.folderViewCount = 0;
     state.hasMore = false;
     state.renderedCount = 0;
     state.viewerIndex = -1;
@@ -1901,7 +2564,28 @@
 
   function reloadFromControls() {
     clearTimeout(controlTimer);
-    if (state.mode === "api") {
+    if (state.mode === "api" && state.view === "albums") {
+      refreshDirectoryItems(false);
+      if (state.folderFacets.folders.length > 0) {
+        return;
+      }
+      state.requestVersion += 1;
+      const version = state.requestVersion;
+      controlTimer = setTimeout(async () => {
+        setLoading(true, "Đang tải danh sách album…");
+        try {
+          await refreshFolderOverview(version);
+        } catch {
+          if (version === state.requestVersion) {
+            showToast("Chưa cập nhật được đầy đủ danh sách album.");
+          }
+        } finally {
+          if (version === state.requestVersion) {
+            setLoading(false);
+          }
+        }
+      }, 120);
+    } else if (state.mode === "api" && state.view === "library") {
       controlTimer = setTimeout(async () => {
         state.requestVersion += 1;
         const version = state.requestVersion;
@@ -1933,7 +2617,7 @@
           }
         }
       }, 280);
-    } else if (state.mode === "directory" || state.mode === "offline") {
+    } else if (["api", "directory", "offline"].includes(state.mode)) {
       refreshDirectoryItems(false);
     }
   }
@@ -1944,9 +2628,13 @@
     state.isLocalServer = endpoint.kind === "local";
     state.view = "library";
     state.filter = "all";
+    state.query = "";
+    elements.searchInput.value = "";
     state.timelineFilters = { folder: "", year: "", month: "", day: "" };
+    state.folderSummaries.clear();
     updateNavigationUi();
-    loadHiddenItems();
+    loadLocalCollections();
+    updateViewUi();
     elements.endpointLabel.textContent = endpoint.label;
     connectAlbum();
   }
@@ -1987,6 +2675,18 @@
       reloadFromControls();
     }
   });
+  elements.activeFilters.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-clear-filter]");
+    if (button) {
+      clearTimelineFilter(button.dataset.clearFilter);
+    }
+  });
+  elements.timelineRail.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-timeline-year]");
+    if (button) {
+      selectTimelineYear(button.dataset.timelineYear);
+    }
+  });
 
   elements.themeToggle.addEventListener("click", () => {
     const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
@@ -2008,13 +2708,20 @@
     button.addEventListener("click", () => {
       const nextView = button.dataset.navView;
       const nextFilter = button.dataset.navFilter;
-      if (nextView === state.view && (nextView === "hidden" || nextFilter === state.filter)) {
+      const sameDestination = nextView === state.view && nextFilter === state.filter;
+      const hasTransientFilters = Boolean(state.query.trim()) || activeTimelineFilterCount() > 0;
+      if (sameDestination && !hasTransientFilters) {
         return;
       }
       exitSelectionMode();
+      state.requestVersion += 1;
+      state.query = "";
+      elements.searchInput.value = "";
+      state.timelineFilters = { folder: "", year: "", month: "", day: "" };
       state.view = nextView;
       state.filter = nextFilter;
       updateNavigationUi();
+      updateViewUi();
       reloadFromControls();
     });
   }
@@ -2040,9 +2747,19 @@
 
   elements.sizeInput.addEventListener("input", () => {
     document.documentElement.style.setProperty("--tile-size", `${elements.sizeInput.value}px`);
+    try {
+      localStorage.setItem(TILE_SIZE_STORAGE_KEY, elements.sizeInput.value);
+    } catch {
+      // The visual setting still applies for the current session.
+    }
   });
 
   elements.mediaGrid.addEventListener("click", (event) => {
+    const folderCard = event.target.closest("[data-folder-card]");
+    if (folderCard) {
+      openFolderAlbum(folderCard.dataset.folder);
+      return;
+    }
     const groupButton = event.target.closest("[data-select-group]");
     if (groupButton) {
       toggleTimelineGroup(groupButton.dataset.selectGroup);
@@ -2065,11 +2782,14 @@
   elements.selectButton.addEventListener("click", () => enterSelectionMode());
   elements.selectionCancel.addEventListener("click", exitSelectionMode);
   elements.selectAllButton.addEventListener("click", toggleSelectAll);
+  elements.favoriteSelected.addEventListener("click", toggleSelectedFavorites);
   elements.hideSelected.addEventListener("click", () => applyHiddenAction(true));
   elements.restoreSelected.addEventListener("click", () => applyHiddenAction(false));
   elements.downloadSelected.addEventListener("click", downloadSelectedItems);
 
   elements.viewerClose.addEventListener("click", closeViewer);
+  elements.viewerFavorite.addEventListener("click", toggleViewerFavorite);
+  elements.viewerHide.addEventListener("click", toggleViewerHidden);
   elements.viewerInfoToggle.addEventListener("click", () => {
     setViewerInfoVisible(!elements.viewerShell.classList.contains("show-info"));
   });
@@ -2114,12 +2834,12 @@
       if (!entries.some((entry) => entry.isIntersecting) || state.isLoading) {
         return;
       }
-      if (state.mode === "api") {
+      if (state.mode === "api" && state.view === "library") {
         loadApiPage().catch((error) => {
           showConnectionError(error);
           elements.scanStatus.hidden = true;
         });
-      } else if (state.mode === "directory" || state.mode === "offline") {
+      } else if ((state.mode === "directory" || state.mode === "offline") && state.view !== "albums") {
         renderNextPage();
       }
     },

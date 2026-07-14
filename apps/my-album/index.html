@@ -6,8 +6,8 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#f7f8fa" />
     <title>My Album</title>
-    <link rel="stylesheet" href="./styles.css?v=offline-cloud-17" />
-    <script src="./app.js?v=offline-cloud-17" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=album-ux-20" />
+    <script src="./app.js?v=album-ux-20" defer></script>
   </head>
   <body>
     <aside class="sidebar" aria-label="Điều hướng My Album">
@@ -25,6 +25,15 @@
           <button class="nav-button is-active" type="button" data-library-nav data-nav-view="library" data-nav-filter="all">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" /></svg>
             <span>Dòng thời gian</span>
+          </button>
+          <button class="nav-button" type="button" data-library-nav data-nav-view="favorites" data-nav-filter="all">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3C14.7 3 13.5 3.5 12 5c-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5C2 10.8 3.5 12.5 5 14l7 7Z" /></svg>
+            <span>Yêu thích</span>
+            <span id="favorite-count" class="nav-count" hidden></span>
+          </button>
+          <button class="nav-button" type="button" data-library-nav data-nav-view="albums" data-nav-filter="all">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h5l2 2h11v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2" /></svg>
+            <span>Album</span>
           </button>
           <button class="nav-button" type="button" data-library-nav data-nav-view="library" data-nav-filter="image">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
@@ -106,7 +115,7 @@
         </section>
 
         <section class="library-toolbar" aria-label="Công cụ album">
-          <div class="filter-group" role="group" aria-label="Loại nội dung">
+          <div id="media-filter-group" class="filter-group" role="group" aria-label="Loại nội dung">
             <button class="filter-button is-active" type="button" data-filter="all">Tất cả</button>
             <button class="filter-button" type="button" data-filter="image">Ảnh</button>
             <button class="filter-button" type="button" data-filter="video">Video</button>
@@ -120,7 +129,7 @@
             <span id="timeline-filter-count" class="timeline-filter-count" hidden></span>
           </button>
 
-          <label class="select-field">
+          <label id="sort-field" class="select-field">
             <span class="sr-only">Sắp xếp</span>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M6 12h12M10 18h4" /></svg>
             <select id="sort-select" aria-label="Sắp xếp">
@@ -131,7 +140,7 @@
             </select>
           </label>
 
-          <label class="size-field" for="size-input" title="Kích thước ảnh">
+          <label id="size-field" class="size-field" for="size-input" title="Kích thước ảnh">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="15" height="15" x="4.5" y="4.5" rx="2" /></svg>
             <input id="size-input" type="range" min="120" max="280" step="10" value="180" aria-label="Kích thước ảnh" />
           </label>
@@ -142,7 +151,10 @@
           </button>
         </section>
 
+        <section id="active-filters" class="active-filters" aria-label="Bộ lọc đang áp dụng" hidden></section>
+
         <section id="media-grid" class="media-grid" aria-label="Ảnh và video"></section>
+        <aside id="timeline-rail" class="timeline-rail" aria-label="Điều hướng nhanh theo năm" hidden></aside>
 
         <section id="empty-state" class="empty-state">
           <span class="empty-symbol" aria-hidden="true">
@@ -162,13 +174,13 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" /></svg>
         <span>Thư viện</span>
       </button>
-      <button class="mobile-nav-button" type="button" data-library-nav data-nav-view="library" data-nav-filter="image">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" /><path d="m7 15 3-3 2 2 3-4 3 5" /></svg>
-        <span>Ảnh</span>
+      <button class="mobile-nav-button" type="button" data-library-nav data-nav-view="albums" data-nav-filter="all">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h5l2 2h11v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" /><path d="M3 7V5a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2" /></svg>
+        <span>Album</span>
       </button>
-      <button class="mobile-nav-button" type="button" data-library-nav data-nav-view="library" data-nav-filter="video">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 13 5 3V8l-5 3" /><rect width="13" height="14" x="3" y="5" rx="2" /></svg>
-        <span>Video</span>
+      <button class="mobile-nav-button" type="button" data-library-nav data-nav-view="favorites" data-nav-filter="all">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3C14.7 3 13.5 3.5 12 5c-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5C2 10.8 3.5 12.5 5 14l7 7Z" /></svg>
+        <span>Yêu thích</span>
       </button>
       <button class="mobile-nav-button" type="button" data-library-nav data-nav-view="hidden" data-nav-filter="all">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20M6.7 6.7C4.9 7.9 3.3 9.7 2 12c2.1 3.8 5.7 6 10 6 1.6 0 3-.3 4.3-.9M10.7 4.1c.4-.1.9-.1 1.3-.1 4.3 0 7.9 2.2 10 6-.7 1.3-1.6 2.4-2.6 3.3" /></svg>
@@ -186,6 +198,10 @@
       </div>
       <div class="selection-actions">
         <button id="select-all-button" class="button button-secondary" type="button">Chọn tất cả</button>
+        <button id="favorite-selected" class="button button-secondary" type="button">
+          <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3C14.7 3 13.5 3.5 12 5c-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5C2 10.8 3.5 12.5 5 14l7 7Z" /></svg>
+          <span>Yêu thích</span>
+        </button>
         <button id="download-selected" class="button button-secondary" type="button">
           <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
           <span>Tải xuống</span>
@@ -256,6 +272,12 @@
             <small id="viewer-folder"></small>
           </div>
           <div class="viewer-actions">
+            <button id="viewer-favorite" class="viewer-icon-button" type="button" title="Yêu thích" aria-label="Thêm vào yêu thích" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3C14.7 3 13.5 3.5 12 5c-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5C2 10.8 3.5 12.5 5 14l7 7Z" /></svg>
+            </button>
+            <button id="viewer-hide" class="viewer-icon-button" type="button" title="Ẩn khỏi thư viện" aria-label="Ẩn khỏi thư viện">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20M6.7 6.7C4.9 7.9 3.3 9.7 2 12c2.1 3.8 5.7 6 10 6 1.6 0 3-.3 4.3-.9M10.7 4.1c.4-.1.9-.1 1.3-.1 4.3 0 7.9 2.2 10 6-.7 1.3-1.6 2.4-2.6 3.3M14.1 14.1a3 3 0 0 1-4.2-4.2" /></svg>
+            </button>
             <button id="viewer-info-toggle" class="viewer-icon-button" type="button" title="Thông tin" aria-label="Hiện thông tin" aria-pressed="false">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
             </button>
@@ -293,8 +315,12 @@
                 <dd id="viewer-info-folder"></dd>
               </div>
               <div>
-                <dt>Chi tiết</dt>
-                <dd id="viewer-details"></dd>
+                <dt>Ngày sửa đổi</dt>
+                <dd id="viewer-info-date"></dd>
+              </div>
+              <div>
+                <dt>Dung lượng</dt>
+                <dd id="viewer-info-size"></dd>
               </div>
               <div>
                 <dt>Định dạng</dt>
@@ -316,6 +342,9 @@
         <span class="media-preview">
           <span class="selection-check" aria-hidden="true">
             <svg viewBox="0 0 24 24"><path d="m7 12 3 3 7-7" /></svg>
+          </span>
+          <span class="media-favorite" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3C14.7 3 13.5 3.5 12 5c-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5C2 10.8 3.5 12.5 5 14l7 7Z" /></svg>
           </span>
         </span>
         <span class="media-meta">
