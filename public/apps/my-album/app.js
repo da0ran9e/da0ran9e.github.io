@@ -28,11 +28,30 @@
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
   ]);
   const VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm", "avi", "mkv"]);
+  const ALLOWED_METADATA_FIELDS = new Set([
+    "make", "model", "camera", "lens", "iso", "aperture", "shutter", "focalLength",
+    "flash", "duration", "frameRate", "title", "description", "rating", "width", "height",
+    "latitude", "longitude", "altitude",
+  ]);
   const SKIPPED_DIRECTORIES = new Set([
     "thumbs", "_thumbnails", "_my-album", ".my-album-cache", "__pycache__",
   ]);
 
   class ApiUnavailableError extends Error {}
+
+  function emptyFacets() {
+    return {
+      folders: [],
+      dates: [],
+      cameras: [],
+      locations: { with: 0, without: 0 },
+      metadata: 0,
+    };
+  }
+
+  function emptyTimelineFilters() {
+    return { folder: "", camera: "", location: "", year: "", month: "", day: "" };
+  }
 
   const state = {
     endpoint: null,
@@ -42,14 +61,15 @@
     visibleItems: [],
     total: 0,
     stats: null,
-    facets: { folders: [], dates: [] },
-    folderFacets: { folders: [], dates: [] },
+    facets: emptyFacets(),
+    folderFacets: emptyFacets(),
     hasMore: false,
     filter: "all",
     view: "library",
     query: "",
     sort: "newest",
-    timelineFilters: { folder: "", year: "", month: "", day: "" },
+    timelineFilters: emptyTimelineFilters(),
+    metadataStatus: { available: false, items: 0, generatedAt: "" },
     renderedCount: 0,
     requestVersion: 0,
     isLoading: false,
@@ -115,6 +135,8 @@
     filterClose: document.querySelector("#filter-close"),
     filterReset: document.querySelector("#filter-reset"),
     folderFilter: document.querySelector("#folder-filter"),
+    cameraFilter: document.querySelector("#camera-filter"),
+    locationFilter: document.querySelector("#location-filter"),
     yearFilter: document.querySelector("#year-filter"),
     monthFilter: document.querySelector("#month-filter"),
     dayFilter: document.querySelector("#day-filter"),
@@ -125,8 +147,24 @@
     viewerInfoName: document.querySelector("#viewer-info-name"),
     viewerInfoFolder: document.querySelector("#viewer-info-folder"),
     viewerInfoDate: document.querySelector("#viewer-info-date"),
+    viewerInfoModified: document.querySelector("#viewer-info-modified"),
     viewerInfoSize: document.querySelector("#viewer-info-size"),
     viewerInfoType: document.querySelector("#viewer-info-type"),
+    viewerInfoCapturedRow: document.querySelector("#viewer-info-captured-row"),
+    viewerInfoDimensionsRow: document.querySelector("#viewer-info-dimensions-row"),
+    viewerInfoDimensions: document.querySelector("#viewer-info-dimensions"),
+    viewerInfoCameraRow: document.querySelector("#viewer-info-camera-row"),
+    viewerInfoCamera: document.querySelector("#viewer-info-camera"),
+    viewerInfoLensRow: document.querySelector("#viewer-info-lens-row"),
+    viewerInfoLens: document.querySelector("#viewer-info-lens"),
+    viewerInfoSettingsRow: document.querySelector("#viewer-info-settings-row"),
+    viewerInfoSettings: document.querySelector("#viewer-info-settings"),
+    viewerInfoDurationRow: document.querySelector("#viewer-info-duration-row"),
+    viewerInfoDuration: document.querySelector("#viewer-info-duration"),
+    viewerInfoLocationRow: document.querySelector("#viewer-info-location-row"),
+    viewerInfoLocation: document.querySelector("#viewer-info-location"),
+    viewerInfoDescriptionRow: document.querySelector("#viewer-info-description-row"),
+    viewerInfoDescription: document.querySelector("#viewer-info-description"),
     viewerFavorite: document.querySelector("#viewer-favorite"),
     viewerHide: document.querySelector("#viewer-hide"),
     viewerInfoToggle: document.querySelector("#viewer-info-toggle"),
@@ -159,6 +197,13 @@
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
+  });
+  const dateTimeFormatter = new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
   const timelineDateFormatter = new Intl.DateTimeFormat("vi-VN", {
     weekday: "long",
@@ -265,6 +310,14 @@
       folderKey: item.folderKey,
       bytes: item.bytes,
       modified: item.modified,
+      dateTaken: item.dateTaken,
+      dateKey: item.dateKey,
+      dateTakenText: item.dateTakenText,
+      dateSource: item.dateSource,
+      camera: item.camera,
+      hasMetadata: item.hasMetadata,
+      hasLocation: item.hasLocation,
+      metadata: item.metadata,
       source: item.source,
       thumbnailFallback: item.thumbnailFallback,
     };
@@ -385,7 +438,8 @@
   function updateTimelineFilterUi() {
     const count = activeTimelineFilterCount();
     const currentFacets = timelineFacetsForCurrentView();
-    const hasAvailableFilters = currentFacets.folders.length > 0 || currentFacets.dates.length > 0;
+    const hasAvailableFilters = currentFacets.folders.length > 0 || currentFacets.dates.length > 0 ||
+      currentFacets.cameras.length > 0 || currentFacets.metadata > 0;
     elements.timelineFilterButton.hidden = state.view === "albums" || !state.mode ||
       (!hasAvailableFilters && count === 0);
     elements.timelineFilterButton.classList.toggle("is-active", count > 0);
@@ -398,9 +452,18 @@
 
   function renderActiveFilters() {
     const filters = [];
-    const { folder, year, month, day } = state.timelineFilters;
+    const { folder, camera, location, year, month, day } = state.timelineFilters;
     if (folder) {
       filters.push({ key: "folder", label: folderFilterLabel(folder) });
+    }
+    if (camera) {
+      filters.push({ key: "camera", label: `Máy ảnh: ${camera}` });
+    }
+    if (location) {
+      filters.push({
+        key: "location",
+        label: location === "with" ? "Có GPS" : "Không có GPS",
+      });
     }
     if (year) {
       filters.push({ key: "year", label: `Năm ${year}` });
@@ -514,7 +577,11 @@
       directory: isCloud ? "Thư mục Cloud" : "Thư mục LAN",
       offline: "Ngoại tuyến",
     };
-    elements.connectionMode.textContent = labels[mode] || "";
+    const metadataLabel = state.metadataStatus.available ? " · EXIF" : "";
+    elements.connectionMode.textContent = `${labels[mode] || ""}${mode === "api" || mode === "offline" ? metadataLabel : ""}`;
+    elements.connectionMode.title = state.metadataStatus.available
+      ? `${numberFormatter.format(state.metadataStatus.items)} mục có metadata`
+      : "";
     elements.refreshButton.hidden = !mode;
     updateTimelineFilterUi();
   }
@@ -561,8 +628,20 @@
     return Number.isFinite(timestamp) && timestamp > 0 ? dateFormatter.format(new Date(timestamp * 1000)) : "";
   }
 
+  function formatDateTime(timestamp) {
+    return Number.isFinite(timestamp) && timestamp > 0
+      ? dateTimeFormatter.format(new Date(timestamp * 1000))
+      : "";
+  }
+
   function itemTimestamp(item) {
-    return Number(item.modified) || 0;
+    return Number(item.dateTaken) || Number(item.modified) || 0;
+  }
+
+  function itemDateKey(item) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(item.dateKey || "")
+      ? item.dateKey
+      : localDateKey(itemTimestamp(item));
   }
 
   function itemDetail(item) {
@@ -589,10 +668,19 @@
     if (filters.folder && itemFolderKey(item) !== filters.folder) {
       return false;
     }
+    if (filters.camera && item.camera !== filters.camera) {
+      return false;
+    }
+    if (filters.location === "with" && !item.hasLocation) {
+      return false;
+    }
+    if (filters.location === "without" && item.hasLocation) {
+      return false;
+    }
     if (!filters.year) {
       return true;
     }
-    const dateKey = localDateKey(itemTimestamp(item));
+    const dateKey = itemDateKey(item);
     if (!dateKey || dateKey.slice(0, 4) !== filters.year) {
       return false;
     }
@@ -605,16 +693,31 @@
   function deriveFacets(items) {
     const folders = new Set();
     const dates = new Set();
+    const cameras = new Set();
+    let withLocation = 0;
+    let metadata = 0;
     for (const item of items) {
       folders.add(itemFolderKey(item));
-      const dateKey = localDateKey(itemTimestamp(item));
+      const dateKey = itemDateKey(item);
       if (dateKey) {
         dates.add(dateKey);
+      }
+      if (item.camera) {
+        cameras.add(item.camera);
+      }
+      if (item.hasLocation) {
+        withLocation += 1;
+      }
+      if (item.hasMetadata) {
+        metadata += 1;
       }
     }
     return {
       folders: [...folders].sort(folderCollator.compare),
       dates: [...dates].sort().reverse(),
+      cameras: [...cameras].sort(folderCollator.compare),
+      locations: { with: withLocation, without: items.length - withLocation },
+      metadata,
     };
   }
 
@@ -625,7 +728,27 @@
     const dates = Array.isArray(rawFacets?.dates)
       ? rawFacets.dates.map(String).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort().reverse()
       : [];
-    return { folders: [...new Set(folders)], dates: [...new Set(dates)] };
+    const cameras = Array.isArray(rawFacets?.cameras)
+      ? rawFacets.cameras.map(String).filter(Boolean).sort(folderCollator.compare)
+      : [];
+    return {
+      folders: [...new Set(folders)],
+      dates: [...new Set(dates)],
+      cameras: [...new Set(cameras)],
+      locations: {
+        with: Math.max(0, Number(rawFacets?.locations?.with) || 0),
+        without: Math.max(0, Number(rawFacets?.locations?.without) || 0),
+      },
+      metadata: Math.max(0, Number(rawFacets?.metadata) || 0),
+    };
+  }
+
+  function normalizeMetadataStatus(rawStatus) {
+    return {
+      available: Boolean(rawStatus?.available),
+      items: Math.max(0, Number(rawStatus?.items) || 0),
+      generatedAt: typeof rawStatus?.generatedAt === "string" ? rawStatus.generatedAt : "",
+    };
   }
 
   function folderFilterLabel(folder) {
@@ -657,6 +780,17 @@
       filters.folder,
       folderFilterLabel,
     );
+    setSelectOptions(
+      elements.cameraFilter,
+      "Tất cả máy ảnh",
+      currentFacets.cameras,
+      filters.camera,
+    );
+    elements.cameraFilter.disabled = currentFacets.cameras.length === 0 && !filters.camera;
+    elements.locationFilter.value = ["with", "without"].includes(filters.location)
+      ? filters.location
+      : "";
+    elements.locationFilter.disabled = currentFacets.metadata === 0 && !filters.location;
 
     const years = [...new Set(currentFacets.dates.map((date) => date.slice(0, 4)))].sort().reverse();
     const year = setSelectOptions(elements.yearFilter, "Tất cả năm", years, filters.year);
@@ -704,6 +838,8 @@
   function readTimelineFilterForm() {
     return {
       folder: elements.folderFilter.value,
+      camera: elements.cameraFilter.value,
+      location: elements.locationFilter.value,
       year: elements.yearFilter.value,
       month: elements.yearFilter.value ? elements.monthFilter.value : "",
       day: elements.yearFilter.value && elements.monthFilter.value ? elements.dayFilter.value : "",
@@ -712,12 +848,12 @@
 
   function clearTimelineFilter(key) {
     if (key === "all") {
-      state.timelineFilters = { folder: "", year: "", month: "", day: "" };
+      state.timelineFilters = emptyTimelineFilters();
     } else if (key === "year") {
       state.timelineFilters = { ...state.timelineFilters, year: "", month: "", day: "" };
     } else if (key === "month") {
       state.timelineFilters = { ...state.timelineFilters, month: "", day: "" };
-    } else if (key === "day" || key === "folder") {
+    } else if (["day", "folder", "camera", "location"].includes(key)) {
       state.timelineFilters = { ...state.timelineFilters, [key]: "" };
     } else {
       return;
@@ -745,7 +881,7 @@
     state.filter = "all";
     state.query = "";
     elements.searchInput.value = "";
-    state.timelineFilters = { folder, year: "", month: "", day: "" };
+    state.timelineFilters = { ...emptyTimelineFilters(), folder };
     updateNavigationUi();
     updateViewUi();
     reloadFromControls();
@@ -940,6 +1076,18 @@
     const name = String(rawItem.fileName || rawItem.name || "Không tên");
     const folderKey = rawItem.folder ? String(rawItem.folder) : ".";
     const folder = folderKey !== "." ? folderKey.replaceAll("/", " / ") : "Thư mục gốc";
+    const metadata = {};
+    if (rawItem.metadata && typeof rawItem.metadata === "object") {
+      for (const [key, value] of Object.entries(rawItem.metadata)) {
+        if (ALLOWED_METADATA_FIELDS.has(key) && ["string", "number", "boolean"].includes(typeof value)) {
+          metadata[key] = value;
+        }
+      }
+    }
+    const latitude = Number(metadata.latitude);
+    const longitude = Number(metadata.longitude);
+    const hasLocation = Boolean(rawItem.hasLocation) && Number.isFinite(latitude) &&
+      Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
     return {
       id: String(rawItem.id),
       url: new URL(String(rawItem.media), baseUrl).href,
@@ -953,6 +1101,14 @@
       folderKey,
       bytes: Number(rawItem.bytes) || 0,
       modified: Number(rawItem.modified) || 0,
+      dateTaken: Number(rawItem.dateTaken) || 0,
+      dateKey: /^\d{4}-\d{2}-\d{2}$/.test(rawItem.dateKey || "") ? rawItem.dateKey : "",
+      dateTakenText: String(rawItem.dateTakenText || ""),
+      dateSource: String(rawItem.dateSource || ""),
+      camera: String(rawItem.camera || metadata.camera || ""),
+      hasMetadata: Boolean(rawItem.hasMetadata),
+      hasLocation,
+      metadata,
       source: "api",
       thumbnailFallback: null,
     };
@@ -977,13 +1133,14 @@
 
     const cache = await caches.open(CATALOG_CACHE_NAME);
     const payload = {
-      version: 2,
+      version: 3,
       endpoint: state.baseUrl,
       savedAt: Date.now(),
       sourceMode: state.mode,
       items: state.items,
       stats: state.stats,
       facets: state.facets,
+      metadataStatus: state.metadataStatus,
     };
     await cache.put(catalogCacheUrl(), new Response(JSON.stringify(payload), {
       headers: { "Content-Type": "application/json; charset=utf-8" },
@@ -1002,7 +1159,7 @@
         return false;
       }
       const payload = await response.json();
-      if (![1, 2].includes(payload?.version) || payload.endpoint !== state.baseUrl || !Array.isArray(payload.items)) {
+      if (![1, 2, 3].includes(payload?.version) || payload.endpoint !== state.baseUrl || !Array.isArray(payload.items)) {
         return false;
       }
 
@@ -1027,6 +1184,9 @@
         ? normalizeFacets(payload.facets)
         : deriveFacets(items);
       state.folderFacets = state.facets;
+      state.metadataStatus = payload.version >= 3
+        ? normalizeMetadataStatus(payload.metadataStatus)
+        : { available: false, items: 0, generatedAt: "" };
       setMode("offline");
       refreshDirectoryItems(false);
       return true;
@@ -1068,6 +1228,7 @@
     if (payload.status !== "ok") {
       throw new Error("health check không hợp lệ");
     }
+    state.metadataStatus = normalizeMetadataStatus(payload.metadata);
   }
 
   function apiItemsUrl({ offset, force }) {
@@ -1133,6 +1294,9 @@
       state.items = reset ? nextItems : [...state.items, ...nextItems];
       state.total = Number(payload.total) || 0;
       state.stats = payload.stats || null;
+      if (payload.metadata) {
+        state.metadataStatus = normalizeMetadataStatus(payload.metadata);
+      }
       state.hasMore = Boolean(payload.hasMore);
       if (payload.facets) {
         state.facets = normalizeFacets(payload.facets);
@@ -1355,6 +1519,13 @@
     return [...merged.values()].filter(validCollectionItem);
   }
 
+  function itemSearchText(item) {
+    const metadataText = item.metadata && typeof item.metadata === "object"
+      ? Object.values(item.metadata).filter((value) => ["string", "number"].includes(typeof value)).join(" ")
+      : "";
+    return `${item.name} ${item.folder} ${item.camera || ""} ${metadataText}`.toLocaleLowerCase("vi");
+  }
+
   function updateVisibleItems() {
     const normalizedQuery = state.query.trim().toLocaleLowerCase("vi");
     const sourceItems = state.view === "favorites"
@@ -1366,7 +1537,7 @@
       .filter((item) => state.view === "hidden" || !state.hiddenIds.has(item.id))
       .filter((item) => state.filter === "all" || item.type === state.filter)
       .filter(itemMatchesTimelineFilters)
-      .filter((item) => !normalizedQuery || `${item.name} ${item.folder}`.toLocaleLowerCase("vi").includes(normalizedQuery))
+      .filter((item) => !normalizedQuery || itemSearchText(item).includes(normalizedQuery))
       .sort(compareDirectoryItems);
   }
 
@@ -1938,9 +2109,9 @@
       const firstCharacter = item.name.trim().charAt(0).toLocaleUpperCase("vi") || "#";
       return `name:${firstCharacter}`;
     }
-    const timestamp = itemTimestamp(item);
-    if (timestamp > 0) {
-      return `date:${localDateKey(timestamp)}`;
+    const dateKey = itemDateKey(item);
+    if (dateKey) {
+      return `date:${dateKey}`;
     }
     return `folder:${item.folder || "Thư mục gốc"}`;
   }
@@ -1951,7 +2122,7 @@
       return { key, title: key.slice(5) };
     }
     if (key.startsWith("date:")) {
-      const date = new Date(itemTimestamp(item) * 1000);
+      const date = new Date(`${key.slice(5)}T12:00:00`);
       const formatted = timelineDateFormatter.format(date);
       return { key, title: formatted.charAt(0).toLocaleUpperCase("vi") + formatted.slice(1) };
     }
@@ -2321,6 +2492,84 @@
     showToast(shouldHide ? "Đã ẩn mục khỏi thư viện." : "Đã đưa mục trở lại thư viện.");
   }
 
+  function setViewerInfoRow(row, valueElement, value) {
+    const text = String(value || "").trim();
+    row.hidden = !text;
+    valueElement.textContent = text;
+  }
+
+  function captureSettingsText(metadata) {
+    const values = [];
+    if (metadata.shutter) {
+      const shutter = String(metadata.shutter);
+      values.push(/[a-z]/i.test(shutter) ? shutter : `${shutter}s`);
+    }
+    if (metadata.aperture) {
+      const aperture = String(metadata.aperture);
+      values.push(aperture.toLocaleLowerCase("vi").startsWith("f/") ? aperture : `f/${aperture}`);
+    }
+    if (metadata.iso) {
+      const iso = String(metadata.iso);
+      values.push(iso.toLocaleUpperCase("vi").startsWith("ISO") ? iso : `ISO ${iso}`);
+    }
+    if (metadata.focalLength) {
+      const focalLength = String(metadata.focalLength);
+      values.push(/[a-z]/i.test(focalLength) ? focalLength : `${focalLength} mm`);
+    }
+    return values.join(" · ");
+  }
+
+  function updateViewerMetadata(item) {
+    const metadata = item.metadata || {};
+    const captured = item.dateTaken ? formatDateTime(item.dateTaken) : "";
+    setViewerInfoRow(elements.viewerInfoCapturedRow, elements.viewerInfoDate, captured);
+    elements.viewerInfoCapturedRow.title = item.dateSource || "";
+    elements.viewerInfoModified.textContent = formatDateTime(Number(item.modified)) || "Không có thông tin";
+
+    const width = Number(metadata.width);
+    const height = Number(metadata.height);
+    const dimensions = width > 0 && height > 0
+      ? `${numberFormatter.format(width)} × ${numberFormatter.format(height)} px`
+      : "";
+    setViewerInfoRow(elements.viewerInfoDimensionsRow, elements.viewerInfoDimensions, dimensions);
+    setViewerInfoRow(elements.viewerInfoCameraRow, elements.viewerInfoCamera, item.camera);
+    setViewerInfoRow(elements.viewerInfoLensRow, elements.viewerInfoLens, metadata.lens);
+    setViewerInfoRow(
+      elements.viewerInfoSettingsRow,
+      elements.viewerInfoSettings,
+      captureSettingsText(metadata),
+    );
+    setViewerInfoRow(elements.viewerInfoDurationRow, elements.viewerInfoDuration, metadata.duration);
+
+    const latitude = Number(metadata.latitude);
+    const longitude = Number(metadata.longitude);
+    const hasLocation = item.hasLocation && Number.isFinite(latitude) && Number.isFinite(longitude);
+    elements.viewerInfoLocationRow.hidden = !hasLocation;
+    if (hasLocation) {
+      const latitudeText = latitude.toFixed(6);
+      const longitudeText = longitude.toFixed(6);
+      const coordinates = `${latitudeText}, ${longitudeText}`;
+      const altitude = Number(metadata.altitude);
+      elements.viewerInfoLocation.textContent = Number.isFinite(altitude)
+        ? `${coordinates} · ${numberFormatter.format(altitude)} m`
+        : coordinates;
+      elements.viewerInfoLocation.href = `https://www.openstreetmap.org/?mlat=${latitudeText}&mlon=${longitudeText}#map=16/${latitudeText}/${longitudeText}`;
+    } else {
+      elements.viewerInfoLocation.textContent = "";
+      elements.viewerInfoLocation.removeAttribute("href");
+    }
+
+    const description = [metadata.title, metadata.description]
+      .filter(Boolean)
+      .filter((value, index, values) => values.indexOf(value) === index)
+      .join("\n");
+    setViewerInfoRow(
+      elements.viewerInfoDescriptionRow,
+      elements.viewerInfoDescription,
+      description,
+    );
+  }
+
   function showViewer(index) {
     const item = state.visibleItems[index];
     if (!item) {
@@ -2337,9 +2586,9 @@
     elements.viewerFolder.textContent = item.folder;
     elements.viewerInfoName.textContent = item.name;
     elements.viewerInfoFolder.textContent = item.folder;
-    elements.viewerInfoDate.textContent = formatDate(itemTimestamp(item)) || "Không có thông tin";
     elements.viewerInfoSize.textContent = formatBytes(item.bytes) || "Không có thông tin";
     elements.viewerInfoType.textContent = `${item.type === "video" ? "Video" : "Ảnh"} · ${item.extension.toUpperCase()}`;
+    updateViewerMetadata(item);
     elements.viewerOpenOriginal.href = item.url;
     elements.viewerCount.textContent = `${numberFormatter.format(index + 1)} / ${numberFormatter.format(viewerTotal)}`;
     elements.viewerPrevious.disabled = index === 0;
@@ -2498,8 +2747,9 @@
     state.visibleItems = [];
     state.total = 0;
     state.stats = null;
-    state.facets = { folders: [], dates: [] };
-    state.folderFacets = { folders: [], dates: [] };
+    state.facets = emptyFacets();
+    state.folderFacets = emptyFacets();
+    state.metadataStatus = { available: false, items: 0, generatedAt: "" };
     state.folderSummaries.clear();
     state.folderViewCount = 0;
     state.hasMore = false;
@@ -2630,7 +2880,7 @@
     state.filter = "all";
     state.query = "";
     elements.searchInput.value = "";
-    state.timelineFilters = { folder: "", year: "", month: "", day: "" };
+    state.timelineFilters = emptyTimelineFilters();
     state.folderSummaries.clear();
     updateNavigationUi();
     loadLocalCollections();
@@ -2667,7 +2917,7 @@
   });
   elements.filterReset.addEventListener("click", () => {
     const hadActiveFilters = activeTimelineFilterCount() > 0;
-    state.timelineFilters = { folder: "", year: "", month: "", day: "" };
+    state.timelineFilters = emptyTimelineFilters();
     populateTimelineFilterDialog();
     updateTimelineFilterUi();
     if (hadActiveFilters) {
@@ -2717,7 +2967,7 @@
       state.requestVersion += 1;
       state.query = "";
       elements.searchInput.value = "";
-      state.timelineFilters = { folder: "", year: "", month: "", day: "" };
+      state.timelineFilters = emptyTimelineFilters();
       state.view = nextView;
       state.filter = nextFilter;
       updateNavigationUi();

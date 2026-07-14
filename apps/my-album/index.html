@@ -6,8 +6,8 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#f7f8fa" />
     <title>My Album</title>
-    <link rel="stylesheet" href="./styles.css?v=album-ux-20" />
-    <script src="./app.js?v=album-ux-20" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=album-ux-22" />
+    <script src="./app.js?v=album-ux-22" defer></script>
   </head>
   <body>
     <aside class="sidebar" aria-label="Điều hướng My Album">
@@ -237,6 +237,20 @@
               <option value="">Tất cả thư mục</option>
             </select>
           </label>
+          <label class="timeline-filter-camera">
+            <span>Máy ảnh</span>
+            <select id="camera-filter" name="camera" disabled>
+              <option value="">Tất cả máy ảnh</option>
+            </select>
+          </label>
+          <label>
+            <span>Vị trí</span>
+            <select id="location-filter" name="location" disabled>
+              <option value="">Tất cả vị trí</option>
+              <option value="with">Có GPS</option>
+              <option value="without">Không có GPS</option>
+            </select>
+          </label>
           <label>
             <span>Năm</span>
             <select id="year-filter" name="year">
@@ -314,9 +328,13 @@
                 <dt>Thư mục</dt>
                 <dd id="viewer-info-folder"></dd>
               </div>
+              <div id="viewer-info-captured-row">
+                <dt>Ngày chụp</dt>
+                <dd id="viewer-info-date"></dd>
+              </div>
               <div>
                 <dt>Ngày sửa đổi</dt>
-                <dd id="viewer-info-date"></dd>
+                <dd id="viewer-info-modified"></dd>
               </div>
               <div>
                 <dt>Dung lượng</dt>
@@ -325,6 +343,34 @@
               <div>
                 <dt>Định dạng</dt>
                 <dd id="viewer-info-type"></dd>
+              </div>
+              <div id="viewer-info-dimensions-row" hidden>
+                <dt>Kích thước</dt>
+                <dd id="viewer-info-dimensions"></dd>
+              </div>
+              <div id="viewer-info-camera-row" hidden>
+                <dt>Máy ảnh</dt>
+                <dd id="viewer-info-camera"></dd>
+              </div>
+              <div id="viewer-info-lens-row" hidden>
+                <dt>Ống kính</dt>
+                <dd id="viewer-info-lens"></dd>
+              </div>
+              <div id="viewer-info-settings-row" hidden>
+                <dt>Thông số chụp</dt>
+                <dd id="viewer-info-settings"></dd>
+              </div>
+              <div id="viewer-info-duration-row" hidden>
+                <dt>Thời lượng</dt>
+                <dd id="viewer-info-duration"></dd>
+              </div>
+              <div id="viewer-info-location-row" hidden>
+                <dt>Vị trí</dt>
+                <dd><a id="viewer-info-location" href="#" target="_blank" rel="noreferrer"></a></dd>
+              </div>
+              <div id="viewer-info-description-row" hidden>
+                <dt>Mô tả</dt>
+                <dd id="viewer-info-description"></dd>
               </div>
             </dl>
           </aside>

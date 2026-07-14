@@ -33,6 +33,16 @@ NOI DUNG JSON
 - Duong dan trong JSON la duong dan tuong doi, khong ghi o dia Windows.
 - Thu muc thumbnail, cache va _my-album duoc bo qua.
 
+AP DUNG VAO MY ALBUM
+
+- Dat album-metadata.json trong thu muc goc cua album (day cung la vi tri mac dinh).
+- My Album LAN API v7 tu doc file nay; khong can chuyen JSON len trinh duyet.
+- Khoi dong lai start_my_album.cmd sau khi cap nhat goi server. Tren giao dien,
+  trang thai ket noi se hien "EXIF" khi metadata da duoc nhan.
+- Timeline uu tien ngay chup, bo loc co them may anh/GPS, va bang Thong tin hien
+  camera, ong kinh, thong so chup, kich thuoc, thoi luong va toa do neu co.
+- Sau nhung lan trich xuat tiep theo, bam Lam moi album de doc file JSON moi.
+
 CHAY LAI
 
 Mac dinh script chi doc lai file moi hoac da thay doi. Metadata cua file khong
