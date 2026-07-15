@@ -152,6 +152,7 @@
     sortSelect: document.querySelector("#sort-select"),
     sortField: document.querySelector("#sort-field"),
     timelineFilterButton: document.querySelector("#timeline-filter-button"),
+    randomEventButton: document.querySelector("#random-event-button"),
     timelineFilterCount: document.querySelector("#timeline-filter-count"),
     sizeInput: document.querySelector("#size-input"),
     sizeField: document.querySelector("#size-field"),
@@ -711,6 +712,7 @@
     elements.timelineFilterButton.setAttribute("aria-pressed", String(count > 0));
     elements.timelineFilterCount.textContent = String(count);
     elements.timelineFilterCount.hidden = count === 0;
+    elements.randomEventButton.hidden = !state.mode || ["albums", "map"].includes(state.view);
     renderActiveFilters();
     renderTimelineRail();
   }
@@ -1312,6 +1314,25 @@
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function openRandomSmartEvent() {
+    const events = smartEvents();
+    if (events.length === 0) {
+      showToast("Chưa đủ ảnh cùng thời điểm để tạo sự kiện.");
+      return;
+    }
+    // Avoid re-opening the event already on screen when there is another choice.
+    let pool = events;
+    if (events.length > 1 && state.view === "event") {
+      const others = events.filter((event) => event.id !== state.activeEventId);
+      if (others.length > 0) {
+        pool = others;
+      }
+    }
+    const chosen = pool[Math.floor(Math.random() * pool.length)];
+    openSmartEvent(chosen.id);
+    showToast(`Sự kiện ngẫu nhiên · ${chosen.name}`);
+  }
+
   function populateCollectionDialog() {
     const selected = elements.collectionSelect.value;
     const fragment = document.createDocumentFragment();
@@ -1501,7 +1522,7 @@
       try {
         setMetadataProgress(4, "Đang đọc file…", formatBytes(file.size));
         const buffer = await file.arrayBuffer();
-        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-25", window.location.href));
+        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-26", window.location.href));
         worker.addEventListener("message", (event) => {
           const message = event.data || {};
           if (message.type === "progress") {
@@ -4451,6 +4472,7 @@
   }
 
   elements.timelineFilterButton.addEventListener("click", showTimelineFilterDialog);
+  elements.randomEventButton.addEventListener("click", openRandomSmartEvent);
   elements.filterClose.addEventListener("click", closeTimelineFilterDialog);
   elements.metadataButton.addEventListener("click", showMetadataDialog);
   elements.metadataClose.addEventListener("click", closeMetadataDialog);
