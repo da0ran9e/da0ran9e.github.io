@@ -32,6 +32,14 @@
   const SMART_EVENT_MAX_SPAN_SECONDS = 5 * 24 * 60 * 60;
   const MAPLIBRE_CSS_URL = "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css";
   const MAPLIBRE_JS_URL = "https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js";
+  // Chrome/Firefox cannot decode HEIC/HEIF originals; libheif (WASM) does it in-page.
+  const LIBHEIF_JS_URL = "https://unpkg.com/libheif-js@1.18.2/libheif-wasm/libheif-bundle.js";
+  const BROWSER_DECODABLE_IMAGE_TYPES = /^image\/(jpeg|png|webp|gif|avif|bmp)$/;
+  const HEIF_IMAGE_EXTENSIONS = new Set(["heic", "heif"]);
+  // Camera RAW formats have no in-browser decoder; the viewer shows the thumbnail.
+  const RAW_IMAGE_EXTENSIONS = new Set([
+    "cr2", "cr3", "arw", "nef", "dng", "raf", "rw2", "orf", "sr2", "srw", "pef",
+  ]);
   const OPEN_FREE_MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
   const IMAGE_EXTENSIONS = new Set([
     "jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff", "heic", "heif",
@@ -1522,7 +1530,7 @@
       try {
         setMetadataProgress(4, "Đang đọc file…", formatBytes(file.size));
         const buffer = await file.arrayBuffer();
-        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-27", window.location.href));
+        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-28", window.location.href));
         worker.addEventListener("message", (event) => {
           const message = event.data || {};
           if (message.type === "progress") {
@@ -3878,6 +3886,104 @@
     elements.viewerInfoToggle.setAttribute("aria-label", visible ? "Ẩn thông tin" : "Hiện thông tin");
   }
 
+  let libheifLoadPromise = null;
+  function loadLibheif() {
+    if (window.libheif) {
+      return Promise.resolve(typeof window.libheif === "function" ? window.libheif() : window.libheif);
+    }
+    if (libheifLoadPromise) {
+      return libheifLoadPromise;
+    }
+    libheifLoadPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.id = "my-album-libheif-js";
+      script.src = LIBHEIF_JS_URL;
+      script.async = true;
+      script.addEventListener("load", () => {
+        if (window.libheif) {
+          resolve(typeof window.libheif === "function" ? window.libheif() : window.libheif);
+        } else {
+          reject(new Error("Thư viện HEIC không hợp lệ."));
+        }
+      }, { once: true });
+      script.addEventListener("error", () => reject(new Error("Không tải được bộ giải mã HEIC.")), { once: true });
+      document.head.append(script);
+    }).catch((error) => {
+      libheifLoadPromise = null;
+      throw error;
+    });
+    return libheifLoadPromise;
+  }
+
+  async function decodeHeicToJpegBlob(blob) {
+    const libheif = await loadLibheif();
+    const buffer = new Uint8Array(await blob.arrayBuffer());
+    const decoder = new libheif.HeifDecoder();
+    const images = decoder.decode(buffer);
+    if (!images || images.length === 0) {
+      throw new Error("HEIC không có ảnh.");
+    }
+    const image = images[0];
+    const width = image.get_width();
+    const height = image.get_height();
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    const imageData = context.createImageData(width, height);
+    try {
+      await new Promise((resolve, reject) => {
+        image.display(imageData, (displayData) => {
+          if (!displayData) {
+            reject(new Error("Không dựng được ảnh HEIC."));
+            return;
+          }
+          context.putImageData(displayData, 0, 0);
+          resolve();
+        });
+      });
+    } finally {
+      if (typeof image.free === "function") {
+        image.free();
+      }
+    }
+    const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+    canvas.width = 0;
+    canvas.height = 0;
+    if (!jpeg) {
+      throw new Error("Không tạo được JPEG từ HEIC.");
+    }
+    return jpeg;
+  }
+
+  // Turn a fetched original into something the browser can paint. HEIC/HEIF are
+  // decoded with libheif; camera RAW (and any HEIC decode failure) fall back to the
+  // JPEG thumbnail as a low-resolution preview. Returns { blob, fullQuality, preview }.
+  async function resolveViewableImageBlob(item, blob, signal) {
+    const extension = String(item.extension || "").toLowerCase();
+    const needsDecode = HEIF_IMAGE_EXTENSIONS.has(extension) || RAW_IMAGE_EXTENSIONS.has(extension);
+    if (!needsDecode || BROWSER_DECODABLE_IMAGE_TYPES.test(blob.type)) {
+      return { blob, fullQuality: true, preview: false };
+    }
+    if (HEIF_IMAGE_EXTENSIONS.has(extension)) {
+      try {
+        const jpeg = await decodeHeicToJpegBlob(blob);
+        if (signal?.aborted) {
+          return { blob: null, fullQuality: false, preview: false };
+        }
+        return { blob: jpeg, fullQuality: true, preview: false };
+      } catch {
+        // Fall through to the thumbnail preview below.
+      }
+    }
+    try {
+      const thumbnail = await loadThumbnailBlob(item.thumbnail, signal);
+      return { blob: thumbnail, fullQuality: false, preview: true };
+    } catch {
+      return { blob: null, fullQuality: false, preview: false };
+    }
+  }
+
   async function loadViewerImage(item, index, token) {
     const viewUrl = item.preview || item.url;
     const controller = new AbortController();
@@ -3901,10 +4007,31 @@
         return;
       }
 
+      // Cached blobs are already stored in a browser-decodable form; only fresh
+      // originals may need HEIC decoding or a RAW thumbnail fallback.
+      let fullQuality = true;
+      let previewOnly = false;
+      if (!fromCache) {
+        const resolved = await resolveViewableImageBlob(item, blob, controller.signal);
+        if (token !== state.viewerLoadToken || controller.signal.aborted) {
+          return;
+        }
+        if (!resolved.blob) {
+          renderViewerError(index);
+          return;
+        }
+        blob = resolved.blob;
+        fullQuality = resolved.fullQuality;
+        previewOnly = resolved.preview;
+      }
+
       state.viewerAbortController = null;
       state.viewerBlob = blob;
       state.viewerCacheUrl = viewUrl;
       state.viewerObjectUrl = URL.createObjectURL(blob);
+      if (previewOnly) {
+        showToast("Định dạng này không xem đầy đủ trên trình duyệt — đang hiển thị bản xem trước. Dùng “Mở ảnh gốc” để tải bản gốc.");
+      }
 
       const image = document.createElement("img");
       image.alt = item.name;
@@ -3918,6 +4045,11 @@
           if (elements.viewerOfflineStatus) {
             elements.viewerOfflineStatus.hidden = false;
           }
+          return;
+        }
+
+        if (!fullQuality) {
+          // A low-resolution thumbnail preview should not be cached as the original.
           return;
         }
 

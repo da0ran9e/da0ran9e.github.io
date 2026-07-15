@@ -1,12 +1,12 @@
 "use strict";
 
 const SHELL_CACHE_PREFIX = "my-album-shell-";
-const SHELL_CACHE_NAME = `${SHELL_CACHE_PREFIX}v27`;
+const SHELL_CACHE_NAME = `${SHELL_CACHE_PREFIX}v28`;
 const SHELL_FILES = [
   "./index.html",
-  "./styles.css?v=album-ux-27",
-  "./app.js?v=album-ux-27",
-  "./metadata-worker.js?v=album-ux-27",
+  "./styles.css?v=album-ux-28",
+  "./app.js?v=album-ux-28",
+  "./metadata-worker.js?v=album-ux-28",
 ];
 
 self.addEventListener("install", (event) => {
