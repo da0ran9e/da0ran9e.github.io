@@ -99,6 +99,10 @@
     localMetadataByPath: new Map(),
     clientCatalogComplete: false,
     albumMetaToken: 0,
+    albumsTab: "",
+    timeline: { sections: [], width: 0 },
+    viewerImageReady: false,
+    viewerPreviewUrl: null,
     metadataImporting: false,
     renderedCount: 0,
     requestVersion: 0,
@@ -161,6 +165,9 @@
     sortField: document.querySelector("#sort-field"),
     timelineFilterButton: document.querySelector("#timeline-filter-button"),
     randomEventButton: document.querySelector("#random-event-button"),
+    headingBack: document.querySelector("#heading-back"),
+    moreButton: document.querySelector("#more-button"),
+    moreMenu: document.querySelector("#more-menu"),
     timelineFilterCount: document.querySelector("#timeline-filter-count"),
     sizeInput: document.querySelector("#size-input"),
     sizeField: document.querySelector("#size-field"),
@@ -277,6 +284,10 @@
     year: "numeric",
   });
   const monthFormatter = new Intl.DateTimeFormat("vi-VN", { month: "long" });
+  const monthYearFormatter = new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric" });
+  const dayTitleFormatter = new Intl.DateTimeFormat("vi-VN", { weekday: "long", day: "numeric", month: "long" });
+  const longDateFormatter = new Intl.DateTimeFormat("vi-VN", { day: "numeric", month: "long", year: "numeric" });
+  const clockFormatter = new Intl.DateTimeFormat("vi-VN", { hour: "2-digit", minute: "2-digit" });
   const folderCollator = new Intl.Collator("vi", { numeric: true, sensitivity: "base" });
   const thumbnailObserver = "IntersectionObserver" in window
     ? new IntersectionObserver((entries) => {
@@ -292,6 +303,21 @@
         }
       }
     }, { rootMargin: "600px 0px" })
+    : null;
+  const timelineSectionObserver = "IntersectionObserver" in window
+    ? new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const section = entry.target.timelineSection;
+        if (!section) {
+          continue;
+        }
+        if (entry.isIntersecting) {
+          populateTimelineSection(section);
+        } else {
+          depopulateTimelineSection(section);
+        }
+      }
+    }, { rootMargin: "1200px 0px" })
     : null;
   const folderSummaryQueue = [];
   const folderSummaryWaiters = new Map();
@@ -329,8 +355,12 @@
     );
     document.querySelector('meta[name="theme-color"]')?.setAttribute(
       "content",
-      theme === "dark" ? "#111618" : "#f7f8fa",
+      theme === "dark" ? "#0f1011" : "#fafafa",
     );
+    const themeLabel = document.querySelector("#theme-label");
+    if (themeLabel) {
+      themeLabel.textContent = theme === "dark" ? "Giao diện sáng" : "Giao diện tối";
+    }
     if (persist) {
       localStorage.setItem(THEME_STORAGE_KEY, theme);
     }
@@ -669,9 +699,8 @@
   function updateNavigationUi() {
     for (const button of elements.navigationButtons) {
       const targetView = button.dataset.navView;
-      const targetFilter = button.dataset.navFilter;
       const isActive = targetView === "library"
-        ? state.view === "library" && targetFilter === state.filter
+        ? state.view === "library"
         : targetView === "albums"
           ? ["albums", "collection", "event"].includes(state.view)
           : state.view === targetView;
@@ -721,6 +750,8 @@
     elements.timelineFilterCount.textContent = String(count);
     elements.timelineFilterCount.hidden = count === 0;
     elements.randomEventButton.hidden = !state.mode || ["albums", "map"].includes(state.view);
+    elements.headingBack.hidden = !(["collection", "event"].includes(state.view) ||
+      (state.view === "library" && state.timelineFilters.folder));
     renderActiveFilters();
     renderTimelineRail();
   }
@@ -783,6 +814,13 @@
   }
 
   function renderTimelineRail() {
+    const justified = usesJustifiedTimeline();
+    elements.timelineRail.classList.toggle("is-scrubber", justified);
+    if (justified) {
+      renderTimelineScrubber();
+      return;
+    }
+    document.body.classList.remove("has-scrubber");
     const currentFacets = timelineFacetsForCurrentView();
     const years = [...new Set(currentFacets.dates.map((date) => date.slice(0, 4)))].sort().reverse();
     const shouldShow = state.mode && !["albums", "map"].includes(state.view) && years.length > 1 &&
@@ -1051,6 +1089,19 @@
     return folder === "." ? "Thư mục gốc" : folder.replaceAll("/", " / ");
   }
 
+  function folderDisplay(folder) {
+    if (!folder || folder === ".") {
+      return { title: "Thư mục gốc", path: "" };
+    }
+    const parts = folder.split("/");
+    // Names like "5" (Photo Booth's hash buckets) mean nothing without their parent.
+    const titleParts = parts.at(-1).length <= 2 && parts.length > 1 ? 2 : 1;
+    return {
+      title: parts.slice(-titleParts).join(" / "),
+      path: parts.slice(0, -titleParts).join(" / "),
+    };
+  }
+
   function setSelectOptions(select, placeholder, values, selected, labelForValue = String) {
     const normalizedValues = [...new Set(values.map(String))];
     if (selected && !normalizedValues.includes(selected)) {
@@ -1172,13 +1223,33 @@
   }
 
   function smartEventName(start, end) {
+    const first = new Date(start * 1000);
+    const last = new Date(end * 1000);
     if (localDateKey(start) === localDateKey(end)) {
-      return `Sự kiện ${formatDate(start)}`;
+      return longDateFormatter.format(first);
     }
-    return `Sự kiện ${formatDate(start)} - ${formatDate(end)}`;
+    if (first.getFullYear() === last.getFullYear() && first.getMonth() === last.getMonth()) {
+      return `${first.getDate()}–${longDateFormatter.format(last)}`;
+    }
+    return `${dayMonthText(first)} – ${longDateFormatter.format(last)}`;
   }
 
+  function dayMonthText(date) {
+    return `${date.getDate()} ${monthFormatter.format(date)}`;
+  }
+
+  let smartEventsCache = { items: null, hiddenCount: -1, events: [] };
+
   function smartEvents() {
+    if (smartEventsCache.items === state.items && smartEventsCache.hiddenCount === state.hiddenIds.size) {
+      return smartEventsCache.events;
+    }
+    const events = computeSmartEvents();
+    smartEventsCache = { items: state.items, hiddenCount: state.hiddenIds.size, events };
+    return events;
+  }
+
+  function computeSmartEvents() {
     const candidates = state.items
       .filter((item) => !state.hiddenIds.has(item.id))
       .filter((item) => itemTimestamp(item) > 0)
@@ -1199,15 +1270,22 @@
       const end = itemTimestamp(group.at(-1));
       const folderKeys = [...new Set(items.map(itemFolderKey))];
       const folderDetail = folderKeys.length === 1
-        ? folderFilterLabel(folderKeys[0])
+        ? folderDisplay(folderKeys[0]).title
         : `${numberFormatter.format(folderKeys.length)} thư mục`;
+      const videoCount = items.filter((item) => item.type === "video").length;
+      const imageCount = items.length - videoCount;
+      const countDetail = [
+        imageCount ? `${numberFormatter.format(imageCount)} ảnh` : "",
+        videoCount ? `${numberFormatter.format(videoCount)} video` : "",
+      ].filter(Boolean).join(" · ");
       events.push({
         id: `event-${start}-${group[0].id}`,
         items,
         start,
         end,
         name: smartEventName(start, end),
-        detail: `${numberFormatter.format(items.length)} mục · ${folderDetail}`,
+        detail: countDetail,
+        folderDetail,
         cover: items[0],
       });
       group = [];
@@ -1329,12 +1407,10 @@
       return;
     }
     // Avoid re-opening the event already on screen when there is another choice.
-    let pool = events;
-    if (events.length > 1 && state.view === "event") {
-      const others = events.filter((event) => event.id !== state.activeEventId);
-      if (others.length > 0) {
-        pool = others;
-      }
+    const substantial = events.filter((event) => event.items.length >= 6);
+    let pool = substantial.length > 0 ? substantial : events;
+    if (pool.length > 1 && state.view === "event") {
+      pool = pool.filter((event) => event.id !== state.activeEventId);
     }
     const chosen = pool[Math.floor(Math.random() * pool.length)];
     openSmartEvent(chosen.id);
@@ -1530,7 +1606,7 @@
       try {
         setMetadataProgress(4, "Đang đọc file…", formatBytes(file.size));
         const buffer = await file.arrayBuffer();
-        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-28", window.location.href));
+        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-29", window.location.href));
         worker.addEventListener("message", (event) => {
           const message = event.data || {};
           if (message.type === "progress") {
@@ -2147,12 +2223,14 @@
       return;
     }
 
-    // Reconcile: camera facets, precise data and (unchanged) timeline are refreshed.
+    // Reconcile the camera facet; results only change if a search or filter is active.
     state.facets = deriveFacets(state.items);
     state.folderFacets = state.facets;
     state.stats = deriveStats(state.items);
-    renderTimelineRail();
-    refreshDirectoryItems(true);
+    updateTimelineFilterUi();
+    if (state.query.trim() || activeTimelineFilterCount() > 0) {
+      refreshDirectoryItems(true);
+    }
     updateSummary();
     saveCachedCatalog().catch(() => {});
   }
@@ -2670,10 +2748,14 @@
       state.total = state.visibleItems.length;
     }
 
-    const targetCount = keepRenderLimit ? Math.max(state.renderedCount, PAGE_SIZE) : PAGE_SIZE;
-    state.renderedCount = 0;
-    clearMediaGrid();
-    renderNextPage(targetCount);
+    if (usesJustifiedTimeline()) {
+      renderJustifiedTimeline(keepRenderLimit);
+    } else {
+      const targetCount = keepRenderLimit ? Math.max(state.renderedCount, PAGE_SIZE) : PAGE_SIZE;
+      state.renderedCount = 0;
+      clearMediaGrid();
+      renderNextPage(targetCount);
+    }
     updateSummary();
     updateEmptyState();
   }
@@ -2984,6 +3066,8 @@
     for (const image of elements.mediaGrid.querySelectorAll(".media-preview img")) {
       releaseThumbnailImage(image);
     }
+    timelineSectionObserver?.disconnect();
+    state.timeline = { sections: [], width: 0 };
     elements.mediaGrid.replaceChildren();
   }
 
@@ -3052,6 +3136,7 @@
     image.loading = "lazy";
     image.decoding = "async";
     image.albumThumbnail = { preview, item };
+    setTileTone(preview, item);
     preview.prepend(image);
 
     if (thumbnailObserver) {
@@ -3061,14 +3146,31 @@
     }
   }
 
+  let folderIndexCache = { items: null, index: new Map() };
+
   function folderSummaryFromLoadedItems(folder) {
-    const items = state.items.filter((item) => itemFolderKey(item) === folder);
-    items.sort((left, right) => itemTimestamp(right) - itemTimestamp(left));
+    if (folderIndexCache.items !== state.items) {
+      const index = new Map();
+      for (const item of state.items) {
+        const key = itemFolderKey(item);
+        const entry = index.get(key);
+        if (!entry) {
+          index.set(key, { count: 1, cover: item });
+          continue;
+        }
+        entry.count += 1;
+        if (itemTimestamp(item) > itemTimestamp(entry.cover)) {
+          entry.cover = item;
+        }
+      }
+      folderIndexCache = { items: state.items, index };
+    }
+    const entry = folderIndexCache.index.get(folder);
     const complete = state.mode !== "api" || state.clientCatalogComplete;
     return {
       complete,
-      count: complete ? items.length : null,
-      cover: items[0] || null,
+      count: complete ? entry?.count || 0 : null,
+      cover: entry?.cover || null,
     };
   }
 
@@ -3102,8 +3204,8 @@
     card.className = "folder-card";
     card.dataset.folderCard = "";
     card.dataset.folder = folder;
-    const label = folderFilterLabel(folder);
-    card.setAttribute("aria-label", `Mở album ${label}`);
+    const display = folderDisplay(folder);
+    card.setAttribute("aria-label", `Mở album ${folderFilterLabel(folder)}`);
 
     const cover = document.createElement("span");
     cover.className = "media-preview folder-cover";
@@ -3112,10 +3214,16 @@
     const copy = document.createElement("span");
     copy.className = "folder-card-copy";
     const title = document.createElement("strong");
-    title.textContent = label;
+    title.textContent = display.title;
     const count = document.createElement("small");
     count.className = "folder-count";
     copy.append(title, count);
+    if (display.path) {
+      const path = document.createElement("small");
+      path.className = "folder-path";
+      path.textContent = display.path;
+      copy.append(path);
+    }
     card.append(cover, copy);
     updateFolderCard(card, summary);
     return card;
@@ -3258,8 +3366,34 @@
       return;
     }
 
+    const tabs = [
+      ["collections", "Bộ sưu tập", customCollections.length],
+      ["events", "Sự kiện", events.length],
+      ["folders", "Thư mục", folders.length],
+    ].filter((tab) => tab[2] > 0);
+    if (!tabs.some((tab) => tab[0] === state.albumsTab)) {
+      state.albumsTab = tabs[0][0];
+    }
+    const showTab = (name) => Boolean(query) || state.albumsTab === name;
+
     const fragment = document.createDocumentFragment();
-    if (customCollections.length > 0) {
+    if (!query && tabs.length > 1) {
+      const tabBar = document.createElement("div");
+      tabBar.className = "albums-tabs filter-group";
+      tabBar.setAttribute("role", "group");
+      tabBar.setAttribute("aria-label", "Loại album");
+      for (const [name, label, count] of tabs) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `filter-button${state.albumsTab === name ? " is-active" : ""}`;
+        button.dataset.albumsTab = name;
+        button.setAttribute("aria-pressed", String(state.albumsTab === name));
+        button.textContent = `${label} ${numberFormatter.format(count)}`;
+        tabBar.append(button);
+      }
+      fragment.append(tabBar);
+    }
+    if (customCollections.length > 0 && showTab("collections")) {
       const cards = customCollections.map((collection) => {
         const items = customCollectionItems(collection.id);
         const cover = items.slice().sort((left, right) => itemTimestamp(right) - itemTimestamp(left))[0] || collection.items[0];
@@ -3278,22 +3412,32 @@
         "custom",
       ));
     }
-    if (events.length > 0) {
-      const cards = events.map((event) => createCollectionCard({
-        kind: "event",
-        id: event.id,
-        name: event.name,
-        detail: event.detail,
-        cover: event.cover,
-      }));
-      fragment.append(createOrganizeSection(
-        "Sự kiện",
-        `${numberFormatter.format(events.length)} nhóm`,
-        cards,
-        "events",
-      ));
+    if (events.length > 0 && showTab("events")) {
+      const eventsByYear = new Map();
+      for (const event of events) {
+        const year = String(new Date(event.end * 1000).getFullYear());
+        if (!eventsByYear.has(year)) {
+          eventsByYear.set(year, []);
+        }
+        eventsByYear.get(year).push(event);
+      }
+      for (const [year, yearEvents] of eventsByYear) {
+        const cards = yearEvents.map((event) => createCollectionCard({
+          kind: "event",
+          id: event.id,
+          name: event.name,
+          detail: event.detail,
+          cover: event.cover,
+        }));
+        fragment.append(createOrganizeSection(
+          year,
+          `${numberFormatter.format(yearEvents.length)} sự kiện`,
+          cards,
+          "events",
+        ));
+      }
     }
-    if (folders.length === 0) {
+    if (folders.length === 0 || !showTab("folders")) {
       elements.mediaGrid.append(fragment);
       return;
     }
@@ -3330,6 +3474,22 @@
     elements.mediaGrid.append(fragment);
   }
 
+  function syncCardSelectionState(card) {
+    const item = state.visibleItems[Number(card.dataset.index)];
+    const isSelected = Boolean(item && state.selectedIds.has(item.id));
+    card.classList.toggle("is-selected", isSelected);
+    card.classList.toggle("is-favorite", Boolean(item && state.favoriteItems.has(item.id)));
+    if (state.selectionMode) {
+      card.setAttribute("aria-pressed", String(isSelected));
+      card.setAttribute("aria-label", `${isSelected ? "Bỏ chọn" : "Chọn"} ${item?.name || "mục"}`);
+    } else {
+      card.removeAttribute("aria-pressed");
+      if (item) {
+        card.setAttribute("aria-label", `Mở ${item.name}`);
+      }
+    }
+  }
+
   function updateSelectionUi() {
     const selectedCount = state.selectedIds.size;
     const selectedItems = state.visibleItems.filter((item) => state.selectedIds.has(item.id));
@@ -3359,19 +3519,7 @@
     elements.restoreSelected.hidden = state.view !== "hidden";
 
     for (const card of elements.mediaGrid.querySelectorAll(".media-card:not(.is-skeleton)")) {
-      const item = state.visibleItems[Number(card.dataset.index)];
-      const isSelected = Boolean(item && state.selectedIds.has(item.id));
-      card.classList.toggle("is-selected", isSelected);
-      card.classList.toggle("is-favorite", Boolean(item && state.favoriteItems.has(item.id)));
-      if (state.selectionMode) {
-        card.setAttribute("aria-pressed", String(isSelected));
-        card.setAttribute("aria-label", `${isSelected ? "Bỏ chọn" : "Chọn"} ${item?.name || "mục"}`);
-      } else {
-        card.removeAttribute("aria-pressed");
-        if (item) {
-          card.setAttribute("aria-label", `Mở ${item.name}`);
-        }
-      }
+      syncCardSelectionState(card);
     }
 
     const groupSelection = new Map();
@@ -3568,14 +3716,37 @@
   function timelineGroup(item) {
     const key = timelineGroupKey(item);
     if (key.startsWith("name:")) {
-      return { key, title: key.slice(5) };
+      const title = key.slice(5);
+      return { key, title, compactTitle: title, month: "", year: "" };
     }
     if (key.startsWith("date:")) {
-      const date = new Date(`${key.slice(5)}T12:00:00`);
-      const formatted = timelineDateFormatter.format(date);
-      return { key, title: formatted.charAt(0).toLocaleUpperCase("vi") + formatted.slice(1) };
+      const dateKey = key.slice(5);
+      const date = new Date(`${dateKey}T12:00:00`);
+      return {
+        key,
+        title: capitalizeVietnamese(timelineDateFormatter.format(date)),
+        compactTitle: relativeDayTitle(dateKey, date),
+        month: capitalizeVietnamese(monthYearFormatter.format(date)),
+        year: dateKey.slice(0, 4),
+      };
     }
-    return { key, title: item.folder || "Thư mục gốc" };
+    const title = item.folder || "Thư mục gốc";
+    return { key, title, compactTitle: title, month: "Chưa rõ ngày chụp", year: "?" };
+  }
+
+  function capitalizeVietnamese(text) {
+    return text.charAt(0).toLocaleUpperCase("vi") + text.slice(1);
+  }
+
+  function relativeDayTitle(dateKey, date) {
+    const now = Math.floor(Date.now() / 1000);
+    if (dateKey === localDateKey(now)) {
+      return "Hôm nay";
+    }
+    if (dateKey === localDateKey(now - 86400)) {
+      return "Hôm qua";
+    }
+    return capitalizeVietnamese(dayTitleFormatter.format(date));
   }
 
   function createTimelineSection(group) {
@@ -3592,8 +3763,8 @@
     select.setAttribute("aria-label", `Chọn nhóm ${group.title}`);
     select.setAttribute("aria-pressed", "false");
     select.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 12 3 3 7-7" /></svg>';
-    const title = document.createElement("h2");
-    title.textContent = group.title;
+    const title = document.createElement("h3");
+    title.textContent = group.compactTitle || group.title;
     const count = document.createElement("span");
     count.className = "timeline-count";
     count.dataset.count = "0";
@@ -3602,6 +3773,12 @@
 
     const grid = document.createElement("div");
     grid.className = "timeline-grid";
+    if (group.showMonth) {
+      const month = document.createElement("h2");
+      month.className = "timeline-month";
+      month.textContent = group.month;
+      section.append(month);
+    }
     section.append(header, grid);
     return section;
   }
@@ -3623,53 +3800,66 @@
     return tones[hash % tones.length];
   }
 
-  function addMetadataPlaceholder(preview, item) {
-    if (!item.hasMetadata) {
-      return;
+  function setTileTone(preview, item) {
+    if (/^#[0-9a-fA-F]{6}$/.test(item.color || "")) {
+      preview.style.setProperty("--tile-tone", item.color);
+    } else if (item.hasMetadata) {
+      preview.style.setProperty("--tile-tone", metadataPlaceholderTone(item));
     }
-    const metadata = item.metadata || {};
-    const width = Number(metadata.width);
-    const height = Number(metadata.height);
-    const dimensions = width > 0 && height > 0
-      ? `${numberFormatter.format(width)} × ${numberFormatter.format(height)}`
-      : item.type === "video" ? "Video" : "Ảnh";
-    const placeholder = document.createElement("span");
-    placeholder.className = "metadata-placeholder";
-    const tone = /^#[0-9a-fA-F]{6}$/.test(item.color || "")
-      ? item.color
-      : metadataPlaceholderTone(item);
-    placeholder.style.setProperty("--metadata-placeholder-tone", tone);
-    placeholder.dataset.orientation = width > height ? "landscape" : height > width ? "portrait" : "square";
+  }
 
-    const primary = document.createElement("strong");
-    primary.textContent = item.dateKey?.slice(0, 4) || item.camera || (item.type === "video" ? "Video" : "Ảnh");
-    const secondary = document.createElement("small");
-    secondary.textContent = dimensions;
-    placeholder.append(primary, secondary);
-    preview.prepend(placeholder);
+  function formatDuration(value) {
+    const total = Math.round(Number(value));
+    if (!Number.isFinite(total) || total <= 0) {
+      return "";
+    }
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = String(total % 60).padStart(2, "0");
+    return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${seconds}` : `${minutes}:${seconds}`;
+  }
+
+  function itemCaption(item) {
+    if (!item.dateTaken) {
+      return item.name;
+    }
+    const time = clockFormatter.format(new Date(item.dateTaken * 1000));
+    return item.camera ? `${time} · ${item.camera}` : time;
+  }
+
+  function createMediaBadge(item) {
+    const extension = String(item.extension || "").toLowerCase();
+    const isRaw = RAW_IMAGE_EXTENSIONS.has(extension);
+    if (item.type !== "video" && extension !== "gif" && !isRaw) {
+      return null;
+    }
+    const badge = document.createElement("span");
+    badge.className = "media-type";
+    if (item.type === "video") {
+      badge.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z" /></svg>';
+      const duration = document.createElement("span");
+      duration.textContent = formatDuration(item.metadata?.duration);
+      badge.append(duration);
+    } else {
+      badge.textContent = isRaw ? "RAW" : "GIF";
+    }
+    return badge;
   }
 
   function createMediaCard(item, index) {
     const fragment = elements.mediaCardTemplate.content.cloneNode(true);
     const card = fragment.querySelector(".media-card");
     const preview = fragment.querySelector(".media-preview");
-    const name = fragment.querySelector(".media-name");
-    const folder = fragment.querySelector(".media-folder");
     const detail = fragment.querySelector(".media-detail");
 
     card.dataset.index = String(index);
     card.dataset.itemId = item.id;
     card.setAttribute("aria-label", `Mở ${item.name}`);
-    name.textContent = item.name;
-    folder.textContent = item.folder;
-    detail.textContent = itemDetail(item);
-    card.classList.toggle("has-metadata", Boolean(item.hasMetadata));
-    addMetadataPlaceholder(preview, item);
-
-    const typeBadge = document.createElement("span");
-    typeBadge.className = "media-type";
-    typeBadge.textContent = item.extension;
-    preview.append(typeBadge);
+    detail.textContent = itemCaption(item);
+    const typeBadge = createMediaBadge(item);
+    if (typeBadge) {
+      preview.append(typeBadge);
+    }
     addPreviewImage(preview, item);
 
     if (state.selectedIds.has(item.id)) {
@@ -3679,6 +3869,354 @@
     card.classList.toggle("is-favorite", state.favoriteItems.has(item.id));
 
     return fragment;
+  }
+
+  // === Justified timeline ===
+  // Every tile's size is known from metadata before any image loads, so the whole
+  // page height is computed up front: the scrollbar and scrubber are truthful from
+  // the first paint, and only sections near the viewport hold real DOM.
+  function usesJustifiedTimeline() {
+    return Boolean(timelineSectionObserver) && ["album", "offline"].includes(state.mode) &&
+      !["albums", "map"].includes(state.view);
+  }
+
+  function itemAspectRatio(item) {
+    const width = Number(item.metadata?.width);
+    const height = Number(item.metadata?.height);
+    if (!(width > 0 && height > 0)) {
+      return 4 / 3;
+    }
+    return Math.min(2.4, Math.max(0.5, width / height));
+  }
+
+  function timelineGap() {
+    return window.innerWidth <= 760 ? 2 : 4;
+  }
+
+  function timelineRowTarget(width) {
+    const chosen = Number(elements.sizeInput.value) || 180;
+    return Math.max(84, Math.min(chosen, width * 0.42));
+  }
+
+  function buildTimelineSections() {
+    const sections = [];
+    let current = null;
+    let previousMonth = "";
+    state.visibleItems.forEach((item, index) => {
+      const key = timelineGroupKey(item);
+      if (!current || current.group.key !== key) {
+        const group = timelineGroup(item);
+        group.showMonth = Boolean(group.month) && group.month !== previousMonth;
+        previousMonth = group.month;
+        current = { group, start: index, end: index, placements: [], height: 0, top: 0, populated: false };
+        sections.push(current);
+      }
+      current.end = index + 1;
+    });
+    return sections;
+  }
+
+  function layoutTimelineSection(section, width, target, gap) {
+    const placements = [];
+    let y = 0;
+    let row = [];
+    let aspectSum = 0;
+    const heightFor = (count, sum) => (width - gap * (count - 1)) / sum;
+    const flush = (height, fill) => {
+      const rowHeight = Math.round(height);
+      let x = 0;
+      row.forEach(([index, aspect], position) => {
+        const left = Math.round(x);
+        const right = fill && position === row.length - 1 ? width : Math.round(x + aspect * height);
+        placements.push([index, left, y, right - left, rowHeight]);
+        x += aspect * height + gap;
+      });
+      y += rowHeight + gap;
+      row = [];
+      aspectSum = 0;
+    };
+    for (let index = section.start; index < section.end; index += 1) {
+      const aspect = itemAspectRatio(state.visibleItems[index]);
+      const nextHeight = heightFor(row.length + 1, aspectSum + aspect);
+      if (nextHeight > target) {
+        row.push([index, aspect]);
+        aspectSum += aspect;
+        continue;
+      }
+      // The row is full: end it wherever its height lands closest to the target.
+      const currentHeight = row.length ? heightFor(row.length, aspectSum) : Infinity;
+      if (Math.abs(currentHeight - target) < Math.abs(nextHeight - target)) {
+        flush(currentHeight, true);
+        row.push([index, aspect]);
+        aspectSum = aspect;
+      } else {
+        row.push([index, aspect]);
+        aspectSum += aspect;
+        flush(nextHeight, true);
+      }
+    }
+    if (row.length) {
+      flush(Math.min(target, heightFor(row.length, aspectSum)), false);
+    }
+    section.placements = placements;
+    section.height = Math.max(0, y - gap);
+  }
+
+  function positionTimelineCard(card, placement) {
+    card.style.left = `${placement[1]}px`;
+    card.style.top = `${placement[2]}px`;
+    card.style.width = `${placement[3]}px`;
+    card.style.height = `${placement[4]}px`;
+  }
+
+  function populateTimelineSection(section) {
+    if (section.populated) {
+      return;
+    }
+    section.populated = true;
+    const fragment = document.createDocumentFragment();
+    for (const placement of section.placements) {
+      const cardFragment = createMediaCard(state.visibleItems[placement[0]], placement[0]);
+      const card = cardFragment.querySelector(".media-card");
+      positionTimelineCard(card, placement);
+      syncCardSelectionState(card);
+      fragment.append(cardFragment);
+    }
+    section.grid.append(fragment);
+  }
+
+  function depopulateTimelineSection(section) {
+    if (!section.populated) {
+      return;
+    }
+    section.populated = false;
+    for (const image of section.grid.querySelectorAll(".media-preview img")) {
+      releaseThumbnailImage(image);
+    }
+    section.grid.replaceChildren();
+  }
+
+  function applyTimelineLayout() {
+    const timeline = state.timeline;
+    const width = elements.mediaGrid.clientWidth;
+    if (!width || timeline.sections.length === 0) {
+      return;
+    }
+    timeline.width = width;
+    const target = timelineRowTarget(width);
+    const gap = timelineGap();
+    for (const section of timeline.sections) {
+      layoutTimelineSection(section, width, target, gap);
+      section.grid.style.height = `${section.height}px`;
+      if (section.populated) {
+        const cards = section.grid.querySelectorAll(".media-card");
+        section.placements.forEach((placement, position) => {
+          if (cards[position]) {
+            positionTimelineCard(cards[position], placement);
+          }
+        });
+      }
+    }
+    for (const section of timeline.sections) {
+      section.top = section.element.offsetTop;
+    }
+  }
+
+  function timelineGridTop() {
+    return elements.mediaGrid.getBoundingClientRect().top + window.scrollY;
+  }
+
+  function timelineSectionAtOffset(offset) {
+    const sections = state.timeline.sections;
+    let low = 0;
+    let high = sections.length - 1;
+    while (low < high) {
+      const middle = Math.ceil((low + high) / 2);
+      if (sections[middle].top <= offset) {
+        low = middle;
+      } else {
+        high = middle - 1;
+      }
+    }
+    return sections[low] || null;
+  }
+
+  function relayoutTimeline() {
+    if (!usesJustifiedTimeline() || state.timeline.sections.length === 0) {
+      return;
+    }
+    const gridTop = timelineGridTop();
+    const offset = window.scrollY - gridTop;
+    const anchor = offset > 0 ? timelineSectionAtOffset(offset) : null;
+    const anchorProgress = anchor ? (offset - anchor.top) / Math.max(1, anchor.element.offsetHeight) : 0;
+    applyTimelineLayout();
+    if (anchor) {
+      window.scrollTo({ top: timelineGridTop() + anchor.top + anchorProgress * anchor.element.offsetHeight, behavior: "instant" });
+    }
+    renderTimelineScrubber();
+  }
+
+  let timelineRelayoutFrame = 0;
+  function scheduleTimelineRelayout() {
+    cancelAnimationFrame(timelineRelayoutFrame);
+    timelineRelayoutFrame = requestAnimationFrame(relayoutTimeline);
+  }
+
+  function renderJustifiedTimeline(keepPosition) {
+    const previousScroll = window.scrollY;
+    clearMediaGrid();
+    const sections = buildTimelineSections();
+    state.timeline = { sections, width: 0 };
+    state.renderedCount = state.visibleItems.length;
+
+    const fragment = document.createDocumentFragment();
+    for (const section of sections) {
+      const element = createTimelineSection(section.group);
+      const grid = element.querySelector(".timeline-grid");
+      grid.classList.add("is-justified");
+      grid.timelineSection = section;
+      const count = element.querySelector(".timeline-count");
+      const total = section.end - section.start;
+      count.dataset.count = String(total);
+      count.textContent = `${numberFormatter.format(total)} mục`;
+      section.element = element;
+      section.grid = grid;
+      fragment.append(element);
+    }
+    elements.mediaGrid.append(fragment);
+    applyTimelineLayout();
+    for (const section of sections) {
+      timelineSectionObserver.observe(section.grid);
+    }
+    updateSelectionUi();
+    renderTimelineRail();
+
+    if (keepPosition) {
+      window.scrollTo({ top: previousScroll, behavior: "instant" });
+    } else {
+      const stuckAt = elements.libraryToolbar.getBoundingClientRect().top + window.scrollY - stickyTopOffset();
+      if (window.scrollY > stuckAt) {
+        window.scrollTo({ top: stuckAt, behavior: "instant" });
+      }
+    }
+  }
+
+  function stickyTopOffset() {
+    return elements.searchInput.closest(".topbar").offsetHeight;
+  }
+
+  function revealViewerItemInTimeline(index) {
+    if (!usesJustifiedTimeline() || index < 0) {
+      return;
+    }
+    const section = state.timeline.sections.find((candidate) => index >= candidate.start && index < candidate.end);
+    const placement = section?.placements[index - section.start];
+    if (!section || !placement) {
+      return;
+    }
+    // The grid's offsetTop is measured from .media-grid, so it already includes the section.
+    const cardTop = timelineGridTop() + section.grid.offsetTop + placement[2];
+    const headerSpace = stickyTopOffset() + elements.libraryToolbar.offsetHeight + 44;
+    if (cardTop < window.scrollY + headerSpace || cardTop + placement[4] > window.scrollY + window.innerHeight) {
+      window.scrollTo({ top: Math.max(0, cardTop - headerSpace), behavior: "instant" });
+    }
+  }
+
+  // === Timeline scrubber ===
+  const scrubberState = { active: false, frame: 0, thumb: null, bubble: null };
+
+  function scrubberMaxScroll() {
+    return Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  }
+
+  function renderTimelineScrubber() {
+    const rail = elements.timelineRail;
+    const sections = state.timeline.sections;
+    const isNameSort = state.sort === "name-asc" || state.sort === "name-desc";
+    const shouldShow = sections.length > 1 && !isNameSort && scrubberMaxScroll() > window.innerHeight;
+    rail.hidden = !shouldShow;
+    document.body.classList.toggle("has-scrubber", shouldShow);
+    rail.replaceChildren();
+    if (!shouldShow) {
+      return;
+    }
+
+    const height = rail.clientHeight;
+    const maxScroll = scrubberMaxScroll();
+    const gridTop = timelineGridTop();
+    const fragment = document.createDocumentFragment();
+    let previousYear = "";
+    let lastY = -Infinity;
+    sections.forEach((section, index) => {
+      const year = section.group.year;
+      if (!year || year === previousYear) {
+        return;
+      }
+      previousYear = year;
+      const y = Math.min(1, (gridTop + section.top) / maxScroll) * height;
+      if (y - lastY < 20 || y > height - 10) {
+        return;
+      }
+      lastY = y;
+      const mark = document.createElement("button");
+      mark.type = "button";
+      mark.className = "scrubber-mark";
+      mark.dataset.scrubSection = String(index);
+      mark.style.top = `${y}px`;
+      mark.textContent = year === "?" ? "Khác" : year;
+      mark.setAttribute("aria-label", year === "?" ? "Đến ảnh chưa rõ ngày chụp" : `Đến năm ${year}`);
+      fragment.append(mark);
+    });
+    scrubberState.thumb = document.createElement("span");
+    scrubberState.thumb.className = "scrubber-thumb";
+    scrubberState.bubble = document.createElement("span");
+    scrubberState.bubble.className = "scrubber-bubble";
+    scrubberState.bubble.hidden = true;
+    fragment.append(scrubberState.thumb, scrubberState.bubble);
+    rail.append(fragment);
+    updateScrubberThumb();
+  }
+
+  function updateScrubberThumb() {
+    if (scrubberState.thumb && !elements.timelineRail.hidden) {
+      const y = Math.min(1, window.scrollY / scrubberMaxScroll()) * elements.timelineRail.clientHeight;
+      scrubberState.thumb.style.transform = `translateY(${y}px)`;
+      // The phone handle would sit on the page title until there's something to scrub past.
+      elements.timelineRail.classList.toggle("is-at-top", window.scrollY < 120 && !scrubberState.active);
+    }
+  }
+
+  function scrubberLabelAt(scrollTop) {
+    const section = timelineSectionAtOffset(scrollTop - timelineGridTop());
+    return section?.group.month || section?.group.title || "";
+  }
+
+  function showScrubberBubble(clientY) {
+    const bounds = elements.timelineRail.getBoundingClientRect();
+    const fraction = Math.min(1, Math.max(0, (clientY - bounds.top) / bounds.height));
+    const scrollTop = fraction * scrubberMaxScroll();
+    if (scrubberState.bubble) {
+      scrubberState.bubble.hidden = false;
+      scrubberState.bubble.textContent = scrubberLabelAt(scrollTop);
+      scrubberState.bubble.style.top = `${fraction * bounds.height}px`;
+    }
+    return scrollTop;
+  }
+
+  function endScrubbing() {
+    scrubberState.active = false;
+    elements.timelineRail.classList.remove("is-scrubbing");
+    if (scrubberState.bubble) {
+      scrubberState.bubble.hidden = true;
+    }
+  }
+
+  function jumpToTimelineSection(index) {
+    const section = state.timeline.sections[index];
+    if (section) {
+      const top = timelineGridTop() + section.top - stickyTopOffset() - elements.libraryToolbar.offsetHeight;
+      window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
+    }
   }
 
   function renderNextPage(targetCount = PAGE_SIZE) {
@@ -3693,7 +4231,7 @@
       const item = state.visibleItems[index];
       const group = timelineGroup(item);
       if (!activeSection || activeSection.dataset.groupKey !== group.key) {
-        activeSection = createTimelineSection(group);
+        activeSection = createTimelineSection({ ...group, compactTitle: group.title });
         elements.mediaGrid.append(activeSection);
       }
       activeSection.querySelector(".timeline-grid").append(createMediaCard(item, index));
@@ -3708,7 +4246,7 @@
       albums: "Album",
       favorites: "Yêu thích",
       hidden: "Đã ẩn",
-      map: "Bản đồ ảnh",
+      map: "Bản đồ",
     };
     const customCollection = state.view === "collection"
       ? state.customCollections.get(state.activeCollectionId)
@@ -3717,7 +4255,7 @@
       ? smartEvents().find((candidate) => candidate.id === state.activeEventId)
       : null;
     elements.albumTitle.textContent = customCollection?.name || event?.name || collectionTitles[state.view] || (
-      state.filter === "image" ? "Ảnh" : state.filter === "video" ? "Video" : "Dòng thời gian"
+      state.timelineFilters.folder ? folderDisplay(state.timelineFilters.folder).title : "Thư viện"
     );
     if (!state.endpoint) {
       elements.albumSummary.textContent = "Nhập IP và cổng của máy lưu album để bắt đầu.";
@@ -3753,7 +4291,7 @@
         : "";
       const suffix = state.view === "collection"
         ? "Lưu trên thiết bị này"
-        : event?.detail || "Theo thời điểm chụp";
+        : event?.folderDetail || "Theo thời điểm chụp";
       elements.albumSummary.textContent =
         `${numberFormatter.format(state.visibleItems.length)} mục${qualifier} · ${suffix}`;
       return;
@@ -3779,7 +4317,7 @@
     const baseSummary = `${numberFormatter.format(visibleImages)} ảnh · ${numberFormatter.format(visibleVideos)} video`;
     const hasActiveQuery = state.filter !== "all" || Boolean(state.query.trim()) || activeTimelineFilterCount() > 0;
     elements.albumSummary.textContent = hasActiveQuery
-      ? `${numberFormatter.format(state.total)} kết quả · ${baseSummary}`
+      ? `${numberFormatter.format(state.total)} kết quả`
       : baseSummary;
   }
 
@@ -3843,8 +4381,11 @@
       video.removeAttribute("src");
       video.load();
     }
-    const image = elements.viewerStage.querySelector("img");
-    image?.removeAttribute("src");
+    for (const image of elements.viewerStage.querySelectorAll("img")) {
+      image.removeAttribute("src");
+    }
+    state.viewerImageReady = false;
+    releaseViewerPreview();
 
     if (state.viewerObjectUrl) {
       URL.revokeObjectURL(state.viewerObjectUrl);
@@ -3856,6 +4397,55 @@
       elements.viewerOfflineStatus.hidden = true;
     }
     elements.viewerStage.replaceChildren();
+  }
+
+  function releaseViewerPreview() {
+    if (state.viewerPreviewUrl) {
+      URL.revokeObjectURL(state.viewerPreviewUrl);
+      state.viewerPreviewUrl = null;
+    }
+  }
+
+  // Originals come through a home-server tunnel (and HEIC must also be decoded), so
+  // show the already-cached thumbnail immediately instead of an empty stage.
+  async function showViewerPreview(item, token, signal) {
+    try {
+      const [url] = await thumbnailSources(item);
+      if (!url) {
+        return;
+      }
+      const blob = await loadThumbnailBlob(url, signal);
+      if (token !== state.viewerLoadToken || state.viewerImageReady) {
+        return;
+      }
+      const preview = document.createElement("img");
+      preview.alt = "";
+      preview.className = "viewer-preview";
+      state.viewerPreviewUrl = URL.createObjectURL(blob);
+      preview.src = state.viewerPreviewUrl;
+      elements.viewerStage.prepend(preview);
+    } catch {
+      // The spinner alone is an acceptable fallback.
+    }
+  }
+
+  function viewerTitleText(item) {
+    if (!item.dateTaken) {
+      return item.name;
+    }
+    const date = new Date(item.dateTaken * 1000);
+    return `${longDateFormatter.format(date)} · ${clockFormatter.format(date)}`;
+  }
+
+  let viewerChromeTimer = 0;
+  function wakeViewerChrome() {
+    elements.viewerShell.classList.remove("chrome-hidden");
+    clearTimeout(viewerChromeTimer);
+    viewerChromeTimer = window.setTimeout(() => {
+      if (elements.viewerDialog.open && !elements.viewerShell.classList.contains("show-info")) {
+        elements.viewerShell.classList.add("chrome-hidden");
+      }
+    }, 3200);
   }
 
   function renderViewerLoading() {
@@ -4081,7 +4671,20 @@
         }
       }, { once: true });
       image.src = state.viewerObjectUrl;
+      if (image.decode) {
+        // Swap only once decoded, so the preview never flashes to an empty frame.
+        // The timeout covers background tabs, where decode() may never settle.
+        await Promise.race([
+          image.decode().catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, 4000)),
+        ]);
+      }
+      if (token !== state.viewerLoadToken || !state.viewerObjectUrl) {
+        return;
+      }
+      state.viewerImageReady = true;
       elements.viewerStage.replaceChildren(image);
+      releaseViewerPreview();
     } catch (error) {
       if (error?.name !== "AbortError" && token === state.viewerLoadToken) {
         state.viewerAbortController = null;
@@ -4181,7 +4784,9 @@
     const captured = item.dateTaken ? formatDateTime(item.dateTaken) : "";
     setViewerInfoRow(elements.viewerInfoCapturedRow, elements.viewerInfoDate, captured);
     elements.viewerInfoCapturedRow.title = item.dateSource || "";
-    elements.viewerInfoModified.textContent = formatDateTime(Number(item.modified)) || "Không có thông tin";
+    const modified = formatDateTime(Number(item.modified));
+    elements.viewerInfoModified.textContent = modified;
+    elements.viewerInfoModified.parentElement.hidden = !modified;
 
     const width = Number(metadata.width);
     const height = Number(metadata.height);
@@ -4196,7 +4801,11 @@
       elements.viewerInfoSettings,
       captureSettingsText(metadata),
     );
-    setViewerInfoRow(elements.viewerInfoDurationRow, elements.viewerInfoDuration, metadata.duration);
+    setViewerInfoRow(
+      elements.viewerInfoDurationRow,
+      elements.viewerInfoDuration,
+      formatDuration(metadata.duration) || metadata.duration,
+    );
 
     const latitude = Number(metadata.latitude);
     const longitude = Number(metadata.longitude);
@@ -4239,11 +4848,13 @@
     const viewerTotal = state.mode === "api" && state.view === "library"
       ? state.total
       : state.visibleItems.length;
-    elements.viewerName.textContent = item.name;
-    elements.viewerFolder.textContent = item.folder;
+    elements.viewerName.textContent = viewerTitleText(item);
+    elements.viewerFolder.textContent = item.camera || folderDisplay(item.folderKey).title;
+    elements.viewerStage.style.setProperty("--viewer-tone", item.color || "transparent");
     elements.viewerInfoName.textContent = item.name;
     elements.viewerInfoFolder.textContent = item.folder;
-    elements.viewerInfoSize.textContent = formatBytes(item.bytes) || "Không có thông tin";
+    elements.viewerInfoSize.textContent = formatBytes(item.bytes);
+    elements.viewerInfoSize.parentElement.hidden = !item.bytes;
     elements.viewerInfoType.textContent = `${item.type === "video" ? "Video" : "Ảnh"} · ${item.extension.toUpperCase()}`;
     updateViewerMetadata(item);
     elements.viewerOpenOriginal.href = item.url;
@@ -4255,6 +4866,7 @@
       elements.viewerDialog.showModal();
     }
     updateViewerActionUi(item);
+    wakeViewerChrome();
 
     startViewerMedia(item, index, token);
   }
@@ -4263,6 +4875,7 @@
     if (item.type === "image") {
       renderViewerLoading();
       loadViewerImage(item, index, token);
+      showViewerPreview(item, token, state.viewerAbortController?.signal);
     } else {
       const video = document.createElement("video");
       video.controls = true;
@@ -4293,6 +4906,9 @@
   }
 
   function closeViewer() {
+    if (elements.viewerDialog.open) {
+      revealViewerItemInTimeline(state.viewerIndex);
+    }
     releaseViewerMedia();
     state.viewerIndex = -1;
     setViewerInfoVisible(false);
@@ -4662,6 +5278,78 @@
     const button = event.target.closest("[data-timeline-year]");
     if (button) {
       selectTimelineYear(button.dataset.timelineYear);
+      return;
+    }
+    const mark = event.target.closest("[data-scrub-section]");
+    if (mark) {
+      jumpToTimelineSection(Number(mark.dataset.scrubSection));
+    }
+  });
+  elements.timelineRail.addEventListener("pointerdown", (event) => {
+    if (!elements.timelineRail.classList.contains("is-scrubber") || event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    scrubberState.active = true;
+    elements.timelineRail.setPointerCapture(event.pointerId);
+    elements.timelineRail.classList.add("is-scrubbing");
+    window.scrollTo({ top: showScrubberBubble(event.clientY), behavior: "instant" });
+  });
+  elements.timelineRail.addEventListener("pointermove", (event) => {
+    if (!elements.timelineRail.classList.contains("is-scrubber")) {
+      return;
+    }
+    if (!scrubberState.active && event.pointerType !== "mouse") {
+      return;
+    }
+    const clientY = event.clientY;
+    cancelAnimationFrame(scrubberState.frame);
+    scrubberState.frame = requestAnimationFrame(() => {
+      const scrollTop = showScrubberBubble(clientY);
+      if (scrubberState.active) {
+        window.scrollTo({ top: scrollTop, behavior: "instant" });
+      }
+    });
+  });
+  elements.timelineRail.addEventListener("pointerup", endScrubbing);
+  elements.timelineRail.addEventListener("pointercancel", endScrubbing);
+  elements.timelineRail.addEventListener("pointerleave", () => {
+    cancelAnimationFrame(scrubberState.frame);
+    if (!scrubberState.active && scrubberState.bubble) {
+      scrubberState.bubble.hidden = true;
+    }
+  });
+  window.addEventListener("scroll", () => {
+    if (state.timeline.sections.length > 0) {
+      updateScrubberThumb();
+    }
+  }, { passive: true });
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(() => {
+      if (state.timeline.sections.length > 0 && elements.mediaGrid.clientWidth !== state.timeline.width) {
+        scheduleTimelineRelayout();
+      }
+    }).observe(elements.mediaGrid);
+  }
+
+  elements.headingBack.addEventListener("click", () => {
+    elements.navigationButtons.find((button) => button.dataset.navView === "albums")?.click();
+  });
+
+  // Browsers without the Popover API fall back to a plain hidden toggle.
+  if (!("popover" in HTMLElement.prototype)) {
+    elements.moreMenu.hidden = true;
+    elements.moreButton.addEventListener("click", () => {
+      elements.moreMenu.hidden = !elements.moreMenu.hidden;
+    });
+  }
+  elements.moreMenu.addEventListener("click", (event) => {
+    if (event.target.closest("button")) {
+      if ("popover" in HTMLElement.prototype) {
+        elements.moreMenu.hidePopover();
+      } else {
+        elements.moreMenu.hidden = true;
+      }
     }
   });
 
@@ -4733,9 +5421,17 @@
     } catch {
       // The visual setting still applies for the current session.
     }
+    scheduleTimelineRelayout();
   });
 
   elements.mediaGrid.addEventListener("click", (event) => {
+    const albumsTab = event.target.closest("[data-albums-tab]");
+    if (albumsTab) {
+      state.albumsTab = albumsTab.dataset.albumsTab;
+      renderFolderView();
+      window.scrollTo({ top: 0, behavior: "instant" });
+      return;
+    }
     const collectionCard = event.target.closest("[data-collection-card]");
     if (collectionCard) {
       openCustomCollection(collectionCard.dataset.collectionCard);
@@ -4786,6 +5482,37 @@
   });
   elements.viewerInfoClose.addEventListener("click", () => setViewerInfoVisible(false));
   elements.viewerDownload.addEventListener("click", downloadViewerItem);
+  elements.viewerDialog.addEventListener("pointermove", (event) => {
+    if (event.pointerType === "mouse") {
+      wakeViewerChrome();
+    }
+  });
+  let viewerSwipe = null;
+  elements.viewerStage.addEventListener("touchstart", (event) => {
+    const touch = event.touches.length === 1 ? event.touches[0] : null;
+    viewerSwipe = touch && !event.target.closest("video")
+      ? { x: touch.clientX, y: touch.clientY }
+      : null;
+  }, { passive: true });
+  elements.viewerStage.addEventListener("touchend", (event) => {
+    if (!viewerSwipe) {
+      return;
+    }
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - viewerSwipe.x;
+    const dy = touch.clientY - viewerSwipe.y;
+    viewerSwipe = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      moveViewer(dx < 0 ? 1 : -1);
+    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      if (elements.viewerShell.classList.contains("chrome-hidden")) {
+        wakeViewerChrome();
+      } else {
+        clearTimeout(viewerChromeTimer);
+        elements.viewerShell.classList.add("chrome-hidden");
+      }
+    }
+  }, { passive: true });
   elements.viewerPrevious.addEventListener("click", () => moveViewer(-1));
   elements.viewerNext.addEventListener("click", () => moveViewer(1));
   elements.viewerDialog.addEventListener("click", (event) => {
@@ -4800,10 +5527,15 @@
 
   document.addEventListener("keydown", (event) => {
     if (elements.viewerDialog.open) {
+      wakeViewerChrome();
       if (event.key === "ArrowLeft") {
         moveViewer(-1);
       } else if (event.key === "ArrowRight") {
         moveViewer(1);
+      } else if (event.key.toLowerCase() === "i" && !event.metaKey && !event.ctrlKey) {
+        setViewerInfoVisible(!elements.viewerShell.classList.contains("show-info"));
+      } else if (event.key.toLowerCase() === "f" && !event.metaKey && !event.ctrlKey) {
+        toggleViewerFavorite();
       }
       return;
     }
