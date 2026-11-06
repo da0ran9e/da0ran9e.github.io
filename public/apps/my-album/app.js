@@ -100,6 +100,10 @@
     clientCatalogComplete: false,
     albumMetaToken: 0,
     albumsTab: "",
+    signInRequired: false,
+    signInWindow: null,
+    signInTimer: 0,
+    signInChecking: false,
     timeline: { sections: [], width: 0 },
     viewerImageReady: false,
     viewerPreviewUrl: null,
@@ -166,6 +170,7 @@
     timelineFilterButton: document.querySelector("#timeline-filter-button"),
     randomEventButton: document.querySelector("#random-event-button"),
     headingBack: document.querySelector("#heading-back"),
+    viewerZoom: document.querySelector("#viewer-zoom"),
     moreButton: document.querySelector("#more-button"),
     moreMenu: document.querySelector("#more-menu"),
     timelineFilterCount: document.querySelector("#timeline-filter-count"),
@@ -911,6 +916,83 @@
 
   function hideNotice() {
     elements.connectionNotice.hidden = true;
+    elements.connectionNotice.classList.remove("is-sign-in");
+    elements.retryButton.textContent = "Thử lại";
+    state.signInRequired = false;
+    clearInterval(state.signInTimer);
+  }
+
+  // Cloudflare Access answers an expired session with a redirect to its login page.
+  // A cross-origin fetch can't follow that, so it only surfaces as "Failed to fetch";
+  // refusing to follow the redirect is what tells the two failures apart.
+  async function albumSessionState() {
+    if (!state.endpoint) {
+      return "unknown";
+    }
+    try {
+      const response = await fetch(state.baseUrl, {
+        cache: "no-store",
+        credentials: state.endpoint.kind === "cloud" ? "include" : "same-origin",
+        mode: "cors",
+        redirect: "manual",
+      });
+      if (response.type === "opaqueredirect") {
+        return "expired";
+      }
+      return response.status < 500 ? "ok" : "unknown";
+    } catch {
+      return "unknown";
+    }
+  }
+
+  function showSignInNotice(hasCachedAlbum) {
+    state.signInRequired = true;
+    elements.noticeTitle.textContent = "Cần đăng nhập lại";
+    elements.noticeMessage.textContent = hasCachedAlbum
+      ? "Phiên đăng nhập kho ảnh đã hết hạn. Ảnh đã lưu vẫn xem được; đăng nhập để tải ảnh mới."
+      : "Phiên đăng nhập kho ảnh đã hết hạn. Đăng nhập để xem album.";
+    elements.retryButton.textContent = "Đăng nhập";
+    elements.connectionNotice.classList.add("is-sign-in");
+    elements.connectionNotice.hidden = false;
+  }
+
+  function openSignInWindow() {
+    state.signInWindow = window.open(state.baseUrl, "my-album-sign-in", "popup,width=520,height=720");
+    if (!state.signInWindow) {
+      showToast("Trình duyệt đã chặn cửa sổ đăng nhập. Hãy cho phép cửa sổ bật lên rồi thử lại.");
+      return;
+    }
+    elements.noticeMessage.textContent = "Đăng nhập trong cửa sổ vừa mở, album sẽ tự tải lại khi xong.";
+    elements.retryButton.textContent = "Mở lại trang đăng nhập";
+    clearInterval(state.signInTimer);
+    const startedAt = Date.now();
+    state.signInTimer = window.setInterval(() => {
+      if (Date.now() - startedAt > 10 * 60 * 1000) {
+        clearInterval(state.signInTimer);
+        return;
+      }
+      checkSignInCompleted();
+    }, 2500);
+  }
+
+  async function checkSignInCompleted() {
+    if (!state.signInRequired || state.signInChecking) {
+      return;
+    }
+    state.signInChecking = true;
+    const session = await albumSessionState();
+    state.signInChecking = false;
+    if (session !== "ok" || !state.signInRequired) {
+      return;
+    }
+    try {
+      state.signInWindow?.close();
+    } catch {
+      // A window that can't be closed from here is harmless; the album still reloads.
+    }
+    state.signInWindow = null;
+    showToast("Đã đăng nhập lại.");
+    connectAlbum();
   }
 
   function showConnectionError(error) {
@@ -1606,7 +1688,7 @@
       try {
         setMetadataProgress(4, "Đang đọc file…", formatBytes(file.size));
         const buffer = await file.arrayBuffer();
-        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-29", window.location.href));
+        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-30", window.location.href));
         worker.addEventListener("message", (event) => {
           const message = event.data || {};
           if (message.type === "progress") {
@@ -4386,6 +4468,7 @@
     }
     state.viewerImageReady = false;
     releaseViewerPreview();
+    resetViewerZoom();
 
     if (state.viewerObjectUrl) {
       URL.revokeObjectURL(state.viewerObjectUrl);
@@ -4397,6 +4480,69 @@
       elements.viewerOfflineStatus.hidden = true;
     }
     elements.viewerStage.replaceChildren();
+  }
+
+  // === Viewer zoom ===
+  const VIEWER_MAX_ZOOM = 8;
+  const VIEWER_TAP_ZOOM = 2.5;
+  const viewerZoom = { scale: 1, x: 0, y: 0, pointers: new Map(), pinchDistance: 0, pinchX: 0, pinchY: 0 };
+
+  function viewerZoomImage() {
+    return elements.viewerStage.querySelector("img:not(.viewer-preview)");
+  }
+
+  function applyViewerZoom(animate = false) {
+    const zoomed = viewerZoom.scale > 1.001;
+    elements.viewerStage.classList.toggle("is-zoomed", zoomed);
+    elements.viewerZoom.setAttribute("aria-pressed", String(zoomed));
+    elements.viewerZoom.setAttribute("aria-label", zoomed ? "Thu nhỏ về vừa màn hình" : "Phóng to");
+    const image = viewerZoomImage();
+    if (!image) {
+      return;
+    }
+    const stageWidth = elements.viewerStage.clientWidth;
+    const stageHeight = elements.viewerStage.clientHeight;
+    const naturalWidth = image.naturalWidth || stageWidth;
+    const naturalHeight = image.naturalHeight || stageHeight;
+    // The image is object-fit: contain, so its painted size is smaller than its box;
+    // panning is limited by the painted size or the letterbox could be dragged into view.
+    const fit = Math.min(stageWidth / naturalWidth, stageHeight / naturalHeight);
+    const limitX = Math.max(0, (naturalWidth * fit * viewerZoom.scale - stageWidth) / 2);
+    const limitY = Math.max(0, (naturalHeight * fit * viewerZoom.scale - stageHeight) / 2);
+    viewerZoom.x = Math.min(limitX, Math.max(-limitX, viewerZoom.x));
+    viewerZoom.y = Math.min(limitY, Math.max(-limitY, viewerZoom.y));
+    image.classList.toggle("is-animating", animate);
+    image.style.transform = zoomed
+      ? `translate(${viewerZoom.x}px, ${viewerZoom.y}px) scale(${viewerZoom.scale})`
+      : "";
+  }
+
+  function zoomViewerAt(scale, clientX, clientY, animate = false) {
+    if (!viewerZoomImage()) {
+      return;
+    }
+    const bounds = elements.viewerStage.getBoundingClientRect();
+    const originX = (clientX ?? bounds.left + bounds.width / 2) - bounds.left - bounds.width / 2;
+    const originY = (clientY ?? bounds.top + bounds.height / 2) - bounds.top - bounds.height / 2;
+    const next = Math.min(VIEWER_MAX_ZOOM, Math.max(1, scale));
+    const ratio = next / viewerZoom.scale;
+    viewerZoom.x = originX - (originX - viewerZoom.x) * ratio;
+    viewerZoom.y = originY - (originY - viewerZoom.y) * ratio;
+    viewerZoom.scale = next;
+    applyViewerZoom(animate);
+  }
+
+  function toggleViewerZoom(clientX, clientY) {
+    zoomViewerAt(viewerZoom.scale > 1.001 ? 1 : VIEWER_TAP_ZOOM, clientX, clientY, true);
+  }
+
+  function resetViewerZoom() {
+    viewerZoom.scale = 1;
+    viewerZoom.x = 0;
+    viewerZoom.y = 0;
+    viewerZoom.pointers.clear();
+    elements.viewerStage.classList.remove("is-panning");
+    applyViewerZoom();
   }
 
   function releaseViewerPreview() {
@@ -4626,6 +4772,7 @@
       const image = document.createElement("img");
       image.alt = item.name;
       image.decoding = "async";
+      image.draggable = false;
       image.addEventListener("load", () => {
         if (token !== state.viewerLoadToken) {
           return;
@@ -4872,6 +5019,7 @@
   }
 
   function startViewerMedia(item, index, token) {
+    elements.viewerZoom.hidden = item.type !== "image";
     if (item.type === "image") {
       renderViewerLoading();
       loadViewerImage(item, index, token);
@@ -5093,7 +5241,14 @@
         return;
       }
       resetAlbumState();
-      if (await restoreCachedCatalog()) {
+      const sessionExpired = await albumSessionState() === "expired";
+      if (version !== state.requestVersion) {
+        return;
+      }
+      const hasCachedAlbum = await restoreCachedCatalog();
+      if (sessionExpired) {
+        showSignInNotice(hasCachedAlbum);
+      } else if (hasCachedAlbum) {
         showOfflineNotice(error);
       } else {
         showConnectionError(error);
@@ -5358,7 +5513,20 @@
     applyTheme(nextTheme, true);
   });
   elements.emptyConnect.addEventListener("click", () => connectAlbum());
-  elements.retryButton.addEventListener("click", () => connectAlbum());
+  elements.retryButton.addEventListener("click", () => {
+    if (state.signInRequired) {
+      openSignInWindow();
+    } else {
+      connectAlbum();
+    }
+  });
+  // Also covers signing in from another tab, and phones where the "popup" is just a tab.
+  window.addEventListener("focus", checkSignInCompleted);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      checkSignInCompleted();
+    }
+  });
   elements.refreshButton.addEventListener("click", () => connectAlbum({ force: true }));
 
   elements.searchInput.addEventListener("input", () => {
@@ -5488,6 +5656,9 @@
     }
   });
   let viewerSwipe = null;
+  let viewerLastTouchEnd = 0;
+  let viewerLastTap = 0;
+  let viewerTapTimer = 0;
   elements.viewerStage.addEventListener("touchstart", (event) => {
     const touch = event.touches.length === 1 ? event.touches[0] : null;
     viewerSwipe = touch && !event.target.closest("video")
@@ -5502,17 +5673,99 @@
     const dx = touch.clientX - viewerSwipe.x;
     const dy = touch.clientY - viewerSwipe.y;
     viewerSwipe = null;
+    viewerLastTouchEnd = performance.now();
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      moveViewer(dx < 0 ? 1 : -1);
-    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-      if (elements.viewerShell.classList.contains("chrome-hidden")) {
-        wakeViewerChrome();
-      } else {
-        clearTimeout(viewerChromeTimer);
-        elements.viewerShell.classList.add("chrome-hidden");
+      if (viewerZoom.scale <= 1.001) {
+        moveViewer(dx < 0 ? 1 : -1);
       }
+    } else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      clearTimeout(viewerTapTimer);
+      if (viewerLastTouchEnd - viewerLastTap < 300) {
+        viewerLastTap = 0;
+        toggleViewerZoom(touch.clientX, touch.clientY);
+        return;
+      }
+      viewerLastTap = viewerLastTouchEnd;
+      // Wait out a possible second tap before treating this as "toggle the controls".
+      viewerTapTimer = window.setTimeout(() => {
+        if (elements.viewerShell.classList.contains("chrome-hidden")) {
+          wakeViewerChrome();
+        } else {
+          clearTimeout(viewerChromeTimer);
+          elements.viewerShell.classList.add("chrome-hidden");
+        }
+      }, 280);
     }
   }, { passive: true });
+
+  elements.viewerZoom.addEventListener("click", () => toggleViewerZoom());
+  elements.viewerStage.addEventListener("dblclick", (event) => {
+    // Pointer capture retargets this event to the stage, so the target may not be the image.
+    const onPhoto = event.target === viewerZoomImage() || event.target === elements.viewerStage;
+    if (performance.now() - viewerLastTouchEnd > 500 && viewerZoomImage() && onPhoto) {
+      toggleViewerZoom(event.clientX, event.clientY);
+    }
+  });
+  elements.viewerStage.addEventListener("wheel", (event) => {
+    if (!viewerZoomImage()) {
+      return;
+    }
+    event.preventDefault();
+    wakeViewerChrome();
+    // ctrlKey marks a trackpad pinch, whose deltas are far smaller than a wheel's.
+    const speed = event.ctrlKey ? 0.012 : 0.0025;
+    zoomViewerAt(viewerZoom.scale * Math.exp(-event.deltaY * speed), event.clientX, event.clientY);
+  }, { passive: false });
+  elements.viewerStage.addEventListener("pointerdown", (event) => {
+    const image = viewerZoomImage();
+    if (!image || event.target !== image || event.button !== 0) {
+      return;
+    }
+    elements.viewerStage.setPointerCapture(event.pointerId);
+    viewerZoom.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    viewerZoom.pinchDistance = 0;
+    elements.viewerStage.classList.add("is-panning");
+  });
+  elements.viewerStage.addEventListener("pointermove", (event) => {
+    const previous = viewerZoom.pointers.get(event.pointerId);
+    if (!previous) {
+      return;
+    }
+    const dx = event.clientX - previous.x;
+    const dy = event.clientY - previous.y;
+    viewerZoom.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (viewerZoom.pointers.size >= 2) {
+      const [first, second] = viewerZoom.pointers.values();
+      const distance = Math.hypot(first.x - second.x, first.y - second.y);
+      const midX = (first.x + second.x) / 2;
+      const midY = (first.y + second.y) / 2;
+      if (viewerZoom.pinchDistance > 0) {
+        viewerZoom.x += midX - viewerZoom.pinchX;
+        viewerZoom.y += midY - viewerZoom.pinchY;
+        zoomViewerAt(viewerZoom.scale * (distance / viewerZoom.pinchDistance), midX, midY);
+      }
+      viewerZoom.pinchDistance = distance;
+      viewerZoom.pinchX = midX;
+      viewerZoom.pinchY = midY;
+    } else if (viewerZoom.scale > 1.001) {
+      viewerZoom.x += dx;
+      viewerZoom.y += dy;
+      applyViewerZoom();
+    }
+  });
+  for (const type of ["pointerup", "pointercancel"]) {
+    elements.viewerStage.addEventListener(type, (event) => {
+      viewerZoom.pointers.delete(event.pointerId);
+      viewerZoom.pinchDistance = 0;
+      if (viewerZoom.pointers.size === 0) {
+        elements.viewerStage.classList.remove("is-panning");
+      }
+    });
+  }
+  if ("ResizeObserver" in window) {
+    // Opening the info panel or rotating the device changes how far the photo can pan.
+    new ResizeObserver(() => applyViewerZoom()).observe(elements.viewerStage);
+  }
   elements.viewerPrevious.addEventListener("click", () => moveViewer(-1));
   elements.viewerNext.addEventListener("click", () => moveViewer(1));
   elements.viewerDialog.addEventListener("click", (event) => {
@@ -5528,7 +5781,20 @@
   document.addEventListener("keydown", (event) => {
     if (elements.viewerDialog.open) {
       wakeViewerChrome();
-      if (event.key === "ArrowLeft") {
+      const isZoomed = viewerZoom.scale > 1.001;
+      if (event.key === "+" || event.key === "=") {
+        zoomViewerAt(viewerZoom.scale * 1.5, undefined, undefined, true);
+      } else if (event.key === "-") {
+        zoomViewerAt(viewerZoom.scale / 1.5, undefined, undefined, true);
+      } else if (event.key === "0") {
+        zoomViewerAt(1, undefined, undefined, true);
+      } else if (isZoomed && event.key.startsWith("Arrow")) {
+        // While zoomed the arrows move around the photo instead of changing photos.
+        event.preventDefault();
+        viewerZoom.x += { ArrowLeft: 140, ArrowRight: -140 }[event.key] || 0;
+        viewerZoom.y += { ArrowUp: 140, ArrowDown: -140 }[event.key] || 0;
+        applyViewerZoom(true);
+      } else if (event.key === "ArrowLeft") {
         moveViewer(-1);
       } else if (event.key === "ArrowRight") {
         moveViewer(1);

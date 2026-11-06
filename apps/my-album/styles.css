@@ -564,6 +564,15 @@ body.has-scrubber main {
   background: var(--danger-soft);
 }
 
+.notice.is-sign-in {
+  background: var(--accent-soft);
+}
+
+.notice .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 .notice strong {
   font-size: 14px;
 }
@@ -1912,6 +1921,26 @@ body.has-selection .toast {
 
 .viewer-preview {
   filter: blur(6px) saturate(1.05);
+}
+
+.viewer-stage img:not(.viewer-preview) {
+  cursor: zoom-in;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.viewer-stage img.is-animating {
+  transition: transform 180ms ease;
+}
+
+.viewer-stage.is-zoomed img:not(.viewer-preview) {
+  cursor: grab;
+  will-change: transform;
+}
+
+.viewer-stage.is-zoomed.is-panning img:not(.viewer-preview) {
+  cursor: grabbing;
 }
 
 .viewer-loader {

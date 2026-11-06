@@ -6,8 +6,8 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#fafafa" />
     <title>My Album</title>
-    <link rel="stylesheet" href="./styles.css?v=album-ux-29" />
-    <script src="./app.js?v=album-ux-29" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=album-ux-30" />
+    <script src="./app.js?v=album-ux-30" defer></script>
   </head>
   <body>
     <aside class="sidebar" aria-label="Điều hướng My Album">
@@ -366,6 +366,9 @@
           </div>
           <span id="viewer-offline-status" class="viewer-offline-status" hidden>Đã lưu offline</span>
           <div class="viewer-actions">
+            <button id="viewer-zoom" class="viewer-icon-button" type="button" title="Phóng to (nhấp đúp, cuộn chuột, phím + −)" aria-label="Phóng to" aria-pressed="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.5" /><path d="m21 21-4.6-4.6M11 8v6M8 11h6" /></svg>
+            </button>
             <button id="viewer-favorite" class="viewer-icon-button" type="button" title="Yêu thích" aria-label="Thêm vào yêu thích" aria-pressed="false">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3C14.7 3 13.5 3.5 12 5c-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5C2 10.8 3.5 12.5 5 14l7 7Z" /></svg>
             </button>
