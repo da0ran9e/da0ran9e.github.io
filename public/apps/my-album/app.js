@@ -35,6 +35,43 @@
   // Chrome/Firefox cannot decode HEIC/HEIF originals; libheif (WASM) does it in-page.
   const LIBHEIF_JS_URL = "https://unpkg.com/libheif-js@1.18.2/libheif-wasm/libheif-bundle.js";
   const BROWSER_DECODABLE_IMAGE_TYPES = /^image\/(jpeg|png|webp|gif|avif|bmp)$/;
+  // The write service (album_write_server.py) moves "deleted" files here; never show them.
+  const SERVER_TRASH_FOLDER = "_Thung_rac";
+  const UPLOAD_MAX_BYTES = 95 * 1024 * 1024;
+  // Shooting-parameter filters bucket continuous values into ranges people actually pick.
+  const EXIF_FILTERS = {
+    iso: {
+      chip: (label) => `ISO ${label}`,
+      read: (item) => numberFrom(item.metadata?.iso),
+      buckets: [
+        ["le100", "≤ 100", (value) => value <= 100],
+        ["101-400", "101–400", (value) => value <= 400],
+        ["401-1600", "401–1600", (value) => value <= 1600],
+        ["gt1600", "> 1600", () => true],
+      ],
+    },
+    aperture: {
+      chip: (label) => `Khẩu ${label}`,
+      read: (item) => numberFrom(item.metadata?.aperture),
+      buckets: [
+        ["le2", "f/2 trở xuống", (value) => value <= 2],
+        ["2-4", "f/2.1 – f/4", (value) => value <= 4],
+        ["4-8", "f/4.1 – f/8", (value) => value <= 8],
+        ["gt8", "Trên f/8", () => true],
+      ],
+    },
+    focal: {
+      chip: (label) => label,
+      read: (item) => numberFrom(item.metadata?.focal35),
+      buckets: [
+        ["lt24", "Siêu rộng · dưới 24mm", (value) => value < 24],
+        ["24-35", "Rộng · 24–35mm", (value) => value <= 35],
+        ["36-70", "Tiêu chuẩn · 36–70mm", (value) => value <= 70],
+        ["71-200", "Tele · 71–200mm", (value) => value <= 200],
+        ["gt200", "Siêu tele · trên 200mm", () => true],
+      ],
+    },
+  };
   const HEIF_IMAGE_EXTENSIONS = new Set(["heic", "heif"]);
   // Camera RAW formats have no in-browser decoder; the viewer shows the thumbnail.
   const RAW_IMAGE_EXTENSIONS = new Set([
@@ -67,7 +104,10 @@
   }
 
   function emptyTimelineFilters() {
-    return { folder: "", camera: "", location: "", year: "", month: "", day: "" };
+    return {
+      folder: "", camera: "", location: "", year: "", month: "", day: "",
+      lens: "", iso: "", aperture: "", focal: "",
+    };
   }
 
   const state = {
@@ -101,6 +141,10 @@
     albumMetaToken: 0,
     albumsTab: "",
     signInRequired: false,
+    writeApi: false,
+    uploading: false,
+    mapPanelItems: [],
+    mapPanelCluster: null,
     signInWindow: null,
     signInTimer: 0,
     signInChecking: false,
@@ -171,6 +215,29 @@
     randomEventButton: document.querySelector("#random-event-button"),
     headingBack: document.querySelector("#heading-back"),
     viewerZoom: document.querySelector("#viewer-zoom"),
+    uploadButton: document.querySelector("#upload-button"),
+    uploadInput: document.querySelector("#upload-input"),
+    uploadStatus: document.querySelector("#upload-status"),
+    uploadStatusText: document.querySelector("#upload-status-text"),
+    deleteSelected: document.querySelector("#delete-selected"),
+    viewerDelete: document.querySelector("#viewer-delete"),
+    deleteDialog: document.querySelector("#delete-dialog"),
+    deleteForm: document.querySelector("#delete-form"),
+    deleteMessage: document.querySelector("#delete-message"),
+    deleteCancel: document.querySelector("#delete-cancel"),
+    dropOverlay: document.querySelector("#drop-overlay"),
+    lensFilter: document.querySelector("#lens-filter"),
+    isoFilter: document.querySelector("#iso-filter"),
+    apertureFilter: document.querySelector("#aperture-filter"),
+    focalFilter: document.querySelector("#focal-filter"),
+    exifFilterGroup: document.querySelector("#exif-filter-group"),
+    mapAreaButton: document.querySelector("#map-area-button"),
+    mapPanel: document.querySelector("#map-panel"),
+    mapPanelTitle: document.querySelector("#map-panel-title"),
+    mapPanelSubtitle: document.querySelector("#map-panel-subtitle"),
+    mapPanelGrid: document.querySelector("#map-panel-grid"),
+    mapPanelZoom: document.querySelector("#map-panel-zoom"),
+    mapPanelClose: document.querySelector("#map-panel-close"),
     moreButton: document.querySelector("#more-button"),
     moreMenu: document.querySelector("#more-menu"),
     timelineFilterCount: document.querySelector("#timeline-filter-count"),
@@ -786,6 +853,15 @@
     if (day) {
       filters.push({ key: "day", label: `Ngày ${Number(day)}` });
     }
+    if (state.timelineFilters.lens) {
+      filters.push({ key: "lens", label: `Ống kính: ${state.timelineFilters.lens}` });
+    }
+    for (const kind of ["iso", "aperture", "focal"]) {
+      const key = state.timelineFilters[kind];
+      if (key) {
+        filters.push({ key: kind, label: EXIF_FILTERS[kind].chip(exifBucketLabel(kind, key)) });
+      }
+    }
 
     elements.activeFilters.replaceChildren();
     elements.activeFilters.hidden = filters.length === 0 || ["albums", "map"].includes(state.view);
@@ -1076,6 +1152,14 @@
     if (filters.camera && item.camera !== filters.camera) {
       return false;
     }
+    if (filters.lens && item.metadata?.lens !== filters.lens) {
+      return false;
+    }
+    for (const kind of ["iso", "aperture", "focal"]) {
+      if (filters[kind] && exifBucket(kind, item) !== filters[kind]) {
+        return false;
+      }
+    }
     if (filters.location === "with" && !item.hasLocation) {
       return false;
     }
@@ -1095,10 +1179,29 @@
     return !filters.day || dateKey.slice(8, 10) === filters.day.padStart(2, "0");
   }
 
+  function numberFrom(value) {
+    const match = String(value ?? "").replace(",", ".").match(/\d+(\.\d+)?/);
+    return match ? Number(match[0]) : NaN;
+  }
+
+  function exifBucket(kind, item) {
+    const value = EXIF_FILTERS[kind].read(item);
+    if (!Number.isFinite(value) || value <= 0) {
+      return "";
+    }
+    return EXIF_FILTERS[kind].buckets.find((bucket) => bucket[2](value))[0];
+  }
+
+  function exifBucketLabel(kind, key) {
+    return EXIF_FILTERS[kind].buckets.find((bucket) => bucket[0] === key)?.[1] || key;
+  }
+
   function deriveFacets(items) {
     const folders = new Set();
     const dates = new Set();
     const cameras = new Set();
+    const lenses = new Set();
+    const exif = { iso: new Map(), aperture: new Map(), focal: new Map() };
     let withLocation = 0;
     let metadata = 0;
     for (const item of items) {
@@ -1109,6 +1212,15 @@
       }
       if (item.camera) {
         cameras.add(item.camera);
+      }
+      if (item.metadata?.lens) {
+        lenses.add(String(item.metadata.lens));
+      }
+      for (const kind of ["iso", "aperture", "focal"]) {
+        const bucket = exifBucket(kind, item);
+        if (bucket) {
+          exif[kind].set(bucket, (exif[kind].get(bucket) || 0) + 1);
+        }
       }
       if (item.hasLocation) {
         withLocation += 1;
@@ -1121,6 +1233,8 @@
       folders: [...folders].sort(folderCollator.compare),
       dates: [...dates].sort().reverse(),
       cameras: [...cameras].sort(folderCollator.compare),
+      lenses: [...lenses].sort(folderCollator.compare),
+      exif,
       locations: { with: withLocation, without: items.length - withLocation },
       metadata,
     };
@@ -1250,6 +1364,27 @@
       (value) => `Ngày ${Number(value)}`,
     );
     elements.dayFilter.disabled = !year || !month || days.length === 0;
+
+    const lenses = currentFacets.lenses || [];
+    setSelectOptions(elements.lensFilter, "Tất cả ống kính", lenses, filters.lens);
+    elements.lensFilter.disabled = lenses.length === 0 && !filters.lens;
+    let hasExifValues = lenses.length > 0;
+    for (const [kind, select] of [
+      ["iso", elements.isoFilter],
+      ["aperture", elements.apertureFilter],
+      ["focal", elements.focalFilter],
+    ]) {
+      const counts = currentFacets.exif?.[kind] || new Map();
+      const keys = EXIF_FILTERS[kind].buckets
+        .map((bucket) => bucket[0])
+        .filter((key) => counts.get(key) || filters[kind] === key);
+      hasExifValues ||= keys.length > 0;
+      setSelectOptions(select, "Tất cả", keys, filters[kind], (key) =>
+        `${exifBucketLabel(kind, key)} (${numberFormatter.format(counts.get(key) || 0)})`);
+      select.disabled = keys.length === 0;
+    }
+    // The detailed EXIF arrives with metadata-full.json; until then there is nothing to offer.
+    elements.exifFilterGroup.hidden = !hasExifValues;
   }
 
   function showTimelineFilterDialog() {
@@ -1272,6 +1407,10 @@
       year: elements.yearFilter.value,
       month: elements.yearFilter.value ? elements.monthFilter.value : "",
       day: elements.yearFilter.value && elements.monthFilter.value ? elements.dayFilter.value : "",
+      lens: elements.lensFilter.value,
+      iso: elements.isoFilter.value,
+      aperture: elements.apertureFilter.value,
+      focal: elements.focalFilter.value,
     };
   }
 
@@ -1282,7 +1421,7 @@
       state.timelineFilters = { ...state.timelineFilters, year: "", month: "", day: "" };
     } else if (key === "month") {
       state.timelineFilters = { ...state.timelineFilters, month: "", day: "" };
-    } else if (["day", "folder", "camera", "location"].includes(key)) {
+    } else if (["day", "folder", "camera", "location", "lens", "iso", "aperture", "focal"].includes(key)) {
       state.timelineFilters = { ...state.timelineFilters, [key]: "" };
     } else {
       return;
@@ -1688,7 +1827,7 @@
       try {
         setMetadataProgress(4, "Đang đọc file…", formatBytes(file.size));
         const buffer = await file.arrayBuffer();
-        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-30", window.location.href));
+        worker = new Worker(new URL("./metadata-worker.js?v=album-ux-31", window.location.href));
         worker.addEventListener("message", (event) => {
           const message = event.data || {};
           if (message.type === "progress") {
@@ -2193,6 +2332,7 @@
       frameRate: entry.frame_rate,
       description: entry.description,
       altitude: entry.gps_alt,
+      focal35: entry.focal_length_35mm,
     };
     for (const [key, value] of Object.entries(mapped)) {
       if (value !== undefined && value !== null && value !== "") {
@@ -2219,7 +2359,274 @@
     }
   }
 
+  function isInServerTrash(folderKey) {
+    const key = nfcLower(folderKey);
+    const trash = nfcLower(SERVER_TRASH_FOLDER);
+    return key === trash || key.startsWith(`${trash}/`);
+  }
+
+  function nfcLower(value) {
+    return String(value || "").normalize("NFC").toLocaleLowerCase("en");
+  }
+
+  // Written by album_write_server.py so uploads and removals show up before the
+  // metadata index is rebuilt. Missing file = no changes.
+  async function loadAlbumChanges() {
+    const empty = { added: [], removed: [] };
+    try {
+      const response = await fetchWithTimeout(new URL("album/changes.json", state.baseUrl).href, PROBE_TIMEOUT_MS);
+      if (!response.ok) {
+        return empty;
+      }
+      const payload = await response.json();
+      return {
+        added: Array.isArray(payload?.added) ? payload.added : [],
+        removed: Array.isArray(payload?.removed) ? payload.removed : [],
+      };
+    } catch {
+      return empty;
+    }
+  }
+
+  function applyAlbumChanges(items, changes) {
+    const removedIds = new Set();
+    const removedPaths = new Set();
+    for (const record of changes.removed) {
+      if (record?.id) removedIds.add(String(record.id));
+      if (record?.path) removedPaths.add(canonicalMetadataPath(String(record.path)));
+    }
+    const kept = items.filter((item) => !item.uploaded && !removedIds.has(item.id) &&
+      !removedPaths.has(metadataPathForItem(item)) && !isInServerTrash(item.folderKey));
+    // Once the indexer picks an upload up, its own entry wins; match on path because the
+    // indexer's ids are computed differently from the write service's.
+    const known = new Set(kept.map(metadataPathForItem));
+    const additions = [];
+    for (const entry of changes.added) {
+      if (!entry?.id || !entry.name) {
+        continue;
+      }
+      const item = buildAlbumItem(entry);
+      const key = metadataPathForItem(item);
+      if (known.has(key) || removedIds.has(item.id) || removedPaths.has(key)) {
+        continue;
+      }
+      item.uploaded = true;
+      item.fullPending = false;
+      item.bytes = Number(entry.bytes) || 0;
+      item.thumbnail = entry.thumb
+        ? new URL(entry.thumb, state.baseUrl).href
+        : item.type === "image" ? item.url : "";
+      known.add(key);
+      additions.push(item);
+    }
+    return additions.length > 0 ? [...additions, ...kept] : kept;
+  }
+
+  async function refreshAfterServerChange() {
+    const changes = await loadAlbumChanges();
+    state.items = applyAlbumChanges(state.items, changes);
+    state.stats = deriveStats(state.items);
+    state.facets = deriveFacets(state.items);
+    state.folderFacets = state.facets;
+    state.total = state.items.length;
+    refreshDirectoryItems(true);
+    updateSummary();
+    updateEmptyState();
+    saveCachedCatalog().catch(() => {});
+    return changes;
+  }
+
+  function readImageSize(file) {
+    if (!file.type.startsWith("image/") || !("createImageBitmap" in window)) {
+      return Promise.resolve(null);
+    }
+    return createImageBitmap(file)
+      .then((bitmap) => {
+        const size = { width: bitmap.width, height: bitmap.height };
+        bitmap.close?.();
+        return size;
+      })
+      .catch(() => null);
+  }
+
+  async function uploadOneFile(file, onProgress) {
+    const size = await readImageSize(file);
+    const url = new URL("api/upload", state.baseUrl);
+    url.searchParams.set("name", file.name);
+    url.searchParams.set("lastModified", String(file.lastModified || 0));
+    if (size) {
+      url.searchParams.set("w", String(size.width));
+      url.searchParams.set("h", String(size.height));
+    }
+    return new Promise((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("POST", url.href);
+      request.withCredentials = state.endpoint?.kind === "cloud";
+      // text/plain keeps this a "simple" CORS request: no preflight, which Cloudflare
+      // Access would otherwise answer with its login redirect instead of letting through.
+      request.setRequestHeader("Content-Type", "text/plain");
+      request.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          onProgress(event.loaded / event.total);
+        }
+      });
+      request.addEventListener("load", () => {
+        let payload = null;
+        try {
+          payload = JSON.parse(request.responseText);
+        } catch {
+          // An unreadable body is checked against changes.json afterwards.
+        }
+        if (request.status >= 200 && request.status < 300) {
+          resolve(payload?.item || null);
+        } else {
+          reject(new Error(payload?.error || `HTTP ${request.status}`));
+        }
+      });
+      // A CORS-blocked response still means the server may have saved the file.
+      request.addEventListener("error", () => resolve(null));
+      request.send(file);
+    });
+  }
+
+  function setUploadStatus(text) {
+    elements.uploadStatus.hidden = false;
+    elements.uploadStatusText.textContent = text;
+  }
+
+  async function uploadFiles(fileList) {
+    const files = [...fileList].filter((file) => file.size > 0);
+    if (!state.writeApi || state.uploading || files.length === 0) {
+      return;
+    }
+    const accepted = files.filter((file) => file.size <= UPLOAD_MAX_BYTES);
+    const tooLarge = files.length - accepted.length;
+    state.uploading = true;
+    let failed = 0;
+    let lastError = "";
+    const attempted = [];
+    for (const [position, file] of accepted.entries()) {
+      const prefix = `Đang tải lên ${numberFormatter.format(position + 1)}/${numberFormatter.format(accepted.length)}`;
+      setUploadStatus(prefix);
+      try {
+        attempted.push(file.name);
+        await uploadOneFile(file, (fraction) => setUploadStatus(`${prefix} · ${Math.round(fraction * 100)}%`));
+      } catch (error) {
+        failed += 1;
+        lastError = error.message;
+      }
+    }
+    state.uploading = false;
+    elements.uploadStatus.hidden = true;
+    const changes = await refreshAfterServerChange();
+    const savedNames = new Set(changes.added.map((entry) => String(entry.name).normalize("NFC")));
+    const saved = attempted.filter((name) => savedNames.has(name.normalize("NFC")) ||
+      [...savedNames].some((savedName) => savedName.startsWith(name.normalize("NFC").replace(/\.[^.]+$/, "")))).length;
+    const parts = [];
+    if (saved > 0) {
+      parts.push(`Đã thêm ${numberFormatter.format(saved)} mục vào thư mục Tai_len.`);
+    }
+    if (failed > 0) {
+      parts.push(`${numberFormatter.format(failed)} mục lỗi${lastError ? `: ${lastError}` : ""}.`);
+    }
+    if (tooLarge > 0) {
+      parts.push(`${numberFormatter.format(tooLarge)} tệp lớn hơn 95 MB — hãy chép trực tiếp vào máy.`);
+    }
+    showToast(parts.join(" ") || "Không tải lên được. Kiểm tra dịch vụ ghi trên máy lưu ảnh.", 6000);
+  }
+
+  let pendingDeleteItems = [];
+
+  function requestServerDelete(items) {
+    if (!state.writeApi || items.length === 0) {
+      return;
+    }
+    pendingDeleteItems = items;
+    const subject = items.length === 1 ? "Mục này" : `${numberFormatter.format(items.length)} mục`;
+    elements.deleteMessage.textContent =
+      `${subject} sẽ được chuyển vào thư mục ${SERVER_TRASH_FOLDER} trên máy lưu ảnh và không hiện trên trang nữa. ` +
+      `Không có gì bị xoá hẳn — muốn lấy lại, chỉ cần chuyển tệp ra khỏi thư mục đó.`;
+    elements.deleteDialog.showModal();
+  }
+
+  async function confirmServerDelete() {
+    const items = pendingDeleteItems;
+    pendingDeleteItems = [];
+    if (elements.deleteDialog.open) {
+      elements.deleteDialog.close();
+    }
+    if (items.length === 0) {
+      return;
+    }
+    setUploadStatus(`Đang chuyển ${numberFormatter.format(items.length)} mục…`);
+    let serverError = "";
+    try {
+      const response = await fetch(new URL("api/trash", state.baseUrl).href, {
+        method: "POST",
+        mode: "cors",
+        credentials: state.endpoint?.kind === "cloud" ? "include" : "same-origin",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ items: items.map((item) => ({ id: item.id, path: item.relative })) }),
+      });
+      if (!response.ok) {
+        serverError = (await response.json().catch(() => ({}))).error || `HTTP ${response.status}`;
+      }
+    } catch {
+      // Possibly only the response was blocked; changes.json is the source of truth.
+    }
+    elements.uploadStatus.hidden = true;
+    const before = new Set(state.items.map((item) => item.id));
+    if (elements.viewerDialog.open) {
+      closeViewer();
+    }
+    exitSelectionMode();
+    await refreshAfterServerChange();
+    const remaining = new Set(state.items.map((item) => item.id));
+    const movedIds = items.filter((item) => before.has(item.id) && !remaining.has(item.id)).map((item) => item.id);
+    const moved = movedIds.length;
+    // Favorites and "hidden" keep their own snapshots; drop ones whose file is gone.
+    if (movedIds.some((id) => state.favoriteItems.has(id) || state.hiddenIds.has(id))) {
+      for (const id of movedIds) {
+        state.favoriteItems.delete(id);
+        state.hiddenIds.delete(id);
+        state.hiddenItems.delete(id);
+      }
+      saveFavoriteItems();
+      saveHiddenItems();
+      updateCollectionCounts();
+      refreshDirectoryItems(true);
+    }
+    if (moved === 0) {
+      showToast(`Không chuyển được vào thùng rác${serverError ? `: ${serverError}` : "."}`, 6000);
+      return;
+    }
+    const failed = items.length - moved;
+    showToast(failed > 0
+      ? `Đã chuyển ${numberFormatter.format(moved)} mục vào ${SERVER_TRASH_FOLDER}; ${numberFormatter.format(failed)} mục lỗi${serverError ? `: ${serverError}` : ""}.`
+      : `Đã chuyển ${numberFormatter.format(moved)} mục vào ${SERVER_TRASH_FOLDER} trên máy lưu ảnh.`, 5000);
+  }
+
+  async function detectWriteApi() {
+    state.writeApi = false;
+    try {
+      const response = await fetchWithTimeout(new URL("api/status", state.baseUrl).href, PROBE_TIMEOUT_MS);
+      const payload = response.ok ? await response.json() : null;
+      state.writeApi = Boolean(payload?.ok);
+    } catch {
+      state.writeApi = false;
+    }
+    updateWriteUi();
+  }
+
+  function updateWriteUi() {
+    const canWrite = state.writeApi && state.mode === "album";
+    elements.uploadButton.hidden = !canWrite;
+    elements.viewerDelete.hidden = !canWrite;
+    elements.deleteSelected.hidden = !canWrite;
+  }
+
   async function loadAlbumIndex(version) {
+    const changesPromise = loadAlbumChanges();
     let response;
     try {
       response = await fetchWithTimeout(albumIndexUrl(), API_TIMEOUT_MS);
@@ -2243,16 +2650,21 @@
       return true;
     }
 
-    const items = [];
+    const indexedItems = [];
     const byId = new Map();
     for (const entry of rawItems) {
       if (!entry || entry.id == null) {
         continue;
       }
       const item = buildAlbumItem(entry);
-      items.push(item);
+      indexedItems.push(item);
       byId.set(item.id, item);
     }
+    const changes = await changesPromise;
+    if (version !== state.requestVersion) {
+      return true;
+    }
+    const items = applyAlbumChanges(indexedItems, changes);
 
     state.items = items;
     state.total = items.length;
@@ -2273,6 +2685,7 @@
 
     // Enrich with detailed EXIF without blocking the first paint.
     loadAlbumFull(version, byId).catch(() => {});
+    detectWriteApi();
     return true;
   }
 
@@ -2450,7 +2863,7 @@
     }
     if (!catalog) {
       for (const [name, value] of Object.entries(state.timelineFilters)) {
-        if (value) {
+        if (value && !["lens", "iso", "aperture", "focal"].includes(name)) {
           url.searchParams.set(name, value);
         }
       }
@@ -2930,6 +3343,62 @@
     };
   }
 
+  function openMapPanel(items, subtitle, cluster = null) {
+    closeMapPanel();
+    state.mapPanelItems = items.slice().sort(compareDirectoryItems);
+    state.mapPanelCluster = cluster;
+    const videos = state.mapPanelItems.filter((item) => item.type === "video").length;
+    const images = state.mapPanelItems.length - videos;
+    elements.mapPanelTitle.textContent = [
+      images ? `${numberFormatter.format(images)} ảnh` : "",
+      videos ? `${numberFormatter.format(videos)} video` : "",
+    ].filter(Boolean).join(" · ") || "Không có ảnh";
+    elements.mapPanelSubtitle.textContent = subtitle;
+    elements.mapPanelZoom.hidden = !cluster;
+    const fragment = document.createDocumentFragment();
+    state.mapPanelItems.forEach((item, index) => {
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "map-panel-cell";
+      cell.dataset.mapPanelIndex = String(index);
+      cell.setAttribute("aria-label", `Mở ${item.name}`);
+      const preview = document.createElement("span");
+      preview.className = "media-preview";
+      const badge = createMediaBadge(item);
+      if (badge) {
+        preview.append(badge);
+      }
+      cell.append(preview);
+      addPreviewImage(preview, item);
+      fragment.append(cell);
+    });
+    elements.mapPanelGrid.append(fragment);
+    elements.mapPanelGrid.scrollTop = 0;
+    elements.mapPanel.hidden = false;
+  }
+
+  function closeMapPanel() {
+    for (const image of elements.mapPanelGrid.querySelectorAll("img")) {
+      releaseThumbnailImage(image);
+    }
+    elements.mapPanelGrid.replaceChildren();
+    elements.mapPanel.hidden = true;
+    state.mapPanelItems = [];
+    state.mapPanelCluster = null;
+  }
+
+  function showMapAreaPanel() {
+    if (!state.map) {
+      return;
+    }
+    const bounds = state.map.getBounds();
+    const items = state.mapItems.filter((item) => {
+      const coordinates = itemCoordinates(item);
+      return coordinates && bounds.contains(coordinates);
+    });
+    openMapPanel(items, "Trong vùng đang xem");
+  }
+
   function showMapItem(itemId) {
     const index = state.mapItems.findIndex((item) => item.id === itemId);
     if (index < 0) {
@@ -3015,13 +3484,19 @@
       if (!source || clusterId === undefined) {
         return;
       }
-      Promise.resolve(source.getClusterExpansionZoom(Number(clusterId)))
-        .then((zoom) => {
-          if (feature?.geometry?.type === "Point") {
-            map.easeTo({ center: feature.geometry.coordinates, zoom });
-          }
+      Promise.resolve(source.getClusterLeaves(Number(clusterId), Infinity, 0))
+        .then((leaves) => {
+          const ids = new Set(leaves.map((leaf) => String(leaf.properties?.id)));
+          const items = state.mapItems.filter((item) => ids.has(item.id));
+          openMapPanel(items, "Quanh điểm này", {
+            clusterId: Number(clusterId),
+            center: feature.geometry?.coordinates,
+          });
         })
         .catch(() => {});
+    });
+    map.on("moveend", () => {
+      elements.mapAreaButton.hidden = state.view !== "map" || state.mapItems.length === 0;
     });
     map.on("click", "album-point", (event) => {
       const feature = event.features?.[0];
@@ -3086,6 +3561,7 @@
   }
 
   function renderMapView() {
+    closeMapPanel();
     const mapItems = mapItemsForCurrentFilters();
     state.mapItems = mapItems;
     elements.mapItemCount.textContent = `${numberFormatter.format(mapItems.length)} mục có GPS`;
@@ -3598,6 +4074,7 @@
     elements.hideSelected.disabled = selectedCount === 0 || state.isDownloading;
     elements.restoreSelected.disabled = selectedCount === 0 || state.isDownloading;
     elements.hideSelected.hidden = state.view === "hidden";
+    elements.deleteSelected.disabled = selectedCount === 0 || state.isDownloading;
     elements.restoreSelected.hidden = state.view !== "hidden";
 
     for (const card of elements.mediaGrid.querySelectorAll(".media-card:not(.is-skeleton)")) {
@@ -5166,6 +5643,8 @@
   }
 
   function resetAlbumState() {
+    state.writeApi = false;
+    updateWriteUi();
     closeViewer();
     exitSelectionMode();
     state.items = [];
@@ -5487,6 +5966,78 @@
     }).observe(elements.mediaGrid);
   }
 
+  elements.uploadButton.addEventListener("click", () => elements.uploadInput.click());
+  elements.uploadInput.addEventListener("change", () => {
+    const files = [...(elements.uploadInput.files || [])];
+    elements.uploadInput.value = "";
+    uploadFiles(files);
+  });
+  let dragDepth = 0;
+  const isFileDrag = (event) => state.writeApi && state.mode === "album" &&
+    [...(event.dataTransfer?.types || [])].includes("Files");
+  window.addEventListener("dragenter", (event) => {
+    if (isFileDrag(event)) {
+      dragDepth += 1;
+      elements.dropOverlay.hidden = false;
+    }
+  });
+  window.addEventListener("dragover", (event) => {
+    if (isFileDrag(event)) {
+      event.preventDefault();
+    }
+  });
+  window.addEventListener("dragleave", (event) => {
+    if (isFileDrag(event) && --dragDepth <= 0) {
+      dragDepth = 0;
+      elements.dropOverlay.hidden = true;
+    }
+  });
+  window.addEventListener("drop", (event) => {
+    if (!isFileDrag(event)) {
+      return;
+    }
+    event.preventDefault();
+    dragDepth = 0;
+    elements.dropOverlay.hidden = true;
+    uploadFiles(event.dataTransfer.files);
+  });
+  elements.deleteSelected.addEventListener("click", () => {
+    requestServerDelete(state.visibleItems.filter((item) => state.selectedIds.has(item.id)));
+  });
+  elements.viewerDelete.addEventListener("click", () => {
+    const item = state.visibleItems[state.viewerIndex];
+    if (item) {
+      requestServerDelete([item]);
+    }
+  });
+  elements.deleteForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    confirmServerDelete();
+  });
+  elements.deleteCancel.addEventListener("click", () => {
+    pendingDeleteItems = [];
+    elements.deleteDialog.close();
+  });
+  elements.mapPanelClose.addEventListener("click", closeMapPanel);
+  elements.mapAreaButton.addEventListener("click", showMapAreaPanel);
+  elements.mapPanelZoom.addEventListener("click", () => {
+    const cluster = state.mapPanelCluster;
+    const source = state.map?.getSource("album-media");
+    if (!cluster || !source) {
+      return;
+    }
+    Promise.resolve(source.getClusterExpansionZoom(cluster.clusterId))
+      .then((zoom) => state.map.easeTo({ center: cluster.center, zoom }))
+      .catch(() => {});
+  });
+  elements.mapPanelGrid.addEventListener("click", (event) => {
+    const cell = event.target.closest("[data-map-panel-index]");
+    if (cell) {
+      state.visibleItems = state.mapPanelItems;
+      showViewer(Number(cell.dataset.mapPanelIndex));
+    }
+  });
+
   elements.headingBack.addEventListener("click", () => {
     elements.navigationButtons.find((button) => button.dataset.navView === "albums")?.click();
   });
@@ -5802,6 +6353,8 @@
         setViewerInfoVisible(!elements.viewerShell.classList.contains("show-info"));
       } else if (event.key.toLowerCase() === "f" && !event.metaKey && !event.ctrlKey) {
         toggleViewerFavorite();
+      } else if (event.key === "Delete" && !elements.viewerDelete.hidden) {
+        elements.viewerDelete.click();
       }
       return;
     }

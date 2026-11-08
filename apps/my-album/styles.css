@@ -382,6 +382,40 @@ dd {
   }
 }
 
+.topbar-button {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px 0 10px;
+  border: 0;
+  border-radius: var(--radius);
+  color: #ffffff;
+  background: #1c7562;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.topbar-button:hover {
+  background: #145c4d;
+}
+
+.topbar-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.upload-status {
+  max-width: 40vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .icon-button {
   display: inline-grid;
   width: 40px;
@@ -1344,6 +1378,105 @@ body.has-scrubber .library-toolbar {
   background: var(--surface-soft);
 }
 
+.map-view {
+  position: relative;
+}
+
+.map-area-button {
+  position: absolute;
+  z-index: 3;
+  top: 18px;
+  left: 12px;
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px 0 11px;
+  border: 0;
+  border-radius: 18px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.map-area-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+}
+
+.map-panel {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  right: 8px;
+  bottom: 20px;
+  display: flex;
+  width: min(380px, 45%);
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-large);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.map-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.map-panel-header > div {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.map-panel-header strong {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.map-panel-header small {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.map-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  align-content: start;
+  gap: 3px;
+  padding: 3px;
+  overflow-y: auto;
+}
+
+.map-panel-grid {
+  min-height: 0;
+  flex: 1;
+}
+
+.map-panel-cell {
+  display: block;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+}
+
+.map-panel-cell .media-preview {
+  height: 100%;
+  aspect-ratio: auto;
+}
+
 .map-empty {
   display: grid;
   min-height: 360px;
@@ -1603,6 +1736,7 @@ body.has-selection .toast {
 
 .filter-dialog form,
 .collection-dialog form,
+.delete-dialog form,
 .metadata-dialog-shell {
   display: grid;
   gap: 18px;
@@ -1684,8 +1818,82 @@ body.has-selection .toast {
 
 .timeline-filter-folder,
 .timeline-filter-camera,
-.timeline-filter-fields label:nth-child(3) {
+.timeline-filter-fields:not(.exif-filter-fields) label:nth-child(3) {
   grid-column: 1 / -1;
+}
+
+.exif-filter-fields {
+  min-width: 0;
+  margin: 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.exif-filter-fields legend {
+  float: left;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.exif-filter-fields .exif-filter-lens {
+  grid-column: 1 / -1;
+}
+
+.filter-dialog form {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.delete-dialog p {
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.drop-overlay {
+  position: fixed;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--background) 72%, transparent);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.drop-overlay > div {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 36px 48px;
+  border: 2px dashed var(--accent);
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.drop-overlay svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.drop-overlay strong {
+  font-size: 17px;
+}
+
+.drop-overlay small {
+  color: var(--text-soft);
+  font-size: 13px;
 }
 
 .metadata-status-card {
@@ -2338,6 +2546,30 @@ body.has-selection .toast {
   .notice {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .topbar-button {
+    width: 38px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .topbar-button span {
+    display: none;
+  }
+
+  .map-panel {
+    top: auto;
+    right: 0;
+    bottom: 8px;
+    left: 0;
+    width: auto;
+    height: 58%;
+  }
+
+  .map-area-button {
+    top: 14px;
+    left: 8px;
   }
 
   .mobile-nav {

@@ -6,8 +6,8 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="theme-color" content="#fafafa" />
     <title>My Album</title>
-    <link rel="stylesheet" href="./styles.css?v=album-ux-30" />
-    <script src="./app.js?v=album-ux-30" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=album-ux-31" />
+    <script src="./app.js?v=album-ux-31" defer></script>
   </head>
   <body>
     <aside class="sidebar" aria-label="Điều hướng My Album">
@@ -55,6 +55,15 @@
         </label>
 
         <div class="topbar-actions">
+          <div id="upload-status" class="scan-status upload-status" role="status" hidden>
+            <span class="spinner" aria-hidden="true"></span>
+            <span id="upload-status-text">Đang tải lên…</span>
+          </div>
+          <button id="upload-button" class="topbar-button" type="button" title="Thêm ảnh hoặc video vào máy lưu ảnh" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            <span>Thêm ảnh</span>
+          </button>
+          <input id="upload-input" type="file" multiple accept="image/*,video/*,.heic,.heif,.dng,.cr2,.cr3,.arw,.nef" hidden />
           <div id="scan-status" class="scan-status" role="status" hidden>
             <span class="spinner" aria-hidden="true"></span>
             <span id="scan-status-text">Đang quét...</span>
@@ -157,6 +166,25 @@
         <section id="map-view" class="map-view" aria-label="Ảnh và video trên bản đồ" hidden>
           <span id="map-item-count" class="sr-only"></span>
           <div id="map-canvas" class="map-canvas"></div>
+          <button id="map-area-button" class="map-area-button" type="button" hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1" /><rect width="7" height="7" x="14" y="3" rx="1" /><rect width="7" height="7" x="3" y="14" rx="1" /><rect width="7" height="7" x="14" y="14" rx="1" /></svg>
+            <span>Xem ảnh trong vùng này</span>
+          </button>
+          <aside id="map-panel" class="map-panel" aria-labelledby="map-panel-title" hidden>
+            <header class="map-panel-header">
+              <div>
+                <strong id="map-panel-title"></strong>
+                <small id="map-panel-subtitle"></small>
+              </div>
+              <button id="map-panel-zoom" class="icon-button" type="button" title="Phóng to khu vực" aria-label="Phóng to khu vực">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.5" /><path d="m21 21-4.6-4.6M11 8v6M8 11h6" /></svg>
+              </button>
+              <button id="map-panel-close" class="icon-button" type="button" aria-label="Đóng danh sách ảnh">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12" /></svg>
+              </button>
+            </header>
+            <div id="map-panel-grid" class="map-panel-grid"></div>
+          </aside>
           <div id="map-empty" class="map-empty" hidden>
             <strong>Chưa có ảnh có GPS</strong>
             <p>Nhập metadata có tọa độ để xem ảnh theo vị trí.</p>
@@ -221,6 +249,10 @@
         <button id="hide-selected" class="button button-secondary" type="button">
           <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 2 20 20M6.7 6.7C4.9 7.9 3.3 9.7 2 12c2.1 3.8 5.7 6 10 6 1.6 0 3-.3 4.3-.9M10.7 4.1c.4-.1.9-.1 1.3-.1 4.3 0 7.9 2.2 10 6-.7 1.3-1.6 2.4-2.6 3.3M14.1 14.1a3 3 0 0 1-4.2-4.2" /></svg>
           <span>Ẩn</span>
+        </button>
+        <button id="delete-selected" class="button button-secondary selection-delete" type="button" hidden>
+          <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" /></svg>
+          <span>Xoá</span>
         </button>
         <button id="restore-selected" class="button button-secondary" type="button" hidden>
           <svg class="button-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3-6 10-6 10 6 10 6-3 6-10 6S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -347,12 +379,55 @@
           </label>
         </div>
 
+        <fieldset id="exif-filter-group" class="timeline-filter-fields exif-filter-fields">
+          <legend>Thông số chụp</legend>
+          <label class="exif-filter-lens">
+            <span>Ống kính</span>
+            <select id="lens-filter" name="lens">
+              <option value="">Tất cả ống kính</option>
+            </select>
+          </label>
+          <label>
+            <span>ISO</span>
+            <select id="iso-filter" name="iso"><option value="">Tất cả</option></select>
+          </label>
+          <label>
+            <span>Khẩu độ</span>
+            <select id="aperture-filter" name="aperture"><option value="">Tất cả</option></select>
+          </label>
+          <label>
+            <span>Tiêu cự (35mm)</span>
+            <select id="focal-filter" name="focal"><option value="">Tất cả</option></select>
+          </label>
+        </fieldset>
+
         <div class="dialog-actions timeline-filter-actions">
           <button id="filter-reset" class="button button-secondary" type="button">Xóa lọc</button>
           <button class="button button-primary" type="submit">Áp dụng</button>
         </div>
       </form>
     </dialog>
+
+    <dialog id="delete-dialog" class="dialog delete-dialog">
+      <form id="delete-form" method="dialog">
+        <div class="dialog-header">
+          <h2>Chuyển vào thùng rác?</h2>
+        </div>
+        <p id="delete-message"></p>
+        <div class="dialog-actions">
+          <button id="delete-cancel" class="button button-secondary" type="button">Huỷ</button>
+          <button id="delete-confirm" class="button button-danger" type="submit">Chuyển vào thùng rác</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="drop-overlay" class="drop-overlay" hidden>
+      <div>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 21h14" /></svg>
+        <strong>Thả để tải lên máy lưu ảnh</strong>
+        <small>Ảnh và video sẽ được lưu vào thư mục Tai_len</small>
+      </div>
+    </div>
 
     <dialog id="viewer-dialog" class="viewer-dialog">
       <div id="viewer-shell" class="viewer-shell">
@@ -381,6 +456,9 @@
             <a id="viewer-open-original" class="viewer-icon-button" href="#" target="_blank" rel="noreferrer" title="Mở file gốc" aria-label="Mở file gốc">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
             </a>
+            <button id="viewer-delete" class="viewer-icon-button" type="button" title="Chuyển vào thùng rác máy chủ (Delete)" aria-label="Xoá" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" /></svg>
+            </button>
             <button id="viewer-download" class="viewer-icon-button" type="button" title="Tải xuống" aria-label="Tải xuống">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14" /></svg>
             </button>
