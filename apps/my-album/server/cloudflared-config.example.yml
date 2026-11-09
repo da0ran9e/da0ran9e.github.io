@@ -1,0 +1,23 @@
+# Cloudflare Tunnel config for the album.
+# Copy to  %USERPROFILE%\.cloudflared\config.yml  and fill in your own values.
+# NEVER commit the real file: it names your tunnel UUID and credentials file.
+
+tunnel: 00000000-0000-0000-0000-000000000000
+credentials-file: C:\path\to\.cloudflared\00000000-0000-0000-0000-000000000000.json
+
+# Use 127.0.0.1, never "localhost": on Windows cloudflared resolves localhost to
+# the IPv6 loopback [::1] first, and a server listening only on IPv4 refuses that
+# connection -> "Unable to reach the origin service".
+ingress:
+  # /api/* -> write service (uploads, move-to-trash). Must come FIRST, otherwise
+  # the catch-all below swallows it. That service listens on 127.0.0.1 only, so
+  # the tunnel is the only way in and Cloudflare Access protects it like the rest.
+  - hostname: photos.example.com
+    path: ^/api/
+    service: http://127.0.0.1:8010
+
+  # everything else -> read-only album server
+  - hostname: photos.example.com
+    service: http://127.0.0.1:8000
+
+  - service: http_status:404

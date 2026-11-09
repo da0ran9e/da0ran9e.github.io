@@ -1,0 +1,11 @@
+@echo off
+rem My Album write service (upload / move-to-trash). Copy and edit the paths.
+rem Listens on 127.0.0.1 only: reachable through the Cloudflare Tunnel, not the LAN.
+set ALBUM_ROOT=D:\Photos
+rem Point PYTHON at an interpreter that has Pillow + pillow-heif installed, so
+rem uploads get real thumbnails and HEIC dates. Plain `py` may pick a different
+rem version than the one you installed those packages into.
+set PYTHON=py
+cd /d "%~dp0"
+"%PYTHON%" album_write_server.py --root "%ALBUM_ROOT%" --port 8010
+pause

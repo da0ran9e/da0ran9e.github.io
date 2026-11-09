@@ -1,0 +1,45 @@
+@echo off
+rem Album server + Cloudflare tunnel. Copy to start-photo-server.cmd and edit.
+rem Closing this window stops both.
+setlocal EnableExtensions
+chcp 65001 >nul
+title Photo Server + Cloudflare Tunnel (close this window to stop)
+
+set "ROOT=D:\Photos"
+set "PORT=8000"
+set "TUNNEL=my-tunnel"
+set "ALLOW_ORIGIN=https://example.com"
+set "PYTHON=py"
+rem Windows short path: CMD otherwise misparses the parentheses in
+rem "Program Files (x86)" when this path is expanded inside a command block.
+set "CLOUDFLARED=C:\PROGRA~2\cloudflared\cloudflared.exe"
+
+if not exist "%ROOT%\" echo ERROR: Folder not found: %ROOT% & pause & exit /b 1
+if not exist "%ROOT%\album.py" echo ERROR: album.py not found in %ROOT% & pause & exit /b 1
+if not exist "%CLOUDFLARED%" echo ERROR: cloudflared not found & pause & exit /b 1
+
+rem `start /b` keeps Python in this console, so closing the window stops it too.
+rem Do NOT capture its PID with `for /f`: Python inherits that pipe and the
+rem batch file then blocks forever.
+start "Photo Server" /b "%PYTHON%" "%ROOT%\album.py" --dir "%ROOT%" --port %PORT% --allow-origin "%ALLOW_ORIGIN%"
+
+rem Wait for the port by actually connecting, retrying for up to 10s. Do NOT use
+rem `Get-NetTCPConnection -State Listen`: it returns nothing even while netstat
+rem shows the socket LISTENING, so it reports a false failure.
+powershell -NoProfile -Command "for($i=0;$i -lt 20;$i++){try{$t=New-Object Net.Sockets.TcpClient;$t.Connect('127.0.0.1',%PORT%);$t.Close();exit 0}catch{Start-Sleep -Milliseconds 500}};exit 1" >nul 2>&1
+if errorlevel 1 echo ERROR: server could not listen on port %PORT%. & call :stop & pause & exit /b 1
+
+echo Local:    http://localhost:%PORT%/
+echo Tunnel:   %TUNNEL%
+echo Close this window to stop both.
+echo.
+"%CLOUDFLARED%" tunnel run %TUNNEL%
+call :stop
+pause
+exit /b 0
+
+rem Stop our own server by command line, not by whoever holds the port: that
+rem avoids killing an unrelated app listening on %PORT%.
+:stop
+powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"Name='python.exe' OR Name='python3.exe'\" | Where-Object { $_.CommandLine -like '*album.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>&1
+exit /b 0

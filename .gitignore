@@ -7,3 +7,24 @@ yarn-debug.log*
 yarn-error.log*
 .env*
 !.env.example
+
+# --- My Album server: never commit deployment config or personal photo data ---
+# Real launcher files (the *.example versions are the ones that get committed).
+apps/my-album/server/start-photo-server.cmd
+apps/my-album/server/start-album-write-server.cmd
+# Cloudflare Tunnel credentials / config name the tunnel and hold its secret.
+**/.cloudflared/
+*cloudflared-config.yml
+!**/cloudflared-config.example.yml
+# Photo index + metadata: these carry EXIF, including GPS coordinates.
+*.db
+album-metadata.json
+metadata-min.json
+metadata-full.json
+metadata-archive.json
+.album-index/
+# Generated media and logs.
+thumbs/
+_Thung_rac/
+Tai_len/
+*access*.log
