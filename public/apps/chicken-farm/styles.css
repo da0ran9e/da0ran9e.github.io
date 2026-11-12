@@ -1,0 +1,218 @@
+:root {
+  --bg: #f6f3ea;
+  --card: #fffdf8;
+  --ink: #2b2620;
+  --muted: #7a7064;
+  --line: #e6dfd0;
+  --accent: #c8572b;
+  --accent-ink: #fff;
+  --grass-1: #dcebc4;
+  --grass-2: #b9d79a;
+  --chip: #f1ebdd;
+  --focus: #c8572b;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1915;
+    --card: #24211c;
+    --ink: #f1ebdf;
+    --muted: #a99f90;
+    --line: #3a352d;
+    --accent: #e8794a;
+    --grass-1: #2c3a24;
+    --grass-2: #3a5030;
+    --chip: #322e27;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+h1, h2 { margin: 0; line-height: 1.2; }
+h1 { font-size: 24px; }
+h2 { font-size: 16px; }
+.muted { color: var(--muted); font-weight: 400; }
+button, select, input { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--muted); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+button.ghost { border-color: transparent; color: var(--muted); }
+button[aria-pressed="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+input[type="range"] { accent-color: var(--accent); }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 24px; border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand svg { width: 30px; height: 30px; color: var(--accent); }
+.brand strong { display: block; font-size: 17px; }
+.brand span { display: block; color: var(--muted); font-size: 12px; }
+.topbar-note { margin: 0; color: var(--muted); font-size: 13px; }
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 24px 40px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 18px;
+  min-width: 0;
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hint { font-size: 13px; margin: 6px 0 12px; }
+
+/* sân khấu */
+.stage-card { align-self: start; position: sticky; top: 12px; }
+.stage {
+  aspect-ratio: 1;
+  max-height: 460px;
+  margin: 0 auto 14px;
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 60% at 50% 100%, var(--grass-2) 0 38%, transparent 39%),
+    linear-gradient(var(--card), var(--grass-1));
+  display: grid;
+  place-items: center;
+}
+.stage svg, .stage canvas { width: 100%; height: 100%; display: block; }
+.stage canvas { touch-action: none; cursor: grab; border-radius: 14px; }
+.stage canvas:active { cursor: grabbing; }
+.stage-wrap { position: relative; }
+.stage-layer { width: 100%; height: 100%; }
+.stage-layer[hidden] { display: none; }
+.view-toggle { position: absolute; top: 10px; right: 10px; display: flex; background: color-mix(in srgb, var(--card) 85%, transparent); border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+.view-toggle[hidden] { display: none; }
+.view-toggle button[hidden] { display: none; }
+.is-flat .stage, .is-flat .ck-card-view { background: #eefad6; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .is-flat .stage, :root:not([data-theme="light"]) .is-flat .ck-card-view { background: #2b3324; } }
+.view-toggle button { border: 0; padding: 3px 12px; font-size: 12px; font-weight: 600; background: transparent; }
+.view-toggle button[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+.stage-hint, .stage-reset { display: none; }
+.is-3d .stage-hint { display: block; position: absolute; left: 12px; bottom: 8px; margin: 0; font-size: 12px; color: var(--muted); pointer-events: none; }
+.is-3d .stage-reset { display: block; position: absolute; right: 10px; bottom: 6px; padding: 3px 10px; font-size: 12px; background: color-mix(in srgb, var(--card) 80%, transparent); }
+.stage-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.stage-head p { margin: 4px 0 0; font-size: 13px; }
+.sex-badge { white-space: nowrap; background: var(--chip); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+.age-row { display: grid; grid-template-columns: auto 1fr 110px; gap: 10px; align-items: center; margin: 14px 0; }
+.age-row output { color: var(--muted); font-size: 13px; text-align: right; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.mutation-note { margin: 10px 0 0; font-size: 13px; color: var(--accent); }
+.care { margin-top: 16px; display: grid; gap: 6px; }
+.care h2 { font-size: 14px; }
+.care label { display: grid; grid-template-columns: 120px 1fr; align-items: center; font-size: 13px; }
+.code-box { margin-top: 14px; font-size: 13px; }
+.code-box summary { cursor: pointer; color: var(--muted); }
+.code-row { display: flex; gap: 6px; }
+.code-row input { flex: 1; min-width: 0; font-family: ui-monospace, Menlo, monospace; font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+
+/* bảng gen */
+.genome-card { grid-row: span 1; }
+.egg-mini { width: 44px; height: 44px; }
+.egg-mini svg { width: 100%; height: 100%; }
+.gene-group { border-top: 1px solid var(--line); padding: 8px 0; }
+.gene-group summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 4px 0; }
+.gene {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr) 150px;
+  gap: 10px;
+  align-items: center;
+  padding: 3px 6px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.gene.is-hover { background: var(--chip); }
+.gene-alleles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.gene-alleles input[type="range"] { width: 100%; margin: 0; }
+.gene-alleles select { width: 100%; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); font-size: 12px; }
+.gene-out { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.swatch { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgb(0 0 0 / .15); flex: none; }
+.stat-bar { display: block; width: 100%; height: 6px; border-radius: 3px; background: var(--chip); position: relative; overflow: hidden; }
+.stat-bar::after { content: ""; position: absolute; inset: 0 auto 0 0; width: calc(var(--v) * 100%); background: var(--accent); border-radius: 3px; }
+
+/* chuồng & phối giống */
+.coop-card, .breed-card { grid-column: span 1; }
+.coop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+.ck-card {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 6px 6px 8px;
+  display: grid;
+  gap: 4px;
+  background: var(--card);
+}
+.ck-card.is-chosen { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+.ck-card-view { border: 0; padding: 0; border-radius: 10px; background: linear-gradient(var(--card), var(--grass-1)); aspect-ratio: 1; display: block; width: 100%; }
+.ck-card-art, .ck-card-art svg, .ck-card-art img { display: block; width: 100%; height: 100%; }
+.ck-card-art img, .parent-slot img, .egg-mini img { object-fit: contain; user-select: none; }
+.parent-slot img { width: 110px; height: 110px; display: block; }
+.egg-mini img { width: 100%; height: 100%; }
+.egg-mini.is-focus { filter: drop-shadow(0 0 4px rgb(200 87 43 / .9)); }
+.ck-card-art.is-wobble img { transform-origin: 50% 85%; animation: egg-wobble .9s ease-in-out infinite; }
+.ck-card-art.is-pop img { animation: pop .35s ease-out; }
+@keyframes pop { from { transform: scale(.82); opacity: .4; } to { transform: scale(1); opacity: 1; } }
+.ck-card-meta { padding: 0 4px; min-width: 0; }
+.ck-card-name { display: block; font-size: 13px; }
+.ck-card-sub { display: block; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ck-card-actions { display: flex; gap: 4px; flex-wrap: wrap; padding: 0 2px; }
+.ck-card-actions button { padding: 3px 9px; font-size: 12px; }
+.ck-badge { position: absolute; top: 10px; left: 10px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; }
+.parents { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin: 12px 0; }
+.parent-slot { border: 1px dashed var(--line); border-radius: 14px; min-height: 120px; display: grid; place-items: center; text-align: center; font-size: 13px; padding: 6px; }
+.parent-slot svg { width: 110px; height: 110px; display: block; }
+.times { font-size: 22px; color: var(--muted); }
+.breed-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+.inline { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+
+/* chuyển động & làm nổi bộ phận */
+.chicken .ck-bob { animation: ck-bob 2.8s ease-in-out infinite; }
+.chicken .ck-head { animation: ck-peck 8s ease-in-out infinite; }
+.chicken .ck-eye { transform-box: fill-box; transform-origin: center; animation: ck-blink 5s infinite; }
+@keyframes ck-bob { 50% { transform: translateY(-1.2px); } }
+@keyframes ck-peck { 0%, 82%, 100% { transform: rotate(0); } 86% { transform: rotate(16deg); } 89% { transform: rotate(5deg); } 92% { transform: rotate(14deg); } }
+@keyframes ck-blink { 0%, 93%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+.egg.is-wobble .egg-shell { transform-box: fill-box; transform-origin: 50% 95%; animation: egg-wobble .9s ease-in-out infinite; }
+@keyframes egg-wobble { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
+.coop-grid .chicken .ck-head, .parent-slot .chicken .ck-head { animation-duration: 11s; }
+svg.has-focus [data-part] { opacity: .16; transition: opacity .15s; }
+svg.has-focus [data-part].is-focus { opacity: 1; filter: drop-shadow(0 0 3px rgb(200 87 43 / .9)); }
+@media (prefers-reduced-motion: reduce) {
+  .chicken *, .egg *, .ck-card-art img { animation: none !important; }
+}
+
+@media (max-width: 980px) {
+  .layout { grid-template-columns: 1fr; padding: 12px 16px 32px; }
+  .stage-card { position: static; }
+  .topbar { padding: 12px 16px; }
+  .topbar-note { display: none; }
+}
+@media (max-width: 520px) {
+  .gene { grid-template-columns: 1fr 1fr; }
+  .gene-name { grid-column: 1; }
+  .gene-out { grid-column: 2; justify-content: flex-end; }
+  .gene-alleles { grid-column: 1 / -1; }
+  .age-row { grid-template-columns: auto 1fr; }
+  .age-row output { grid-column: 1 / -1; text-align: left; }
+  .care label { grid-template-columns: 1fr; }
+}

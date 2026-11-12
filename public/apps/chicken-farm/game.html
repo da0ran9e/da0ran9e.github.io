@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Trại Gà</title>
+  <meta name="description" content="Nuôi gà, thả đồng, ấp trứng, sưu tầm — mỗi con gà được vẽ từ bộ gen riêng.">
+  <link rel="stylesheet" href="game.css?v=11">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9 25c-4-2-5-8-2-12 2-3 6-4 9-3l2-4c1-2 4-2 4 0 2-1 4 1 2 3l-1 1c3 1 4 4 3 7l3 1-3 2c-1 4-5 7-10 7-3 0-5-1-7-2z" fill="currentColor"/></svg>
+      <strong>Trại Gà</strong>
+    </div>
+    <div class="res" id="res" role="group" aria-label="Tài nguyên"></div>
+    <span class="net-status" id="net-status" hidden></span>
+    <nav class="menu" aria-label="Mở">
+      <button type="button" id="open-store">Kho</button>
+      <button type="button" id="open-dex">Sổ</button>
+      <button type="button" id="open-memorial">Kỷ niệm</button>
+      <a class="lab-link" href="index.html" title="Xem và chỉnh bộ gen">Phòng gen</a>
+    </nav>
+    <details class="dev" id="dev">
+      <summary title="Bảng thử nghiệm">Dev</summary>
+      <div class="dev-body">
+        <p class="muted">Tốc độ thời gian</p>
+        <div class="seg" id="speed">
+          <button type="button" data-speed="1">1×</button>
+          <button type="button" data-speed="10">10×</button>
+          <button type="button" data-speed="60">60×</button>
+          <button type="button" data-speed="600">600×</button>
+        </div>
+        <button type="button" id="skip-hour">Tua 1 giờ</button>
+        <button type="button" id="give-seeds">+10 hạt quý</button>
+        <p class="muted">Máy chủ (tự dò; để trống + Kết nối = chơi offline)</p>
+        <div class="server-row"><input id="server-url" placeholder="http://127.0.0.1:8787" spellcheck="false" autocomplete="off" aria-label="Địa chỉ máy chủ"><button type="button" id="server-connect">Kết nối</button></div>
+        <button type="button" id="reset" class="danger">Chơi lại từ đầu</button>
+        <p class="muted" id="clock"></p>
+      </div>
+    </details>
+  </header>
+
+  <main>
+    <!-- SÂN TRẠI: màn hình chính -->
+    <section id="view-yard" class="view" aria-label="Sân trại">
+      <div class="scene" id="yard">
+        <div class="scene-bg" id="yard-bg"></div>
+        <div class="scene-layer" id="yard-zones"></div>
+        <div class="scene-layer" id="yard-nests"></div>
+        <div class="scene-layer" id="yard-eggs"></div>
+        <div class="scene-layer" id="yard-chickens"></div>
+        <div class="scene-layer" id="yard-pops"></div>
+      </div>
+      <p class="yard-hint" id="yard-hint"></p>
+
+      <div class="tray" id="tray" role="group" aria-label="Khay hạt — kéo hạt lên gà để cho ăn"></div>
+
+      <section class="info" id="info" hidden aria-label="Thông tin gà"></section>
+
+      <div class="flock" id="flock" role="group" aria-label="Đàn gà"></div>
+
+      <details class="logbox">
+        <summary>Nhật ký</summary>
+        <ol class="log" id="log"></ol>
+      </details>
+
+      <details class="logbox howto">
+        <summary>Cách chơi</summary>
+        <ul>
+          <li>Kéo <b>gà</b> ra <b>Cổng</b> để thả ra cánh đồng kiếm hạt (mỗi lần 1 con, chỉ khi bạn đang xem).</li>
+          <li>Kéo <b>hạt</b> từ khay lên gà để cho ăn, hoặc kéo gà vào <b>Máng ăn</b> để tự chọn hạt.</li>
+          <li>Chạm <b>trứng</b> để nhặt vào kho; kéo trứng có phôi (chấm xanh) vào <b>ổ ấp</b> để ấp.</li>
+          <li>Kéo gà hoặc trứng vào <b>Chợ</b> để đổi lấy túi hạt (gà lớn đổi được 2 trứng có phôi).</li>
+          <li>Không kéo được? Chạm gà (hoặc chọn trong danh sách đàn gà) rồi dùng các nút trong bảng thông tin.</li>
+        </ul>
+      </details>
+    </section>
+
+    <!-- CÁNH ĐỒNG: chỉ chạy khi đang xem -->
+    <section id="view-field" class="view" hidden aria-label="Cánh đồng">
+      <div class="field-head">
+        <button type="button" id="back-yard" class="primary">← Về trại</button>
+        <p class="muted" id="field-who">Mỗi lần chỉ thả được 1 con. Gà chỉ kiếm ăn khi bạn đang xem; rời màn hình là gà tự về chuồng. Gà no rồi thì hạt nhặt được mang về kho.</p>
+      </div>
+      <div class="scene field" id="field">
+        <div class="scene-bg" id="field-bg"></div>
+        <div class="scene-layer" id="field-seeds"></div>
+        <div class="scene-layer" id="field-chickens"></div>
+        <div class="scene-layer" id="field-pops"></div>
+      </div>
+      <div class="field-roster" id="field-roster"></div>
+    </section>
+  </main>
+
+  <div class="ghost" id="ghost" hidden></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+  <dialog id="starter">
+    <form method="dialog">
+      <h2>Chọn một quả trứng</h2>
+      <p class="muted">Mỗi quả mang một bộ gen khác nhau. Chỉ nhìn được vỏ — nở ra con gì là bất ngờ.</p>
+      <div class="starter-eggs" id="starter-eggs"></div>
+    </form>
+  </dialog>
+
+  <dialog id="feed-dialog">
+    <form method="dialog">
+      <h2 id="feed-title">Cho ăn</h2>
+      <div class="feed-list" id="feed-list"></div>
+      <div class="dialog-actions"><button value="close">Xong</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="trade-dialog">
+    <form method="dialog">
+      <h2 id="trade-title">Đổi ở chợ</h2>
+      <p class="muted" id="trade-note"></p>
+      <div class="trade-options">
+        <button type="button" class="primary" id="trade-bag"></button>
+        <button type="button" id="trade-egg">Lấy 2 trứng ngẫu nhiên có phôi</button>
+        <button value="close">Thôi</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="store-dialog" class="sheet">
+    <form method="dialog">
+      <div class="sheet-head"><h2>Kho</h2><button value="close" aria-label="Đóng">✕</button></div>
+      <h3 class="section-title">Hạt <span class="muted" id="seed-cap"></span></h3>
+      <div class="seeds" id="seeds"></div>
+      <h3 class="section-title">Túi hạt chưa mở</h3>
+      <div class="bags" id="bags"></div>
+      <h3 class="section-title">Trứng trong kho <span class="muted" id="egg-cap"></span></h3>
+      <p class="muted">Trứng có phôi (cần gà trống trong trại) thì ấp được. Trứng nào cũng đổi được túi 2 hạt.</p>
+      <div class="eggs" id="eggs"></div>
+    </form>
+  </dialog>
+
+  <dialog id="dex-dialog" class="sheet">
+    <form method="dialog">
+      <div class="sheet-head"><h2>Sổ sưu tầm</h2><button value="close" aria-label="Đóng">✕</button></div>
+      <p class="muted">★ nở được gà mang đặc điểm · ★★ nuôi con đó tới trưởng thành với đủ nhóm chất của đặc điểm (chấm màu). Mỗi mốc ★★ mở thêm chỗ chuồng; mốc đầu tặng thêm một ổ ấp.</p>
+      <div id="dex-progress"></div>
+      <ul class="dex" id="dex-list"></ul>
+    </form>
+  </dialog>
+
+  <dialog id="room-dialog">
+    <form method="dialog">
+      <h2>Chuồng hết chỗ</h2>
+      <p id="room-text"></p>
+      <div class="trade-options">
+        <button type="button" class="primary" id="room-yes"></button>
+        <button value="close">Để sau</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="memorial-dialog" class="sheet">
+    <form method="dialog">
+      <div class="sheet-head"><h2>Kỷ niệm</h2><button value="close" aria-label="Đóng">✕</button></div>
+      <p class="muted">Những con gà đã sống trọn đời ở trại.</p>
+      <div class="memorial" id="memorial"></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/game/main.js?v=16"></script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trại Gà · Phòng gen</title>
+  <meta name="description" content="Bản demo: gà được vẽ hoàn toàn từ bộ gen, lai giống và biến dị.">
+  <link rel="stylesheet" href="styles.css?v=4">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M9 25c-4-2-5-8-2-12 2-3 6-4 9-3l2-4c1-2 4-2 4 0 2-1 4 1 2 3l-1 1c3 1 4 4 3 7l3 1-3 2c-1 4-5 7-10 7-3 0-5-1-7-2z" fill="currentColor"/></svg>
+      <div><strong>Trại Gà</strong><span>Bản demo · Phòng gen</span></div>
+    </div>
+    <a class="topbar-note" href="game.html" style="color:var(--accent);font-weight:600;text-decoration:none">Vào trại chơi →</a>
+    <p class="topbar-note">Mọi con gà ở đây đều được dựng từ bộ gen, không dùng mô hình có sẵn.</p>
+  </header>
+
+  <main class="layout">
+    <section class="card stage-card" aria-labelledby="ck-name">
+      <div class="stage-wrap">
+        <div class="stage" id="stage">
+          <div id="stage-2d" class="stage-layer"></div>
+          <div id="stage-3d" class="stage-layer" hidden></div>
+        </div>
+        <div id="view-toggle" class="view-toggle" role="group" aria-label="Kiểu hiển thị">
+          <button type="button" data-mode="flat" aria-pressed="true">Phẳng 1</button>
+          <button type="button" data-mode="flat2" aria-pressed="false">Phẳng 2</button>
+          <button type="button" data-mode="detail" aria-pressed="false">Chi tiết</button>
+          <button type="button" data-mode="3d" aria-pressed="false">3D</button>
+        </div>
+        <p class="stage-hint">Kéo để xoay · cuộn để phóng to</p>
+        <button id="btn-view" class="stage-reset" type="button">Góc nhìn mặc định</button>
+      </div>
+      <div class="stage-head">
+        <div>
+          <h1 id="ck-name">Gà</h1>
+          <p id="ck-summary" class="muted"></p>
+        </div>
+        <span id="ck-sex" class="sex-badge"></span>
+      </div>
+
+      <div class="age-row">
+        <label for="age">Tuổi</label>
+        <input id="age" type="range" min="0" max="100" value="100">
+        <output id="age-label" for="age">Trưởng thành</output>
+      </div>
+
+      <div class="actions">
+        <button id="btn-hatch" class="primary" type="button">Ấp nở và lớn lên</button>
+        <button id="btn-random" type="button">Gà ngẫu nhiên</button>
+        <button id="btn-mutate" type="button">Gây biến dị</button>
+        <button id="btn-save" type="button">Đưa vào chuồng</button>
+      </div>
+      <p id="mutation-note" class="mutation-note" hidden></p>
+
+      <div class="care">
+        <h2>Chăm sóc <span class="muted">(không đổi gen, chỉ đổi vẻ ngoài)</span></h2>
+        <label>Dinh dưỡng <input id="nutrition" type="range" min="0" max="100" value="70"></label>
+        <label>Độ bóng lông <input id="gloss" type="range" min="0" max="100" value="35"></label>
+      </div>
+
+      <details class="code-box">
+        <summary>Mã gen</summary>
+        <p class="muted">Chuỗi ngắn chứa toàn bộ gen. Sau này server lưu và gửi đúng chuỗi này.</p>
+        <div class="code-row">
+          <input id="code" spellcheck="false" autocomplete="off" aria-label="Mã gen">
+          <button id="btn-copy" type="button">Sao chép</button>
+          <button id="btn-load" type="button">Nạp</button>
+        </div>
+      </details>
+    </section>
+
+    <section class="card genome-card" aria-labelledby="genome-title">
+      <div class="card-head">
+        <h2 id="genome-title">Bộ gen</h2>
+        <div class="egg-mini" id="egg-mini" title="Trứng gà mái này đẻ"></div>
+      </div>
+      <p class="muted hint">Rê chuột (hoặc chạm) vào một gen để xem nét vẽ nó điều khiển. Mỗi gen có 2 bản: <b>bố</b> | <b>mẹ</b>.</p>
+      <div id="genome"></div>
+    </section>
+
+    <section class="card coop-card" aria-labelledby="coop-title">
+      <div class="card-head">
+        <h2 id="coop-title">Chuồng <span id="coop-count" class="muted"></span></h2>
+        <button id="btn-reset" type="button" class="ghost">Làm lại chuồng</button>
+      </div>
+      <p class="muted hint">Bấm vào gà để xem. Chọn một trống và một mái để phối giống.</p>
+      <div id="coop" class="coop-grid"></div>
+    </section>
+
+    <section class="card breed-card" aria-labelledby="breed-title">
+      <h2 id="breed-title">Phối giống</h2>
+      <div class="parents">
+        <div class="parent-slot" id="slot-father"><span class="muted">Chọn gà trống</span></div>
+        <span class="times" aria-hidden="true">×</span>
+        <div class="parent-slot" id="slot-mother"><span class="muted">Chọn gà mái</span></div>
+      </div>
+      <div class="breed-actions">
+        <button id="btn-breed" class="primary" type="button" disabled>Ấp 6 trứng</button>
+        <label class="inline"><input id="special-feed" type="checkbox"> Thức ăn lạ (tăng biến dị ×5)</label>
+      </div>
+      <div id="clutch" class="coop-grid clutch"></div>
+    </section>
+  </main>
+
+  <template id="coop-item">
+    <article class="ck-card">
+      <button class="ck-card-view" type="button"><span class="ck-card-art"></span></button>
+      <div class="ck-card-meta">
+        <strong class="ck-card-name"></strong>
+        <span class="ck-card-sub muted"></span>
+      </div>
+      <div class="ck-card-actions"></div>
+    </article>
+  </template>
+
+  <script type="module" src="js/app.js?v=9"></script>
+</body>
+</html>
