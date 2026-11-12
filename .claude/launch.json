@@ -1,0 +1,1 @@
+{"version":"0.0.1","configurations":[{"name":"farm","runtimeExecutable":"python3","runtimeArgs":["-m","http.server","8795","--directory","/private/tmp/claude-501/-Users-mophan-Documents-New-project-da0ran9e-github-io/a39650c3-8452-4a10-b483-5373a00eb392/scratchpad/farm"],"port":8795}]}
