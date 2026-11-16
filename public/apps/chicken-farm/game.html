@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Trại Gà</title>
   <meta name="description" content="Nuôi gà, thả đồng, ấp trứng, sưu tầm — mỗi con gà được vẽ từ bộ gen riêng.">
-  <link rel="stylesheet" href="game.css?v=18">
+  <link rel="stylesheet" href="game.css?v=19">
 </head>
 <body>
   <header class="bar">
@@ -16,10 +16,13 @@
     <div class="res" id="res" role="group" aria-label="Tài nguyên"></div>
     <span class="net-status" id="net-status" hidden></span>
     <nav class="menu" aria-label="Mở">
-      <button type="button" id="open-quests" class="has-dot">Nhiệm vụ<i class="dot" id="quest-dot" hidden></i></button>
-      <button type="button" id="open-store">Kho</button>
-      <button type="button" id="open-dex">Sổ</button>
-      <button type="button" id="open-memorial">Kỷ niệm</button>
+      <button type="button" id="open-quests" class="has-dot"><span data-i18n="menu.quests">Nhiệm vụ</span><i class="dot" id="quest-dot" hidden></i></button>
+      <button type="button" id="open-store" data-i18n="menu.store">Kho</button>
+      <button type="button" id="open-dex" data-i18n="menu.dex">Sổ</button>
+      <button type="button" id="open-memorial" data-i18n="menu.memorial">Kỷ niệm</button>
+      <button type="button" id="open-log" class="icon" aria-label="Nhật ký" title="Nhật ký"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2.5 15a2.5 2.5 0 0 0 5 0z" fill="currentColor"/></svg></button>
+      <button type="button" id="open-help" class="icon" aria-label="Cách chơi" title="Cách chơi"><b>?</b></button>
+      <button type="button" id="lang" class="icon" data-i18n-aria="menu.lang"></button>
       <button type="button" id="sound" class="icon" aria-pressed="true" aria-label="Âm thanh" title="Bật / tắt âm thanh"></button>
     </nav>
     <details class="dev" id="dev">
@@ -57,22 +60,21 @@
         <div class="amb" aria-hidden="true"></div>
         <div class="scene-layer" id="yard-pops"></div>
       </div>
-      <div class="quest" id="quest" hidden></div>
       <p class="yard-hint" id="yard-hint"></p>
-
-      <div class="tray" id="tray" role="group" aria-label="Khay hạt — kéo hạt lên gà để cho ăn"></div>
-
-      <section class="info" id="info" hidden aria-label="Thông tin gà"></section>
-
       <div class="flock" id="flock" role="group" aria-label="Đàn gà"></div>
-
-      <details class="logbox">
-        <summary>Nhật ký</summary>
-        <ol class="log" id="log"></ol>
-      </details>
-
-      <details class="logbox howto">
-        <summary>Cách chơi</summary>
+      <div class="hud">
+        <div class="tray" id="tray" role="group" aria-label="Khay hạt — kéo hạt lên gà để cho ăn"></div>
+        <div class="quest" id="quest" hidden></div>
+      </div>
+      <section class="info" id="info" hidden aria-label="Thông tin gà"></section>
+    </section>
+    <dialog id="log-dialog" class="sheet"><form method="dialog">
+      <div class="sheet-head"><h2>Nhật ký</h2><button value="close" aria-label="Đóng">✕</button></div>
+      <ol class="log" id="log"></ol>
+    </form></dialog>
+    <dialog id="help-dialog" class="sheet"><form method="dialog">
+      <div class="sheet-head"><h2>Cách chơi</h2><button value="close" aria-label="Đóng">✕</button></div>
+      <div class="howto">
         <ul>
           <li>Chạm <b>trứng trong ổ ấp</b> để sưởi ấm — trứng nở nhanh hơn (mỗi quả tối đa 10 lần).</li>
           <li>Kéo <b>gà</b> ra <b>Cổng</b> để thả ra cánh đồng kiếm hạt (mỗi lần 1 con, chỉ khi bạn đang xem). Thấy <b>đốm sáng</b> thì chạm vào: gà chạy tới bới được hạt tốt.</li>
@@ -81,8 +83,8 @@
           <li>Kéo gà hoặc trứng vào <b>Chợ</b> để đổi lấy túi hạt (gà lớn đổi được 2 trứng có phôi).</li>
           <li>Không kéo được? Chạm gà (hoặc chọn trong danh sách đàn gà) rồi dùng các nút trong bảng thông tin.</li>
         </ul>
-      </details>
-    </section>
+      </div>
+    </form></dialog>
 
     <!-- CÁNH ĐỒNG: chỉ chạy khi đang xem -->
     <section id="view-field" class="view" hidden aria-label="Cánh đồng">
@@ -126,11 +128,15 @@
     <form method="dialog">
       <h2 id="trade-title">Đổi ở chợ</h2>
       <p class="muted" id="trade-note"></p>
-      <div class="trade-options">
-        <button type="button" class="primary" id="trade-bag"></button>
-        <button type="button" id="trade-egg">Lấy 2 trứng ngẫu nhiên có phôi</button>
-        <button value="close">Thôi</button>
+      <div class="trade-deal">
+        <div class="trade-give" id="trade-give"></div>
+        <div class="trade-arrow" aria-hidden="true">→</div>
+        <div class="trade-cards">
+          <button type="button" class="trade-card" id="trade-bag"></button>
+          <button type="button" class="trade-card" id="trade-egg"></button>
+        </div>
       </div>
+      <div class="dialog-actions"><button value="close">Thôi</button></div>
     </form>
   </dialog>
 
@@ -194,17 +200,18 @@
        main.js mới với rules.js / field.js cũ còn trong bộ nhớ đệm và trang game không chạy. -->
   <script type="importmap">
   {"imports": {
-    "./js/genome.js": "./js/genome.js?v=18",
-    "./js/chicken-flat.js": "./js/chicken-flat.js?v=18",
-    "./js/chicken-svg.js": "./js/chicken-svg.js?v=18",
-    "./js/art/icons.js": "./js/art/icons.js?v=18",
-    "./js/art/decor.js": "./js/art/decor.js?v=18",
-    "./js/game/rules.js": "./js/game/rules.js?v=18",
-    "./js/game/field.js": "./js/game/field.js?v=18",
-    "./js/game/net.js": "./js/game/net.js?v=18",
-    "./js/game/fx.js": "./js/game/fx.js?v=18"
+    "./js/genome.js": "./js/genome.js?v=19",
+    "./js/chicken-flat.js": "./js/chicken-flat.js?v=19",
+    "./js/chicken-svg.js": "./js/chicken-svg.js?v=19",
+    "./js/art/icons.js": "./js/art/icons.js?v=19",
+    "./js/art/decor.js": "./js/art/decor.js?v=19",
+    "./js/game/rules.js": "./js/game/rules.js?v=19",
+    "./js/game/field.js": "./js/game/field.js?v=19",
+    "./js/game/net.js": "./js/game/net.js?v=19",
+    "./js/game/fx.js": "./js/game/fx.js?v=19",
+    "./js/game/i18n.js": "./js/game/i18n.js?v=19"
   }}
   </script>
-  <script type="module" src="js/game/main.js?v=18"></script>
+  <script type="module" src="js/game/main.js?v=19"></script>
 </body>
 </html>
