@@ -22,6 +22,8 @@ export const FIELD = {
   restMs: [600, 2500],
   speed: [45, 95], // px/giây, theo gen độ dài chân
   sight: [110, 210], // px, theo gen cỡ mắt
+  lureBoost: 1.7, // chạy tới đốm sáng nhanh hơn đi kiếm ăn…
+  lureMin: 150, // …và không chậm hơn mức này (px/giây): gà con cũng lao tới trong vài giây
 };
 
 // Đặc tính ngoài đồng rút từ kiểu hình (genome.express):
@@ -53,6 +55,21 @@ export function removeChicken(f, id) {
     if (s && s.claimedBy === id) s.claimedBy = null;
   }
   f.chickens.delete(id);
+}
+
+// Đốm sáng (v6): người chơi chỉ một điểm, gà bỏ việc đang làm chạy tới đó (nhanh hơn thường) rồi bới.
+// Tới nơi → sự kiện { type: "lure", chickenId, x, y }; phần thưởng do rules.fieldBonus() quyết định.
+export function setLure(f, id, x, y) {
+  const c = f.chickens.get(id);
+  if (!c) return false;
+  if (c.target) {
+    const s = f.seeds.get(c.target);
+    if (s && s.claimedBy === id) s.claimedBy = null;
+    c.target = null;
+  }
+  c.lure = { x: clamp(x, f.opts.margin, f.w - f.opts.margin), y: clamp(y, f.opts.margin + f.opts.top, f.h - f.opts.margin) };
+  c.mode = "seek";
+  return true;
 }
 
 // Báo cho bộ mô phỏng biết luật chơi đã chấp nhận / từ chối một lần mổ (để đặt thời gian chờ).
@@ -118,6 +135,19 @@ export function tickField(f, dt = FIELD.tickMs) {
       continue;
     }
     const step = (c.speed * dt) / 1000;
+    // đang chạy tới đốm sáng người chơi chỉ?
+    if (c.lure) {
+      const left = moveToward(c, c.lure.x - c.dir * 6, c.lure.y, Math.max(step * FIELD.lureBoost, (FIELD.lureMin * dt) / 1000));
+      if (left <= FIELD.reach) {
+        events.push({ type: "lure", chickenId: c.id, x: c.lure.x, y: c.lure.y });
+        c.lure = null;
+        c.mode = "peck"; // bới đất
+        c.target = null;
+        c.timer = FIELD.peckMs;
+        c.moving = false;
+      }
+      continue;
+    }
     // đang nhắm hạt?
     if (c.target) {
       const s = f.seeds.get(c.target);

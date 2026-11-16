@@ -33,7 +33,7 @@ export const SEEDS = {
 };
 
 export const CONFIG = {
-  version: 5,
+  version: 6,
   stepMs: MIN,
   // Ấp 5–30 phút theo gen "thời gian ấp" của chính quả trứng (genome.express).
   // Lớn: chất lượng dinh dưỡng 1 → 20 phút, 0 → 24 giờ (thang lũy thừa), nhân gen "tốc độ lớn".
@@ -58,11 +58,28 @@ export const CONFIG = {
   drops: {
     field: { common: 92, protein: 1.5, energy: 1.5, mineral: 1.5, pigment: 1.5, premium: 0.8, odd: 1.2 },
     shop: { common: 40, protein: 12, energy: 12, mineral: 12, pigment: 12, premium: 9, odd: 3 },
+    // v6 — đốm sáng ngoài đồng (người chơi chỉ cho gà) và túi quà nhiệm vụ: hạt tốt nhiều hơn
+    lucky: { common: 50, protein: 10, energy: 10, mineral: 10, pigment: 10, premium: 7, odd: 3 },
+    gift: { common: 25, protein: 15, energy: 15, mineral: 15, pigment: 15, premium: 12, odd: 3 },
   },
   fieldEatCooldownMs: 12 * 1000, // 1 con gà ăn tối đa 1 hạt / 12 giây (chống gian lận; design-review 11/11: 15 → 12 s)
   // Q6: giá trị cố định, không theo độ hiếm
   trade: { egg: 2, chicken: [4, 9], eggsPerChicken: 2 }, // túi hạt: trứng 2, gà 4 (mới nở) → 9 (trưởng thành); đổi gà lớn lấy 2 trứng có phôi
-  start: { incubators: 1, coopCap: 6, starterChoices: 3, seeds: { common: 12 } },
+  // quickHatchMs: quả trứng đầu tiên (và trứng quà của bước mở đầu) nở sau 1 phút — phiên chơi đầu
+  // không phải ngồi chờ 5–30 phút mới có con gà đầu tiên.
+  start: { incubators: 1, coopCap: 6, starterChoices: 3, seeds: { common: 12 }, quickHatchMs: MIN },
+  // v6 — SƯỞI TRỨNG: chạm trứng đang ấp, mỗi lần bớt cutPct thời gian ấp của quả đó; tối đa `max` lần
+  // (bớt tối đa 40%), cách nhau ≥ cooldownMs. Việc để làm trong lúc chờ, và có giới hạn nên không spam.
+  warm: { cooldownMs: 2500, cutPct: 0.04, max: 10 },
+  // v6 — ĐỐM SÁNG ngoài đồng: người chơi chạm đốm sáng, gà chạy tới bới được 1–3 hạt (bảng "lucky"),
+  // đôi khi cả một túi hạt. Mỗi trại tối đa 1 lần / cooldownMs. count: [ngưỡng xác suất, số hạt].
+  lucky: { cooldownMs: 20 * 1000, count: [[0.6, 1], [0.85, 2], [0.96, 3]], bagSize: 3 },
+  // v6 — NHIỆM VỤ NGÀY: mỗi ngày (theo giờ Việt Nam) 3 việc, xong cả 3 mở rương; chuỗi ngày liên tiếp
+  // làm rương to hơn, cứ `streakEgg` ngày tặng một quả trứng quà.
+  daily: { tzOffsetMs: 7 * HOUR, tasks: 3, taskBag: 3, chestBag: 6, chestStreakMax: 4, streakEgg: 3 },
+  // v6 — GIỐNG: một con gà trưởng thành mang đủ tổ hợp đặc điểm, nuôi đủ chất → ghi tên giống, tặng túi quà;
+  // đủ `incubatorAt` giống tặng thêm 1 ổ ấp.
+  breed: { bag: 8, incubatorAt: 3 },
   // Q14 (chủ dự án chốt 12/11): trứng ấp xong lúc người chơi vắng thì CHỜ trong ổ, nở khi người chơi
   // quay lại. Vắng ≤ khoảng này (đang mở game, chỉ giữa hai lần đồng bộ) thì vẫn nở đúng giờ.
   hatchPresenceGraceMs: 2 * MIN,
@@ -158,24 +175,111 @@ export const dexKeysOf = (code) => {
   return DEX.filter((d) => d.has(ph)).map((d) => d.key);
 };
 export const dexStars = (state, star = 2) => Object.values(state.dex ?? {}).filter((v) => v >= star).length;
+const DEX_GROUP = Object.fromEntries(DEX.map((d) => [d.key, d.group]));
 
-// Trại từ bản cũ chưa có sổ: ghi lại từ đàn hiện có (không đổi gì khác).
-function ensureDex(state) {
-  if (state.dex) return;
-  state.dex = {};
-  state.milestones = 0;
-  for (const ch of state.chickens) {
-    dexMark(state, ch, 1, ch.hatchedAt, null);
-    if (ch.adultAt != null) dexMark(state, ch, 2, ch.adultAt, null);
+/* ---------- giống: tổ hợp đặc điểm trên MỘT con gà (v6) ---------- */
+
+// tier 1 = thường gặp (2 đặc điểm), 2 = hiếm, 3 = huyền thoại. Chỉ THÊM vào cuối.
+export const BREEDS = [
+  { key: "chomRau", name: "Gà Chỏm Râu", tier: 1, traits: ["crest", "muff"] },
+  { key: "xuBong", name: "Gà Xù Bông", tier: 1, traits: ["frizzle", "feetFeather"] },
+  { key: "vayHong", name: "Gà Vảy Hồng", tier: 1, traits: ["spangled", "rose"] },
+  { key: "cuVan", name: "Gà Cú Vằn", tier: 1, traits: ["barred", "pea"] },
+  { key: "cutLam", name: "Gà Cụt Lam", tier: 1, traits: ["rumpless", "blue"] },
+  { key: "duoiPhung", name: "Gà Đuôi Phượng", tier: 2, traits: ["longTail", "laced"] },
+  { key: "acTo", name: "Gà Ác Tơ", tier: 2, traits: ["silkie", "darkSkin", "fiveToes"] },
+  { key: "hoaMo", name: "Gà Hoa Mơ", tier: 3, traits: ["mottled", "crest", "feetFeather", "walnut"] },
+];
+// Giống mà bộ gen này mang đủ đặc điểm (tiềm năng — còn phải nuôi đủ chất tới trưởng thành).
+export const breedsOf = (code) => {
+  const keys = new Set(dexKeysOf(code));
+  return BREEDS.filter((b) => b.traits.every((t) => keys.has(t))).map((b) => b.key);
+};
+
+/* ---------- nhiệm vụ (v6) ---------- */
+
+// Chuỗi mở đầu: làm lần lượt, mỗi bước một phần thưởng. `count` = bộ đếm trong state.count.
+// Phần thưởng: { bag: cỡ túi, table } | { seeds: {loại: n} } | { egg: { quick, pair } }. Chỉ THÊM vào cuối.
+export const TUTORIAL = [
+  { key: "warm", count: "warm", goal: 5, text: "Sưởi ấm quả trứng: chạm vào trứng trong ổ 5 lần", reward: { bag: 3 } },
+  { key: "hatch", count: "hatch", goal: 1, text: "Đón gà con đầu tiên chào đời", reward: { seeds: { premium: 4 } } },
+  { key: "feed", count: "feed", goal: 3, text: "Cho gà ăn 3 hạt (kéo hạt thả lên gà)", reward: { bag: 4 } },
+  { key: "forage", count: "forage", goal: 5, text: "Thả gà ra đồng và để gà kiếm 5 hạt", reward: { egg: { quick: true, pair: true } } },
+  { key: "lucky", count: "lucky", goal: 2, text: "Ngoài đồng: chạm 2 đốm sáng để chỉ cho gà", reward: { bag: 4, table: "gift" } },
+  { key: "hatch2", count: "hatch", goal: 2, text: "Ấp nở quả trứng thứ hai", reward: { seeds: { protein: 2, energy: 2, mineral: 2, pigment: 2 } } },
+  { key: "juvenile", count: "juvenile", goal: 1, text: "Nuôi một con thành gà giò", reward: { bag: 5, table: "gift" } },
+  { key: "adult", count: "adult", goal: 1, text: "Nuôi một con tới trưởng thành", reward: { bag: 6, table: "gift" } },
+  { key: "collect", count: "collect", goal: 1, text: "Nhặt quả trứng đầu tiên gà mái đẻ ngoài sân", reward: { egg: {} } },
+  { key: "dex2", count: "dex2", goal: 1, text: "Đạt mục ★★ đầu tiên trong Sổ sưu tầm", reward: { bag: 8, table: "gift" } },
+];
+
+const hasBrood = (s) => s.eggs.some((e) => e.fertile) || (s.chickens.some((c) => c.sex === "hen" && c.adultAt != null) && s.chickens.some((c) => c.sex === "rooster" && c.adultAt != null));
+// Việc trong ngày: `needs` lọc việc làm được với trại lúc sang ngày (không giao việc bất khả thi).
+export const DAILY_TASKS = {
+  feed: { goal: 8, text: (n) => `Cho gà ăn ${n} hạt` },
+  forage: { goal: 12, text: (n) => `Để gà kiếm ${n} hạt ngoài đồng` },
+  lucky: { goal: 5, text: (n) => `Chạm ${n} đốm sáng ngoài đồng` },
+  warm: { goal: 8, text: (n) => `Sưởi trứng ${n} lần`, needs: hasBrood },
+  hatch: { goal: 1, text: (n) => `Ấp nở ${n} gà con`, needs: hasBrood },
+  collect: { goal: 2, text: (n) => `Nhặt ${n} quả trứng ngoài sân`, needs: (s) => s.chickens.some((c) => c.sex === "hen" && c.adultAt != null) },
+  open: { goal: 2, text: (n) => `Mở ${n} túi hạt`, needs: (s) => s.bags.length + s.eggs.filter((e) => e.hatchAt === null).length >= 2 },
+};
+export const COUNTERS = ["warm", "hatch", "feed", "forage", "lucky", "juvenile", "adult", "collect", "dex2", "open", "trade"];
+const bump = (state, key, n = 1) => { state.count[key] = (state.count[key] ?? 0) + n; };
+export const dayIndex = (now) => Math.floor((now + CONFIG.daily.tzOffsetMs) / DAY);
+
+// Trại từ bản cũ: bổ sung phần còn thiếu từ đàn hiện có (không đổi gì khác).
+function ensure(state) {
+  if (!state.count) {
+    // v6: bộ đếm nhiệm vụ, chuỗi mở đầu, chuỗi ngày, giống
+    state.count = Object.fromEntries(COUNTERS.map((k) => [k, 0]));
+    state.count.hatch = state.stats?.hatched ?? 0;
+    state.count.juvenile = state.chickens.filter((c) => c.growth >= CONFIG.stages.juvenile).length;
+    state.count.adult = state.chickens.filter((c) => c.adultAt != null).length;
+    if (state.dex) state.count.dex2 = dexStars(state, 2);
+    state.quest = { step: 0 };
+    state.streak = { days: 0, last: -1, best: 0 };
+    state.breeds = {};
+  }
+  if (!state.dex) {
+    state.dex = {};
+    state.milestones = 0;
+    for (const ch of state.chickens) {
+      dexMark(state, ch, 1, ch.hatchedAt, null);
+      if (ch.adultAt != null) dexMark(state, ch, 2, ch.adultAt, null);
+    }
   }
 }
 
+// Sang ngày mới (giờ Việt Nam): giao 3 việc, chọn theo (seed, ngày) trong các việc làm được.
+function rollDaily(state, now) {
+  const day = dayIndex(now);
+  if (state.daily?.day === day) return;
+  const rng = rngFor(state, "daily", day);
+  const pool = Object.keys(DAILY_TASKS).filter((k) => !DAILY_TASKS[k].needs || DAILY_TASKS[k].needs(state));
+  const tasks = [];
+  while (tasks.length < CONFIG.daily.tasks && pool.length) {
+    const k = pool.splice(Math.floor(rng() * pool.length), 1)[0];
+    tasks.push({ key: k, goal: DAILY_TASKS[k].goal, base: state.count[k] ?? 0, claimed: false });
+  }
+  state.daily = { day, tasks, chest: false };
+}
+
+// ★ nở được gà mang đặc điểm · ★★ nuôi con đó tới trưởng thành, đủ nhóm chất của đặc điểm ·
+// ★★★ THUẦN CHỦNG (v6): như ★★, và bố lẫn mẹ của nó (gà trong trại) đều mang đặc điểm này — tức là
+// người chơi đã chọn giống được qua một đời (ch.line ghi lúc trứng được đẻ).
 function dexMark(state, ch, star, at, events) {
   for (const key of dexKeysOf(ch.code)) {
-    if ((state.dex[key] ?? 0) >= star) continue;
-    if (star === 2 && ch.dev[DEX.find((d) => d.key === key).group] < CONFIG.dex.starDev) continue;
-    state.dex[key] = star;
-    events?.push({ type: "dex", at, key, star, chickenId: ch.id });
+    let s = star;
+    if (s >= 2) {
+      if (ch.dev[DEX_GROUP[key]] < CONFIG.dex.starDev) continue;
+      if (ch.line?.includes(key)) s = 3;
+    }
+    const was = state.dex[key] ?? 0;
+    if (was >= s) continue;
+    state.dex[key] = s;
+    if (was < 2 && s >= 2 && state.count) bump(state, "dex2");
+    events?.push({ type: "dex", at, key, star: s, chickenId: ch.id });
   }
   const done = dexStars(state, 2);
   const ms = CONFIG.dex.milestones;
@@ -184,6 +288,22 @@ function dexMark(state, ch, star, at, events) {
     state.coopCap = Math.min(CONFIG.dex.coopMax, state.coopCap + (m.coop ?? 0));
     for (let i = 0; i < (m.incubators ?? 0); i++) state.incubators.push(null);
     events?.push({ type: "milestone", at, n: state.milestones, coopCap: state.coopCap, incubators: state.incubators.length });
+  }
+}
+
+// Gà vừa trưởng thành: mang đủ tổ hợp của một giống VÀ từng đặc điểm đều được nuôi đủ chất → đạt giống.
+// Thưởng: một túi quà; đủ CONFIG.breed.incubatorAt giống thì thêm 1 ổ ấp.
+function breedMark(state, ch, at, events) {
+  for (const key of breedsOf(ch.code)) {
+    if (state.breeds[key] != null) continue;
+    const b = BREEDS.find((x) => x.key === key);
+    if (b.traits.some((t) => ch.dev[DEX_GROUP[t]] < CONFIG.dex.starDev)) continue;
+    state.breeds[key] = at;
+    const bag = { id: nextId(state, "b"), size: CONFIG.breed.bag, from: "gift", at, table: "gift" };
+    state.bags.push(bag);
+    const n = Object.keys(state.breeds).length;
+    if (n === CONFIG.breed.incubatorAt) state.incubators.push(null);
+    events.push({ type: "breed", at, key, chickenId: ch.id, n, bagId: bag.id, incubators: state.incubators.length });
   }
 }
 
@@ -217,10 +337,15 @@ export function newGame(seed, now, choice = 0) {
     memorial: [],
     stats: { hatched: 0, laid: 0, traded: 0, died: 0 },
     seenAt: now, // lần cuối người chơi có mặt (Q14)
-    dex: {}, // key → 1 (★) | 2 (★★)
+    dex: {}, // key → 1 (★) | 2 (★★) | 3 (★★★ thuần chủng)
     milestones: 0, // số mốc sổ đã đạt (Q13)
+    count: Object.fromEntries(COUNTERS.map((k) => [k, 0])), // bộ đếm cho nhiệm vụ (v6)
+    quest: { step: 0 }, // bước hiện tại của chuỗi mở đầu
+    streak: { days: 0, last: -1, best: 0 }, // chuỗi ngày có nhận thưởng việc trong ngày
+    breeds: {}, // key giống → thời điểm đạt
   };
-  state.eggs.push({ id: nextId(state, "e"), code: pick.code, shell: pick.shell, shellName: pick.shellName, fertile: true, motherId: null, fatherId: null, laidAt: now, mutations: 0, hatchAt: null });
+  state.eggs.push({ id: nextId(state, "e"), code: pick.code, shell: pick.shell, shellName: pick.shellName, fertile: true, motherId: null, fatherId: null, laidAt: now, mutations: 0, hatchAt: null, quick: true });
+  rollDaily(state, now);
   return state;
 }
 
@@ -230,7 +355,8 @@ export function newGame(seed, now, choice = 0) {
 // (gọi gà về khi hết phiên xem) → trứng ấp xong vẫn nằm chờ trong ổ (Q14).
 export function advance(state, now, { present = true } = {}) {
   const events = [];
-  ensureDex(state);
+  ensure(state);
+  rollDaily(state, now);
   if (present) {
     const seen = state.seenAt ?? -Infinity;
     const away = now - seen > CONFIG.hatchPresenceGraceMs;
@@ -282,10 +408,12 @@ function hatch(state, egg, at, events) {
     mutationBoost: 0,
     motherId: egg.motherId,
     fatherId: egg.fatherId,
+    ...(egg.line?.length ? { line: egg.line } : {}), // đặc điểm cả bố lẫn mẹ đều mang (cho ★★★)
     ...t,
   };
   state.chickens.push(ch);
   state.stats.hatched++;
+  bump(state, "hatch");
   events.push({ type: "hatched", at, chickenId: ch.id, eggId: egg.id });
   dexMark(state, ch, 1, at, events);
 }
@@ -341,11 +469,16 @@ function stepChicken(state, ch, t, dt, events) {
       ch.dev[k] = (ch.dev[k] * ch.devWeight + lvl * used) / (ch.devWeight + used);
     }
     ch.devWeight += used;
-    if (before < CONFIG.stages.juvenile && ch.growth >= CONFIG.stages.juvenile) events.push({ type: "juvenile", at: t + dt, chickenId: ch.id });
+    if (before < CONFIG.stages.juvenile && ch.growth >= CONFIG.stages.juvenile) {
+      bump(state, "juvenile");
+      events.push({ type: "juvenile", at: t + dt, chickenId: ch.id });
+    }
     if (ch.growth >= CONFIG.stages.adult) {
       ch.adultAt = t + dt;
+      bump(state, "adult");
       events.push({ type: "adult", at: t + dt, chickenId: ch.id });
       dexMark(state, ch, 2, t + dt, events);
+      breedMark(state, ch, t + dt, events);
     }
   } else if (layReady && ch.sex === "hen" && ch.growth >= CONFIG.stages.adult && storedEggs(state) < CONFIG.storage.eggs) {
     // Q3: đẻ ngẫu nhiên khi no bụng — xác suất mỗi bước = dt / thời gian trung bình
@@ -358,7 +491,7 @@ function stepChicken(state, ch, t, dt, events) {
 function layEgg(state, hen, at, events) {
   const rng = rngFor(state, "egg", hen.id, at);
   const roosters = state.chickens.filter((c) => c.sex === "rooster" && c.adultAt != null && c.adultAt <= at && (c.diedAt == null || c.diedAt > at));
-  let code = hen.code, fertile = false, fatherId = null, mutations = 0;
+  let code = hen.code, fertile = false, fatherId = null, mutations = 0, line = [];
   if (roosters.length) {
     const father = roosters[Math.floor(rng() * roosters.length)];
     const r = breed(decodeGenome(father.code), decodeGenome(hen.code), rng, { mutationRate: 1 + hen.mutationBoost });
@@ -367,10 +500,12 @@ function layEgg(state, hen, at, events) {
     fertile = true;
     fatherId = father.id;
     hen.mutationBoost = Math.max(0, hen.mutationBoost - 1);
+    const fk = new Set(dexKeysOf(father.code));
+    line = dexKeysOf(hen.code).filter((k) => fk.has(k));
   }
   // id gắn với (mẹ, thời điểm) để không phụ thuộc thứ tự mô phỏng
   // trứng mới đẻ nằm ngoài SÂN; người chơi nhặt (collectEgg) mới vào kho
-  const egg = { id: `e-${hen.id}-${at.toString(36)}`, code, shell: hen.shell, shellName: hen.shellName, fertile, motherId: hen.id, fatherId, laidAt: at, mutations, hatchAt: null, inYard: true };
+  const egg = { id: `e-${hen.id}-${at.toString(36)}`, code, shell: hen.shell, shellName: hen.shellName, fertile, motherId: hen.id, fatherId, laidAt: at, mutations, hatchAt: null, inYard: true, ...(line.length ? { line } : {}) };
   state.eggs.push(egg);
   state.stats.laid++;
   events.push({ type: "laid", at, chickenId: hen.id, eggId: egg.id, fertile });
@@ -397,6 +532,7 @@ export function feed(state, chickenId, seed, now) {
     if (ch.satiety + s.satiety * 0.5 > CONFIG.satietyMax) return err("full", `${ch.name} đang no`);
     state.inventory[seed]--;
     eat(ch, seed);
+    bump(state, "feed");
     return { chickenId };
   });
 }
@@ -446,11 +582,13 @@ export function fieldFind(state, chickenId, seed, now) {
     if (ch.satiety + SEEDS[seed].satiety * 0.5 <= CONFIG.satietyMax) {
       ch.lastFieldEat = now;
       eat(ch, seed);
+      bump(state, "forage");
       return { chickenId, seed, action: "ate" };
     }
     if (seedCount(state) >= CONFIG.storage.seeds) return err("seeds_full", "Kho hạt đầy");
     ch.lastFieldEat = now;
     state.inventory[seed]++;
+    bump(state, "forage");
     return { chickenId, seed, action: "stored" };
   });
 }
@@ -463,6 +601,7 @@ export function collectEgg(state, eggId, now) {
     if (!egg) return err("no_egg", "Không tìm thấy trứng");
     if (!egg.inYard) return err("not_in_yard", "Trứng đã ở trong kho");
     egg.inYard = false;
+    bump(state, "collect");
     return { eggId };
   });
 }
@@ -478,9 +617,174 @@ export function incubate(state, eggId, now) {
     if (state.chickens.length + state.incubators.filter(Boolean).length >= state.coopCap) return err("coop_full", "Chuồng hết chỗ cho gà mới");
     state.incubators[slot] = egg.id;
     egg.inYard = false;
-    egg.hatchAt = now + incubateMsOf(egg.code);
+    egg.incubateMs = egg.quick ? CONFIG.start.quickHatchMs : incubateMsOf(egg.code);
+    egg.hatchAt = now + egg.incubateMs;
     return { eggId, hatchAt: egg.hatchAt };
   });
+}
+
+// SƯỞI TRỨNG (v6): chạm trứng đang ấp → bớt một phần thời gian ấp. Có giới hạn số lần và nhịp chạm.
+export function warmEgg(state, eggId, now) {
+  return act(state, now, () => {
+    const egg = state.eggs.find((e) => e.id === eggId);
+    if (!egg) return err("no_egg", "Không tìm thấy trứng");
+    if (egg.hatchAt === null) return err("not_incubating", "Trứng chưa nằm trong ổ ấp");
+    if ((egg.warmed ?? 0) >= CONFIG.warm.max) return err("warm_max", "Trứng đã đủ ấm — chờ gà con thôi");
+    if (now - (egg.warmAt ?? -1e15) < CONFIG.warm.cooldownMs) return err("too_fast", "Từ từ thôi, trứng đang ấm dần");
+    egg.warmed = (egg.warmed ?? 0) + 1;
+    egg.warmAt = now;
+    egg.hatchAt = Math.max(now, egg.hatchAt - CONFIG.warm.cutPct * (egg.incubateMs ?? incubateMsOf(egg.code)));
+    bump(state, "warm");
+    return { eggId, hatchAt: egg.hatchAt, warmed: egg.warmed };
+  });
+}
+
+// ĐỐM SÁNG (v6): người chơi chỉ cho gà ngoài đồng một đốm sáng → gà bới được 1–3 hạt tốt hơn thường,
+// đôi khi cả một túi hạt. Hạt về thẳng kho. opts.rng: server truyền nguồn ngẫu nhiên riêng (HMAC).
+export function fieldBonus(state, chickenId, now, opts = {}) {
+  return act(state, now, () => {
+    const ch = state.chickens.find((c) => c.id === chickenId);
+    if (!ch) return err("no_chicken", "Không tìm thấy gà");
+    if (ch.location !== "field") return err("not_in_field", `${ch.name} không ở ngoài đồng`);
+    if (now - (state.luckyAt ?? -1e15) < CONFIG.lucky.cooldownMs) return err("too_fast", "Chưa có đốm sáng mới");
+    const room = CONFIG.storage.seeds - seedCount(state);
+    if (room <= 0) return err("seeds_full", "Kho hạt đầy");
+    const rng = opts.rng ?? rngFor(state, "lucky", now);
+    const r = rng();
+    state.luckyAt = now;
+    bump(state, "lucky");
+    const table = CONFIG.lucky.count;
+    if (r >= table[table.length - 1][0] && state.bags.length < CONFIG.storage.bags) {
+      const bag = { id: nextId(state, "b"), size: CONFIG.lucky.bagSize, from: "field", at: now, table: "gift" };
+      state.bags.push(bag);
+      return { chickenId, bagId: bag.id, bagSize: bag.size };
+    }
+    const n = Math.min(room, table.find(([p]) => r < p)?.[1] ?? table[table.length - 1][1]);
+    const got = {};
+    for (let i = 0; i < n; i++) {
+      const k = rollSeed("lucky", rng);
+      got[k] = (got[k] ?? 0) + 1;
+      state.inventory[k]++;
+    }
+    return { chickenId, got };
+  });
+}
+
+/* ---------- nhiệm vụ: xem tiến độ, nhận thưởng (v6) ---------- */
+
+// Trứng quà: gen ngẫu nhiên như trứng của cửa hàng. pair: trại chỉ có một giới thì quả này chắc chắn nở ra
+// giới còn lại (để người mới sớm có cặp sinh sản). quick: nở nhanh như quả trứng đầu tiên.
+function giftEgg(state, now, rng, { quick = false, pair = false } = {}) {
+  const sexes = new Set(state.chickens.map((c) => c.sex));
+  const sex = pair && sexes.size === 1 ? (sexes.has("hen") ? "rooster" : "hen") : undefined;
+  const mother = randomGenome(rng, { sex: "hen" });
+  const child = randomGenome(rng, sex ? { sex } : {});
+  const ph = express(mother);
+  return { id: nextId(state, "e"), code: encodeGenome(child), shell: ph.egg.shell, shellName: ph.egg.name, fertile: true, motherId: null, fatherId: null, laidAt: now, mutations: 0, hatchAt: null, gift: true, ...(quick ? { quick: true } : {}) };
+}
+
+// Kiểm tra chỗ chứa TRƯỚC, đủ chỗ mới trao (không trao một nửa).
+function giveReward(state, reward, now, rng) {
+  const seedsN = Object.values(reward.seeds ?? {}).reduce((a, b) => a + b, 0);
+  if (reward.bag && state.bags.length >= CONFIG.storage.bags) return err("bags_full", "Kho hết chỗ để túi hạt — mở bớt túi rồi nhận thưởng");
+  if (seedsN && seedCount(state) + seedsN > CONFIG.storage.seeds) return err("seeds_full", "Kho hạt đầy — dùng bớt hạt rồi nhận thưởng");
+  if (reward.egg && storedEggs(state) >= CONFIG.storage.eggs) return err("eggs_full", "Kho trứng đầy — ấp hoặc đổi bớt trứng rồi nhận thưởng");
+  const got = {};
+  if (reward.bag) {
+    const bag = { id: nextId(state, "b"), size: reward.bag, from: "gift", at: now, ...(reward.table ? { table: reward.table } : {}) };
+    state.bags.push(bag);
+    got.bagId = bag.id;
+    got.bagSize = bag.size;
+  }
+  if (seedsN) {
+    for (const [k, n] of Object.entries(reward.seeds)) state.inventory[k] += n;
+    got.seeds = { ...reward.seeds };
+  }
+  if (reward.egg) {
+    const egg = giftEgg(state, now, rng, reward.egg);
+    state.eggs.push(egg);
+    got.eggId = egg.id;
+  }
+  return { ok: true, got };
+}
+
+// Chuỗi ngày SẼ là bao nhiêu nếu hôm nay có nhận thưởng: hôm nay tính rồi thì giữ, hôm qua có thì +1, đứt thì về 1.
+function streakToday(state) {
+  const st = state.streak ?? {}, day = state.daily?.day;
+  return st.last === day ? st.days : st.last === day - 1 ? st.days + 1 : 1;
+}
+// Rương ngày: to dần theo chuỗi ngày; cứ `streakEgg` ngày liên tiếp thêm một quả trứng quà.
+function chestReward(state) {
+  const d = CONFIG.daily, days = streakToday(state);
+  return { bag: d.chestBag + Math.min(d.chestStreakMax, days - 1), table: "gift", ...(days % d.streakEgg === 0 ? { egg: {} } : {}) };
+}
+
+// Bản xem cho giao diện: bước mở đầu hiện tại, 3 việc trong ngày, rương, chuỗi ngày.
+export function questView(state) {
+  const cnt = state.count ?? {};
+  const t = TUTORIAL[state.quest?.step ?? TUTORIAL.length];
+  const tutorial = t ? { id: "tutorial", key: t.key, text: t.text, have: Math.min(t.goal, cnt[t.count] ?? 0), goal: t.goal, done: (cnt[t.count] ?? 0) >= t.goal, reward: t.reward, step: state.quest.step, total: TUTORIAL.length } : null;
+  const daily = (state.daily?.tasks ?? []).map((d, i) => {
+    const have = clamp((cnt[d.key] ?? 0) - d.base, 0, d.goal);
+    return { id: `daily:${i}`, key: d.key, text: DAILY_TASKS[d.key].text(d.goal), have, goal: d.goal, done: have >= d.goal, claimed: d.claimed, reward: { bag: CONFIG.daily.taskBag } };
+  });
+  const chest = { id: "chest", done: daily.length > 0 && daily.every((d) => d.claimed), claimed: !!state.daily?.chest, reward: chestReward(state) };
+  // chuỗi đang còn (hôm qua hoặc hôm nay có nhận thưởng); đứt rồi thì hiện 0
+  const st = state.streak ?? {};
+  const streak = st.last >= (state.daily?.day ?? Infinity) - 1 ? st.days : 0;
+  return { tutorial, daily, chest, streak, best: st.best ?? 0 };
+}
+
+// Nhận thưởng: id = "tutorial" (bước mở đầu hiện tại) | "daily:0..2" | "chest".
+export function claim(state, id, now, opts = {}) {
+  return act(state, now, () => {
+    const rng = opts.rng ?? rngFor(state, "claim", id, now);
+    if (id === "tutorial") {
+      const t = TUTORIAL[state.quest.step];
+      if (!t) return err("no_quest", "Đã xong hết nhiệm vụ mở đầu");
+      if ((state.count[t.count] ?? 0) < t.goal) return err("not_done", "Chưa xong nhiệm vụ này");
+      const r = giveReward(state, t.reward, now, rng);
+      if (!r.ok) return r;
+      state.quest.step++;
+      return { id, key: t.key, got: r.got };
+    }
+    const tasks = state.daily?.tasks ?? [];
+    if (id === "chest") {
+      if (!tasks.length || !tasks.every((d) => d.claimed)) return err("not_done", "Làm xong cả 3 việc trong ngày đã");
+      if (state.daily.chest) return err("claimed", "Đã mở rương hôm nay rồi");
+      const r = giveReward(state, chestReward(state), now, rng);
+      if (!r.ok) return r;
+      state.daily.chest = true;
+      return { id, got: r.got, streak: state.streak.days };
+    }
+    const d = /^daily:[0-9]$/.test(id) ? tasks[Number(id.slice(6))] : null;
+    if (!d) return err("no_quest", "Không có nhiệm vụ này");
+    if (d.claimed) return err("claimed", "Đã nhận thưởng rồi");
+    if ((state.count[d.key] ?? 0) - d.base < d.goal) return err("not_done", "Chưa xong việc này");
+    const r = giveReward(state, { bag: CONFIG.daily.taskBag }, now, rng);
+    if (!r.ok) return r;
+    d.claimed = true;
+    // chuỗi ngày: tính khi nhận thưởng việc đầu tiên trong ngày
+    const day = state.daily.day, st = state.streak;
+    if (st.last !== day) {
+      st.days = st.last === day - 1 ? st.days + 1 : 1;
+      st.last = day;
+      st.best = Math.max(st.best ?? 0, st.days);
+    }
+    return { id, key: d.key, got: r.got, streak: st.days };
+  });
+}
+
+// Đồ trang trí sân trại: suy ra từ tiến độ (không lưu riêng) — phần thưởng nhìn thấy được.
+export function decorOf(state) {
+  return {
+    bunting: (state.quest?.step ?? 0) >= 8, // nuôi được con gà trưởng thành đầu tiên
+    flowers: (state.milestones ?? 0) >= 1,
+    lantern: (state.milestones ?? 0) >= 2,
+    scarecrow: (state.milestones ?? 0) >= 3,
+    pinwheel: (state.streak?.best ?? 0) >= 7,
+    ribbons: Object.keys(state.breeds ?? {}).length,
+  };
 }
 
 /* ---------- đổi ở cửa hàng: trứng / gà → túi hạt (Q6) ---------- */
@@ -508,6 +812,7 @@ export function tradeToShop(state, give, now) {
     state.chickens = state.chickens.filter((c) => !chickenIds.includes(c.id));
     state.bags.push(...bags);
     state.stats.traded += bags.length;
+    bump(state, "trade", bags.length);
     return { bags: bags.map((b) => b.id) };
   });
 }
@@ -535,6 +840,7 @@ export function tradeForEgg(state, chickenId, now, opts = {}) {
     state.chickens = state.chickens.filter((c) => c.id !== chickenId);
     state.eggs.push(...eggs);
     state.stats.traded++;
+    bump(state, "trade");
     return { eggIds: eggs.map((e) => e.id), eggId: eggs[0].id };
   });
 }
@@ -547,11 +853,12 @@ export function openBag(state, bagId, now, opts = {}) {
     const rng = opts.rng ?? rngFor(state, "bag", bag.id);
     const got = {};
     for (let i = 0; i < bag.size; i++) {
-      const k = rollSeed("shop", rng);
+      const k = rollSeed(bag.table ?? "shop", rng);
       got[k] = (got[k] ?? 0) + 1;
       state.inventory[k]++;
     }
     state.bags = state.bags.filter((b) => b.id !== bagId);
+    bump(state, "open");
     return { got };
   });
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Trại Gà</title>
   <meta name="description" content="Nuôi gà, thả đồng, ấp trứng, sưu tầm — mỗi con gà được vẽ từ bộ gen riêng.">
-  <link rel="stylesheet" href="game.css?v=11">
+  <link rel="stylesheet" href="game.css?v=18">
 </head>
 <body>
   <header class="bar">
@@ -16,10 +16,11 @@
     <div class="res" id="res" role="group" aria-label="Tài nguyên"></div>
     <span class="net-status" id="net-status" hidden></span>
     <nav class="menu" aria-label="Mở">
+      <button type="button" id="open-quests" class="has-dot">Nhiệm vụ<i class="dot" id="quest-dot" hidden></i></button>
       <button type="button" id="open-store">Kho</button>
       <button type="button" id="open-dex">Sổ</button>
       <button type="button" id="open-memorial">Kỷ niệm</button>
-      <a class="lab-link" href="index.html" title="Xem và chỉnh bộ gen">Phòng gen</a>
+      <button type="button" id="sound" class="icon" aria-pressed="true" aria-label="Âm thanh" title="Bật / tắt âm thanh"></button>
     </nav>
     <details class="dev" id="dev">
       <summary title="Bảng thử nghiệm">Dev</summary>
@@ -36,6 +37,7 @@
         <p class="muted">Máy chủ (tự dò; để trống + Kết nối = chơi offline)</p>
         <div class="server-row"><input id="server-url" placeholder="http://127.0.0.1:8787" spellcheck="false" autocomplete="off" aria-label="Địa chỉ máy chủ"><button type="button" id="server-connect">Kết nối</button></div>
         <button type="button" id="reset" class="danger">Chơi lại từ đầu</button>
+        <a class="lab-link" href="index.html" title="Xem và chỉnh bộ gen">Phòng gen →</a>
         <p class="muted" id="clock"></p>
       </div>
     </details>
@@ -46,12 +48,16 @@
     <section id="view-yard" class="view" aria-label="Sân trại">
       <div class="scene" id="yard">
         <div class="scene-bg" id="yard-bg"></div>
+        <div class="scene-layer" id="yard-decor"></div>
         <div class="scene-layer" id="yard-zones"></div>
         <div class="scene-layer" id="yard-nests"></div>
         <div class="scene-layer" id="yard-eggs"></div>
         <div class="scene-layer" id="yard-chickens"></div>
+        <div class="sky" aria-hidden="true"></div>
+        <div class="amb" aria-hidden="true"></div>
         <div class="scene-layer" id="yard-pops"></div>
       </div>
+      <div class="quest" id="quest" hidden></div>
       <p class="yard-hint" id="yard-hint"></p>
 
       <div class="tray" id="tray" role="group" aria-label="Khay hạt — kéo hạt lên gà để cho ăn"></div>
@@ -68,7 +74,8 @@
       <details class="logbox howto">
         <summary>Cách chơi</summary>
         <ul>
-          <li>Kéo <b>gà</b> ra <b>Cổng</b> để thả ra cánh đồng kiếm hạt (mỗi lần 1 con, chỉ khi bạn đang xem).</li>
+          <li>Chạm <b>trứng trong ổ ấp</b> để sưởi ấm — trứng nở nhanh hơn (mỗi quả tối đa 10 lần).</li>
+          <li>Kéo <b>gà</b> ra <b>Cổng</b> để thả ra cánh đồng kiếm hạt (mỗi lần 1 con, chỉ khi bạn đang xem). Thấy <b>đốm sáng</b> thì chạm vào: gà chạy tới bới được hạt tốt.</li>
           <li>Kéo <b>hạt</b> từ khay lên gà để cho ăn, hoặc kéo gà vào <b>Máng ăn</b> để tự chọn hạt.</li>
           <li>Chạm <b>trứng</b> để nhặt vào kho; kéo trứng có phôi (chấm xanh) vào <b>ổ ấp</b> để ấp.</li>
           <li>Kéo gà hoặc trứng vào <b>Chợ</b> để đổi lấy túi hạt (gà lớn đổi được 2 trứng có phôi).</li>
@@ -86,7 +93,10 @@
       <div class="scene field" id="field">
         <div class="scene-bg" id="field-bg"></div>
         <div class="scene-layer" id="field-seeds"></div>
+        <div class="scene-layer" id="field-spots"></div>
         <div class="scene-layer" id="field-chickens"></div>
+        <div class="sky" aria-hidden="true"></div>
+        <div class="amb" aria-hidden="true"></div>
         <div class="scene-layer" id="field-pops"></div>
       </div>
       <div class="field-roster" id="field-roster"></div>
@@ -129,7 +139,7 @@
       <div class="sheet-head"><h2>Kho</h2><button value="close" aria-label="Đóng">✕</button></div>
       <h3 class="section-title">Hạt <span class="muted" id="seed-cap"></span></h3>
       <div class="seeds" id="seeds"></div>
-      <h3 class="section-title">Túi hạt chưa mở</h3>
+      <h3 class="section-title">Túi hạt chưa mở <button type="button" class="small primary" id="open-all-bags" hidden>Mở hết</button></h3>
       <div class="bags" id="bags"></div>
       <h3 class="section-title">Trứng trong kho <span class="muted" id="egg-cap"></span></h3>
       <p class="muted">Trứng có phôi (cần gà trống trong trại) thì ấp được. Trứng nào cũng đổi được túi 2 hạt.</p>
@@ -140,9 +150,12 @@
   <dialog id="dex-dialog" class="sheet">
     <form method="dialog">
       <div class="sheet-head"><h2>Sổ sưu tầm</h2><button value="close" aria-label="Đóng">✕</button></div>
-      <p class="muted">★ nở được gà mang đặc điểm · ★★ nuôi con đó tới trưởng thành với đủ nhóm chất của đặc điểm (chấm màu). Mỗi mốc ★★ mở thêm chỗ chuồng; mốc đầu tặng thêm một ổ ấp.</p>
+      <p class="muted">★ nở được gà mang đặc điểm · ★★ nuôi con đó tới trưởng thành với đủ nhóm chất của đặc điểm (chấm màu) · ★★★ thuần chủng: như ★★, và cả bố lẫn mẹ của nó trong trại đều mang đặc điểm. Mỗi mốc ★★ mở thêm chỗ chuồng; mốc đầu tặng thêm một ổ ấp.</p>
       <div id="dex-progress"></div>
       <ul class="dex" id="dex-list"></ul>
+      <h3 class="section-title">Giống <span class="muted" id="breed-cap"></span></h3>
+      <p class="muted">Một con gà mang đủ các đặc điểm của giống, nuôi đủ chất tới trưởng thành thì đạt giống: tặng một túi quà và một chiếc nơ treo ở chuồng. Đủ 3 giống tặng thêm một ổ ấp.</p>
+      <div class="breeds" id="breed-list"></div>
     </form>
   </dialog>
 
@@ -165,6 +178,33 @@
     </form>
   </dialog>
 
-  <script type="module" src="js/game/main.js?v=16"></script>
+  <dialog id="quests-dialog" class="sheet">
+    <form method="dialog">
+      <div class="sheet-head"><h2>Nhiệm vụ</h2><button value="close" aria-label="Đóng">✕</button></div>
+      <div id="quests-body"></div>
+    </form>
+  </dialog>
+
+  <dialog id="reveal" class="reveal" aria-label="Phần thưởng">
+    <div class="rv" id="reveal-body"></div>
+  </dialog>
+
+  <!-- Mỗi lần phát hành: tăng CÙNG một số v= ở game.css, ở mọi dòng dưới đây và ở main.js.
+       Bảng này gắn số phiên bản cho các file con mà main.js nạp vào; thiếu nó, trình duyệt có thể ghép
+       main.js mới với rules.js / field.js cũ còn trong bộ nhớ đệm và trang game không chạy. -->
+  <script type="importmap">
+  {"imports": {
+    "./js/genome.js": "./js/genome.js?v=18",
+    "./js/chicken-flat.js": "./js/chicken-flat.js?v=18",
+    "./js/chicken-svg.js": "./js/chicken-svg.js?v=18",
+    "./js/art/icons.js": "./js/art/icons.js?v=18",
+    "./js/art/decor.js": "./js/art/decor.js?v=18",
+    "./js/game/rules.js": "./js/game/rules.js?v=18",
+    "./js/game/field.js": "./js/game/field.js?v=18",
+    "./js/game/net.js": "./js/game/net.js?v=18",
+    "./js/game/fx.js": "./js/game/fx.js?v=18"
+  }}
+  </script>
+  <script type="module" src="js/game/main.js?v=18"></script>
 </body>
 </html>

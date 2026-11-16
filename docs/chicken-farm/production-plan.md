@@ -223,3 +223,41 @@ Mô phỏng 32 ván × 7 ngày (luật v5, `node tools/chicken-farm/balance-sim.
 | Mốc sổ đạt sau 7 ngày | 1 | 1 | 1 | 1 |
 
 Ghé thăm đói nhiều hơn vì chuồng lớn hơn = nhiều miệng ăn hơn (design-review đã đo trước); vẫn dưới mốc 28% của `balance.test.mjs`. Mốc 3 (15/18 mục) cần thêm đa dạng gen (trao đổi M5, biến dị) → đích dài hạn.
+
+## 14. Vòng "Hứng khởi" (2026-11-15) — luật v6
+
+Chủ dự án nêu hai vấn đề: game **chưa có cơ chế tạo hứng thú** (phần thưởng nhỏ, đều, có bất ngờ) và **giai đoạn đầu phải ngồi chờ trứng nở**. Vòng này do producer tự làm (không dùng đội phụ), ngân sách 700k. Các mục dưới đây là **đề xuất đã cài, chờ chủ dự án duyệt nội dung** — tên giống, lời nhiệm vụ, con số đều chỉnh được trong `rules.js`.
+
+| # | Thay đổi | Lý do | Cài đặt |
+|---|---|---|---|
+| E1 | **Quả trứng đầu nở sau 1 phút** (trứng thường vẫn 5–30 phút theo gen) | Con gà đầu tiên có trong phút đầu, không phải sau 5–30 phút | `CONFIG.start.quickHatchMs`, cờ `egg.quick` |
+| E2 | **Sưởi trứng**: chạm trứng trong ổ, mỗi lần bớt 4% thời gian ấp, cách nhau 2,5 giây, tối đa 10 lần (−40%) | Có việc để làm trong lúc chờ; có trần nên gen *thời gian ấp* vẫn có nghĩa và server không bị spam | `warmEgg()`, `CONFIG.warm` |
+| E3 | **Màn trứng nở**: trứng nứt → chạm 3 lần → gà con ra mắt với tên, độ quý (thường / đẹp / quý / huyền thoại), đặc điểm mang trong gen, mục sổ mới | Khoảnh khắc "mở quà" của game; trước đây chỉ có một dòng thông báo | Chỉ ở client (`REVEAL.hatch`); luật không đổi |
+| E4 | **Chuỗi nhiệm vụ mở đầu** 10 bước, mỗi bước một phần thưởng; bước "kiếm hạt" tặng **trứng quà nở nhanh, chắc chắn khác giới** với con gà đầu | Dạy vòng chơi bằng phần thưởng; người mới có cặp trống mái trong ~5 phút | `TUTORIAL`, `claim("tutorial")`, `state.count`, `state.quest` |
+| E5 | **Việc trong ngày**: 3 việc/ngày (giờ Việt Nam), xong cả 3 mở **rương**; **chuỗi ngày** làm rương to dần, cứ 3 ngày thêm trứng quà | Lý do quay lại mỗi ngày; mục tiêu ngắn luôn nhìn thấy | `DAILY_TASKS`, `rollDaily()`, `claim("daily:n" \| "chest")`, `state.daily`, `state.streak` |
+| E6 | **Đốm sáng ngoài đồng**: thỉnh thoảng lấp lánh trong cỏ, chạm vào thì gà chạy tới bới được 1–3 hạt tốt hơn thường, đôi khi cả túi hạt | Xem cánh đồng trước đây thụ động; phần thưởng thay đổi cho người chú ý (trụ cột 3). Người chơi chỉ *chỉ chỗ*, gà vẫn tự chạy — cần chủ dự án xác nhận không trái D3 | `fieldBonus()`, `CONFIG.lucky`, `drops.lucky`, `field.setLure()` |
+| E7 | **Sổ ★★★ thuần chủng**: như ★★, và cả bố lẫn mẹ (trong trại) đều mang đặc điểm | Đề xuất Q-Dex B viết "đồng hợp", nhưng đặc điểm lặn (lông tơ) hễ hiện là đã đồng hợp → ★★★ trùng ★★. Định nghĩa theo bố mẹ thì đồng đều cho mọi đặc điểm và đúng nghĩa "chọn giống qua một đời" | `egg.line` / `ch.line`, `dexMark()` |
+| E8 | **8 giống** (tổ hợp 2–4 đặc điểm trên một con, nuôi đủ chất): Chỏm Râu, Xù Bông, Vảy Hồng, Cú Vằn, Cụt Lam, Đuôi Phượng, Ác Tơ, Hoa Mơ. Thưởng túi quà 8 hạt + nơ treo ở chuồng; đủ 3 giống thêm 1 ổ ấp | Q-Dex C: mục tiêu sưu tầm có tên, có chuyện kể. Xác suất gặp ngẫu nhiên: 2–5% (giống đẹp) → 0,06% (Ác Tơ) → phải lai chọn | `BREEDS`, `breedMark()`, `state.breeds` |
+| E9 | **Trang trí sân** mở theo tiến độ: dây cờ (nuôi được con trưởng thành đầu), luống hoa / đèn lồng / bù nhìn (3 mốc sổ), chong chóng (chuỗi 7 ngày), nơ (mỗi giống) | Phần thưởng nhìn thấy được, không đụng cân bằng | `decorOf()` (suy ra từ state, không lưu riêng), `js/art/decor.js` |
+| E10 | **Âm thanh** tổng hợp bằng WebAudio (không có tệp âm thanh), nút tắt tiếng; hạt bay, pháo giấy, số nảy; **trời theo giờ thật** (bình minh / ngày / hoàng hôn / đêm có đom đóm); màn mở túi, màn nhận thưởng, màn "khi bạn vắng mặt" | Phản hồi cho từng hành động | `js/game/fx.js`, `game.css` |
+
+**Sửa lỗi phát hiện trong vòng này**
+
+- `tools/replay.mjs` không đọc cột `source` → hành động của hệ thống (gọi gà về lúc người chơi vắng) bị phát lại như thể người chơi có mặt → trứng nở sớm hơn thật và báo "lệch" oan. Đã sửa, có test hồi quy (`server/test/v6.test.mjs`, đã thấy test đỏ trước khi sửa).
+- Nút **Chơi lại từ đầu** (offline) không xoá được trại: lúc tải lại trang, `save()` ghi lại đúng trại vừa xoá. Đã sửa.
+- Trình duyệt có thể ghép `main.js` mới với `rules.js` / `field.js` cũ trong bộ nhớ đệm → trang trắng sau mỗi lần cập nhật. Đã thêm bảng `importmap` gắn số phiên bản cho mọi file con (`game.html`); **mỗi lần phát hành tăng cùng một số `v=`**.
+- H1 (design-review): gà no + kho đầy vẫn mổ → nay nằm nghỉ 45 giây và báo "kho hạt đầy" (phía client; luật không đổi).
+
+**Việc cần làm khi phát hành:** server phải chạy cùng phiên bản luật (v6) — `git pull` rồi khởi động lại; client gặp server v5 sẽ tự chơi offline.
+
+**Chưa đo:** mô phỏng cân bằng chưa cho bot dùng nhiệm vụ / đốm sáng (bot không nhận thưởng), nên số liệu là cận dưới về lượng hạt. Chạy lại `balance-sim` (16 ván × 7 ngày): ngõ cụt 0%, Ghé thăm mất 24% tuổi thọ vì đói (giới hạn test 28%), lần nở đầu sau 1 phút.
+
+**Câu hỏi cho chủ dự án**
+
+| # | Câu hỏi | Đang dùng |
+|---|---|---|
+| Q15 | Tên và tổ hợp của 8 giống? | Như bảng E8 |
+| Q16 | Đốm sáng có trái "không điều khiển nhân vật" (D3)? | Giữ: người chơi chỉ chỗ, gà tự chạy |
+| Q17 | Chuỗi ngày: có "ngày nghỉ phép" để không mất chuỗi? | Chưa có; đứt là về 1 |
+| Q18 | Trứng quà của bước mở đầu ép khác giới — có "dễ quá" không? | Giữ: để ai cũng tới được vòng đẻ trứng |
+

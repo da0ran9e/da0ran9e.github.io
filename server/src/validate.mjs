@@ -42,6 +42,14 @@ function seedKind(body) {
   return v;
 }
 
+// id nhiệm vụ: bước mở đầu hiện tại, một trong các việc trong ngày, hoặc rương ngày
+const QUEST_RE = /^(tutorial|chest|daily:[0-9])$/;
+function questId(body) {
+  const v = body.id;
+  if (typeof v !== "string" || !QUEST_RE.test(v)) throw bad('Trường "id" không hợp lệ');
+  return v;
+}
+
 // Tham số cho từng hành động trại (tên trùng tên hàm luật).
 export const ARGS = {
   collectEgg: (b) => ({ eggId: id(b, "eggId") }), // nhặt trứng ngoài sân vào kho
@@ -54,4 +62,8 @@ export const ARGS = {
   tradeToShop: (b) => ({ eggs: idList(b, "eggs", R.CONFIG.storage.eggs), chickens: idList(b, "chickens", 12) }),
   tradeForEgg: (b) => ({ chickenId: id(b, "chickenId") }),
   openBag: (b) => ({ bagId: id(b, "bagId") }),
+  // luật v6
+  warmEgg: (b) => ({ eggId: id(b, "eggId") }), // sưởi trứng đang ấp
+  fieldBonus: (b) => ({ chickenId: id(b, "chickenId") }), // đốm sáng: phần thưởng do SERVER tung
+  claim: (b) => ({ id: questId(b) }), // nhận thưởng nhiệm vụ
 };

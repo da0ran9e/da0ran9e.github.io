@@ -77,6 +77,9 @@ Client **không bao giờ gửi giờ**: server dùng `Date.now()`.
 | `POST /api/farm/tradeToShop` | `{aid, eggs?: [], chickens?: []}` | trứng/gà → túi hạt |
 | `POST /api/farm/tradeForEgg` | `{aid, chickenId}` | gà → một trứng có phôi ngẫu nhiên (server tung) |
 | `POST /api/farm/openBag` | `{aid, bagId}` | nội dung túi do server tung |
+| `POST /api/farm/warmEgg` | `{aid, eggId}` | luật v6 — sưởi trứng đang ấp: bớt 4% thời gian ấp mỗi lần, cách nhau ≥ 2,5 s, tối đa 10 lần/quả |
+| `POST /api/farm/fieldBonus` | `{aid, chickenId}` | luật v6 — "đốm sáng" ngoài đồng: 1–3 hạt (bảng `lucky`) hoặc một túi, do server tung; cần đang xem cánh đồng; mỗi trại ≤ 1 lần / 20 s |
+| `POST /api/farm/claim` | `{aid, id}` | luật v6 — nhận thưởng nhiệm vụ: `id` = `tutorial` \| `daily:0..2` \| `chest`; trứng quà do server tung |
 
 Thành công: `{ok:true, aid, now, version, result, events, farm}` — `farm` là state đã bỏ `seed`,
 sổ kỷ niệm chỉ 20 mục cuối (`memorialTotal` là tổng). Lỗi: `{ok:false, aid?, code, message, now, version?}`.

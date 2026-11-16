@@ -8,10 +8,9 @@
 
 import { randomBytes, randomInt, createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { R, applyAction, createFarmState, rollFor, clientView, inField, sha256 } from "./actions.mjs";
+import { R, applyAction, createFarmState, rollFor, NEEDS_ROLL, clientView, inField, sha256 } from "./actions.mjs";
 import { HttpError } from "./http-util.mjs";
 
-const NEEDS_ROLL = new Set(["fieldFind", "openBag", "tradeForEgg"]);
 const tokenHash = (token) => createHash("sha256").update(token).digest();
 
 export class FarmService {
@@ -143,7 +142,9 @@ export class FarmService {
     // Ghi một "advance" (người chơi có mặt) khi: vắng lâu (lần tính lười sau khỏi chạy quá dài), hoặc
     // có trứng ấp xong đang chờ trong ổ (Q14) — gà con nở ĐÚNG lúc này và được lưu, không nở lại mỗi lần xem.
     const eggReady = entry.state.eggs.some((e) => e.hatchAt !== null && e.hatchAt <= now);
-    if (eggReady || now - entry.state.updatedAt > this.cfg.systemAdvanceMs) {
+    // v6: sang ngày mới → ghi luôn để 3 việc trong ngày cố định từ lần xem đầu tiên (không đổi giữa hai lần xem).
+    const newDay = entry.state.daily?.day !== R.dayIndex(now);
+    if (eggReady || newDay || now - entry.state.updatedAt > this.cfg.systemAdvanceMs) {
       const draft = structuredClone(entry.state);
       const out = applyAction(draft, "advance", {}, null, now);
       entry = this.#commit(pid, entry, draft, entry.rolls, { type: "advance", now, source: "view" });
@@ -173,7 +174,7 @@ export class FarmService {
 
     // Ngoài đồng chỉ khi đang xem: thả gà = một nhịp tim; tìm hạt cần phiên xem còn hạn.
     if (type === "release") this.presence.beat(pid, now);
-    if (type === "fieldFind" && !this.presence.isWatching(pid, now)) return fail(409, "not_watching", "Bạn không còn xem cánh đồng — gà đã về chuồng");
+    if ((type === "fieldFind" || type === "fieldBonus") && !this.presence.isWatching(pid, now)) return fail(409, "not_watching", "Bạn không còn xem cánh đồng — gà đã về chuồng");
 
     let rolls = entry.rolls;
     const rolled = NEEDS_ROLL.has(type) ? rollFor(type, this.secret, pid, rolls++) : null;

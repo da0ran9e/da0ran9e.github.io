@@ -24,11 +24,15 @@ export function serverRoll(secret, purpose, playerId, counter) {
 //   fieldFind   → loại hạt ngoài đồng (rollSeed("field") của luật trên rng từ HMAC)
 //   openBag     → seed riêng cho lần mở túi
 //   tradeForEgg → seed riêng cho quả trứng của cửa hàng
+//   fieldBonus  → seed riêng cho lần bới đốm sáng (số hạt, loại hạt, hay cả túi)
+//   claim       → seed riêng cho phần thưởng nhiệm vụ (trứng quà)
+const SEEDED = new Set(["openBag", "tradeForEgg", "fieldBonus", "claim"]);
 export function rollFor(type, secret, playerId, counter) {
   if (type === "fieldFind") return { kind: R.rollSeed("field", mulberry32(serverRoll(secret, "field", playerId, counter))) };
-  if (type === "openBag" || type === "tradeForEgg") return { seed: serverRoll(secret, type, playerId, counter) };
+  if (SEEDED.has(type)) return { seed: serverRoll(secret, type, playerId, counter) };
   return null;
 }
+export const NEEDS_ROLL = new Set(["fieldFind", ...SEEDED]);
 
 /* ---------- bảng hành động ---------- */
 
@@ -45,6 +49,10 @@ export const ACTIONS = {
   // luật nhận nguồn ngẫu nhiên từ ngoài (opts.rng) — seed HMAC đã ghi ở cột rolled nên phát lại được
   tradeForEgg: (s, a, now, rolled) => R.tradeForEgg(s, a.chickenId, now, { rng: mulberry32(rolled.seed >>> 0) }),
   openBag: (s, a, now, rolled) => R.openBag(s, a.bagId, now, { rng: mulberry32(rolled.seed >>> 0) }),
+  // luật v6
+  warmEgg: (s, a, now) => R.warmEgg(s, a.eggId, now),
+  fieldBonus: (s, a, now, rolled) => R.fieldBonus(s, a.chickenId, now, { rng: mulberry32(rolled.seed >>> 0) }),
+  claim: (s, a, now, rolled) => R.claim(s, a.id, now, { rng: mulberry32(rolled.seed >>> 0) }),
   advance: () => ({ ok: true }), // hành động hệ thống: chỉ mô phỏng tới `now`
 };
 

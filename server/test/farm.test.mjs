@@ -44,7 +44,7 @@ test("vòng chơi: ấp → tua đồng hồ → nở → cho ăn; GET không gh
   const inc = await s.act(token, "incubate", { eggId });
   assert.equal(inc.status, 200);
   const wait = inc.body.result.hatchAt - s.clock.t;
-  assert.ok(wait >= 5 * MIN && wait <= 30 * MIN, `ấp ${wait / MIN} phút`);
+  assert.equal(wait, R.CONFIG.start.quickHatchMs, `trứng đầu ấp ${wait / MIN} phút`); // v6: trứng đầu nở nhanh
   assert.equal(inc.body.farm.incubators[0], eggId);
   assert.equal((await s.act(token, "incubate", { eggId })).body.code, "already");
 

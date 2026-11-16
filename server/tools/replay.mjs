@@ -14,7 +14,7 @@ import { applyAction, createFarmState, sha256 } from "../src/actions.mjs";
 // Chạy lại nhật ký của một người chơi. Trả về { playerId, ok, actions, version, expected, actual, error? }.
 export function replayFarm(db, playerId) {
   const farm = db.prepare("SELECT state_hash, version FROM farms WHERE player_id = ?").get(playerId);
-  const rows = db.prepare("SELECT seq, type, args, rolled, now FROM actions WHERE player_id = ? ORDER BY seq").all(playerId);
+  const rows = db.prepare("SELECT seq, type, args, rolled, now, source FROM actions WHERE player_id = ? ORDER BY seq").all(playerId);
   const report = { playerId, ok: false, actions: rows.length, version: farm?.version ?? null, expected: farm?.state_hash ?? null, actual: null };
   if (!farm) return { ...report, error: "không có ảnh chụp trong farms" };
   if (!rows.length || rows[0].type !== "newGame") return { ...report, error: "nhật ký không bắt đầu bằng newGame" };
