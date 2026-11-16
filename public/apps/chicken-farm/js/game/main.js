@@ -306,12 +306,16 @@ const OFFLINE = {
   fieldFind: (a, t) => R.fieldFind(state, a.chickenId, a.seed, a.at ?? t),
   incubate: (a, t) => R.incubate(state, a.eggId, t),
   collectEgg: (a, t) => R.collectEgg(state, a.eggId, t),
-  tradeToShop: (a, t) => R.tradeToShop(state, { eggs: a.eggs ?? [], chickens: a.chickens ?? [] }, t),
+  tradeToShop: (a, t) => R.tradeToShop(state, { eggs: a.eggs ?? [], chickens: a.chickens ?? [] }, t, { want: a.want }),
   tradeForEgg: (a, t) => R.tradeForEgg(state, a.chickenId, t),
   openBag: (a, t) => R.openBag(state, a.bagId, t),
   warmEgg: (a, t) => R.warmEgg(state, a.eggId, t),
   fieldBonus: (a, t) => R.fieldBonus(state, a.chickenId, t),
   claim: (a, t) => R.claim(state, a.id, t),
+  fillTower: (a, t) => R.fillTower(state, a.seed, a.n, t),
+  takeFromTower: (a, t) => R.takeFromTower(state, a.seed, a.n, t),
+  startPlay: (a, t) => R.startPlay(state, a.id, t),
+  endPlay: (a, t) => R.endPlay(state, a.score, t),
 };
 async function act(name, args = {}, opts) {
   if (!online) return OFFLINE[name](args, now());
@@ -1919,7 +1923,7 @@ function frame(t) {
     if (t - lastTick > 500 && !drag) {
       lastTick = t;
       if (!online) {
-        const ev = R.advance(state, now());
+        const ev = R.advance(state, now(), { continuous: clock.speed > 1 }); // tua nhanh vẫn là một phiên có mặt
         if (ev.length) {
           handleEvents(ev);
           syncField();

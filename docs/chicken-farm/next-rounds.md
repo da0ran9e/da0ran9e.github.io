@@ -10,6 +10,20 @@
 > - Mỗi lần phát hành tăng cùng một số `v=` trong `game.html` (css, importmap, main.js).
 > - Test: `node --test tests/chicken-farm/*.test.mjs` và `node --test server/test/`. Test mới phải thấy đỏ một lần (phá luật tạm) rồi mới tin.
 
+## Trạng thái luật v7 (2026-11-16) — ĐỌC TRƯỚC
+
+Phần **luật và server** của ba cơ chế khó đã cài và có test cốt lõi; phần **giao diện chưa có** (người chơi chưa thấy gì mới):
+
+| Cơ chế | Luật (`rules.js`) | Server | Test | Còn lại (việc giao diện, dễ) |
+|---|---|---|---|---|
+| Tháp hạt theo sự có mặt (H1) | `fillTower`, `takeFromTower`, `bestSeedFor`, `advance(…, { watchFrom, continuous })` | `FarmService.seen()`, `rolled.w` | `tests/chicken-farm/v7-tower.test.mjs`, T13 trong `server/test/v6.test.mjs` | Vẽ tháp tại `SPOTS.feeder`, hộp đổ hạt, bỏ khay kéo-thả, cho ăn riêng qua Kho; test T4, T6, T10, T12, T14, T15 |
+| Vé (H3, phần luật) | `state.tickets`, `tradeToShop(…, { want: "tickets" })` có trần ngày | `tradeToShop` nhận `want` | `v7-play.test.mjs` | Ô vé trên thanh tài nguyên; thẻ "lấy vé" trong hộp chợ; `giveReward({ ticket })` cho rương; mô phỏng cân bằng (H3) |
+| Thể lực (ideas 12) | `staminaOf`, `staminaMaxOf`, hồi/tiêu trong `stepChicken`, `ch.fitness` | — | `v7-play.test.mjs` | Thanh thể lực trong bảng gà; gà hết sức đi chậm ngoài đồng (chưa cài: hiện chỉ trừ thể lực) |
+| Sân chơi (H2) | `startPlay`, `endPlay` (kẹp điểm, cửa sổ thời gian, trần vé ngày) | `startPlay`, `endPlay` + kiểm tra kiểu `score` | `v7-play.test.mjs` | Điểm thả "Sân chơi", `view = "play"`, bốn module trò chơi, màn kết quả; test P6, P11, P13, P14, P15 |
+
+Khác với thiết kế H2 ban đầu: giới hạn "2 lượt mỗi giờ" đã được **thay bằng thể lực** (35 mỗi lượt) cho gà, và "tối đa 2 lượt mỗi quả" cho trứng.
+Chưa làm gì: thương nhân / khách qua đường, rương theo giờ, gà mái ấp giúp, gõ trứng, bạn bè (chủ dự án: làm chơi đơn trước).
+
 ## Đã xong ở đợt A (2026-11-16)
 
 Toàn màn hình không cuộn (`.view` co theo khung, `.hud` nổi trên cảnh); gà to hơn; nhãn điểm thả chỉ hiện khi rê chuột/kéo; đàn gà thành hàng ảnh nhỏ bên trái; bảng thông tin gà nổi góc phải; nhật ký và cách chơi thành hộp thoại; gà lần lượt đi ra từ chuồng khi vào game; chợ dạng thẻ hình; lớp đa ngôn ngữ `js/game/i18n.js` + nút đổi ngôn ngữ.

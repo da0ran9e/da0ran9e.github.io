@@ -45,13 +45,17 @@ export const ACTIONS = {
   recall: (s, a, now, _r, opts) => R.recall(s, a.chickenId, now, opts),
   recallAll: (s, a, now, _r, opts) => R.recallAll(s, now, opts),
   fieldFind: (s, a, now, rolled) => R.fieldFind(s, a.chickenId, rolled.kind, now),
-  tradeToShop: (s, a, now) => R.tradeToShop(s, { eggs: a.eggs, chickens: a.chickens }, now),
+  tradeToShop: (s, a, now) => R.tradeToShop(s, { eggs: a.eggs, chickens: a.chickens }, now, { want: a.want }),
   // luật nhận nguồn ngẫu nhiên từ ngoài (opts.rng) — seed HMAC đã ghi ở cột rolled nên phát lại được
   tradeForEgg: (s, a, now, rolled) => R.tradeForEgg(s, a.chickenId, now, { rng: mulberry32(rolled.seed >>> 0) }),
   openBag: (s, a, now, rolled) => R.openBag(s, a.bagId, now, { rng: mulberry32(rolled.seed >>> 0) }),
   // luật v6
   warmEgg: (s, a, now) => R.warmEgg(s, a.eggId, now),
   fieldBonus: (s, a, now, rolled) => R.fieldBonus(s, a.chickenId, now, { rng: mulberry32(rolled.seed >>> 0) }),
+  startPlay: (s, a, now) => R.startPlay(s, a.id, now),
+  endPlay: (s, a, now) => R.endPlay(s, a.score, now),
+  fillTower: (s, a, now) => R.fillTower(s, a.seed, a.n, now),
+  takeFromTower: (s, a, now) => R.takeFromTower(s, a.seed, a.n, now),
   claim: (s, a, now, rolled) => R.claim(s, a.id, now, { rng: mulberry32(rolled.seed >>> 0) }),
   advance: () => ({ ok: true }), // hành động hệ thống: chỉ mô phỏng tới `now`
 };
@@ -63,7 +67,8 @@ export const ACTIONS = {
 export function applyAction(state, type, args, rolled, now, { present = true } = {}) {
   const run = ACTIONS[type];
   if (!run) throw new Error(`Hành động không tồn tại: ${type}`);
-  const opts = { present };
+  // rolled.w = mốc đầu phiên mở game do server theo dõi (v7, tháp hạt) — nằm trong nhật ký nên phát lại y hệt
+  const opts = { present, ...(present && rolled?.w !== undefined ? { watchFrom: rolled.w } : {}) };
   const events = R.advance(state, now, opts); // giống act() của luật; tách ra để lấy sự kiện của phần thời gian trôi
   const r = run(state, args ?? {}, now, rolled ?? {}, opts);
   if (r && r.ok === false) return { ok: false, code: r.code, message: r.message };

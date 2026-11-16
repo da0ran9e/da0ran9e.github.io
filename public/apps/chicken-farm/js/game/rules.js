@@ -33,7 +33,7 @@ export const SEEDS = {
 };
 
 export const CONFIG = {
-  version: 6,
+  version: 7,
   stepMs: MIN,
   // Ấp 5–30 phút theo gen "thời gian ấp" của chính quả trứng (genome.express).
   // Lớn: chất lượng dinh dưỡng 1 → 20 phút, 0 → 24 giờ (thang lũy thừa), nhân gen "tốc độ lớn".
@@ -71,6 +71,18 @@ export const CONFIG = {
   // v6 — SƯỞI TRỨNG: chạm trứng đang ấp, mỗi lần bớt cutPct thời gian ấp của quả đó; tối đa `max` lần
   // (bớt tối đa 40%), cách nhau ≥ cooldownMs. Việc để làm trong lúc chờ, và có giới hạn nên không spam.
   warm: { cooldownMs: 2500, cutPct: 0.04, max: 10 },
+  // v7 — THÁP HẠT: người chơi đổ hạt vào tháp; gà ở chuồng đói dưới eatBelow thì tự ăn 1 hạt mỗi phút,
+  // NHƯNG chỉ ở những phút người chơi đang mở game (xem advance: watchFrom). Vắng mặt = gà bị nhốt, không ăn.
+  tower: { cap: 40, eatBelow: 0.5 },
+  // v7 — VÉ: vật phẩm tiêu hao chung, CHỈ dùng trong game (không chuyển giữa người chơi). Đổi trứng có phôi / gà
+  // trưởng thành lấy vé có trần mỗi ngày (không thì người chơi nhiều đổi vô hạn — design-hard-parts §H3).
+  tickets: { cap: 99, perEgg: 1, perChicken: 2, eggsPerDay: 3, chickensPerDay: 2 },
+  // v7 — THỂ LỰC: tối đa theo gen sức đề kháng × tuổi × rèn luyện; hồi khi ở chuồng và không đói (đêm hồi gấp đôi);
+  // kiếm ăn ngoài đồng và chơi làm tiêu. Hết thể lực chỉ là "phải nghỉ", không gây hại.
+  stamina: { base: [60, 100], stage: { chick: 0.6, juvenile: 0.8, adult: 1 }, regenPerHour: 20, nightMul: 2, night: [22, 5], fieldPerHour: 30, fitnessStep: 0.04, fitnessMax: 0.3 },
+  // v7 — SÂN CHƠI: minigame chạy ở client, luật chỉ nhận điểm 0..1 và KẸP phần thưởng (không tin client).
+  // Thắng chỉ hoàn lại vé đã bỏ ra → minigame không sinh vé ròng. Xem design-hard-parts §H2.
+  play: { cost: 1, stamina: 35, minMs: 10 * 1000, maxMs: 120 * 1000, growth: 8, hunger: 60, eggCutPct: 0.15, eggMax: 2, adultLifeMs: 30 * MIN, winAt: 0.6, winTicketsPerDay: 6, fitnessAt: 0.3 },
   // v6 — ĐỐM SÁNG ngoài đồng: người chơi chạm đốm sáng, gà chạy tới bới được 1–3 hạt (bảng "lucky"),
   // đôi khi cả một túi hạt. Mỗi trại tối đa 1 lần / cooldownMs. count: [ngưỡng xác suất, số hạt].
   lucky: { cooldownMs: 20 * 1000, count: [[0.6, 1], [0.85, 2], [0.96, 3]], bagSize: 3 },
@@ -131,8 +143,22 @@ function traitsOf(code) {
     speed: ph.stats.speed, // 0–1, gen "Tốc độ" (chạy ngoài đồng)
     shell: ph.egg.shell,
     shellName: ph.egg.name,
+    stamBase: Math.round(lerp(CONFIG.stamina.base[0], CONFIG.stamina.base[1], clamp((ph.stats.hardiness - 0.2) / 0.6))),
   };
 }
+
+/* ---------- thể lực (v7) ---------- */
+
+// Thể lực tối đa lúc này: gốc theo gen × hệ số tuổi × (1 + rèn luyện). Gà nở trước v7 chưa có gốc → 80.
+export function staminaMaxOf(ch) {
+  const S = CONFIG.stamina;
+  return Math.round((ch.stamBase ?? 80) * S.stage[stageOf(ch)] * (1 + (ch.fitness ?? 0)));
+}
+export const staminaOf = (ch) => Math.min(staminaMaxOf(ch), ch.stamina ?? staminaMaxOf(ch));
+const isNight = (t) => {
+  const h = new Date(t + CONFIG.daily.tzOffsetMs).getUTCHours(), [a, b] = CONFIG.stamina.night;
+  return h >= a || h < b;
+};
 
 export const incubateMsOf = (code) => express(decodeGenome(code)).egg.incubateMin * MIN;
 
@@ -224,12 +250,15 @@ export const DAILY_TASKS = {
   collect: { goal: 2, text: (n) => `Nhặt ${n} quả trứng ngoài sân`, needs: (s) => s.chickens.some((c) => c.sex === "hen" && c.adultAt != null) },
   open: { goal: 2, text: (n) => `Mở ${n} túi hạt`, needs: (s) => s.bags.length + s.eggs.filter((e) => e.hatchAt === null).length >= 2 },
 };
-export const COUNTERS = ["warm", "hatch", "feed", "forage", "lucky", "juvenile", "adult", "collect", "dex2", "open", "trade"];
+export const COUNTERS = ["warm", "hatch", "feed", "forage", "lucky", "juvenile", "adult", "collect", "dex2", "open", "trade", "play"];
 const bump = (state, key, n = 1) => { state.count[key] = (state.count[key] ?? 0) + n; };
 export const dayIndex = (now) => Math.floor((now + CONFIG.daily.tzOffsetMs) / DAY);
 
 // Trại từ bản cũ: bổ sung phần còn thiếu từ đàn hiện có (không đổi gì khác).
 function ensure(state) {
+  if (!state.tower) state.tower = Object.fromEntries(Object.keys(SEEDS).map((k) => [k, 0])); // v7
+  if (state.watchFrom == null) state.watchFrom = state.seenAt ?? state.updatedAt;
+  if (state.tickets == null) { state.tickets = 0; state.play = null; } // v7
   if (!state.count) {
     // v6: bộ đếm nhiệm vụ, chuỗi mở đầu, chuỗi ngày, giống
     state.count = Object.fromEntries(COUNTERS.map((k) => [k, 0]));
@@ -337,6 +366,10 @@ export function newGame(seed, now, choice = 0) {
     memorial: [],
     stats: { hatched: 0, laid: 0, traded: 0, died: 0 },
     seenAt: now, // lần cuối người chơi có mặt (Q14)
+    watchFrom: now, // đầu phiên có mặt hiện tại (v7: tháp hạt chỉ nuôi gà trong phiên)
+    tower: Object.fromEntries(Object.keys(SEEDS).map((k) => [k, 0])), // hạt trong tháp
+    tickets: 0, // vé (v7)
+    play: null, // lượt minigame đang chơi: { id, kind, at }
     dex: {}, // key → 1 (★) | 2 (★★) | 3 (★★★ thuần chủng)
     milestones: 0, // số mốc sổ đã đạt (Q13)
     count: Object.fromEntries(COUNTERS.map((k) => [k, 0])), // bộ đếm cho nhiệm vụ (v6)
@@ -353,12 +386,20 @@ export function newGame(seed, now, choice = 0) {
 
 // present: người chơi đang mở game lúc `now` (mặc định). Server truyền false cho việc hệ thống tự làm
 // (gọi gà về khi hết phiên xem) → trứng ấp xong vẫn nằm chờ trong ổ (Q14).
-export function advance(state, now, { present = true } = {}) {
+// watchFrom: server đưa mốc đầu phiên mở game của người chơi (nó theo dõi cả những lần chỉ XEM, vốn không ghi gì
+// vào state) và ghi mốc đó vào nhật ký để phát lại được. Không đưa → luật tự suy: vắng quá hatchPresenceGraceMs
+// thì phiên mới bắt đầu từ `now`. continuous: client offline đang tua nhanh thời gian (hai lần gọi sát nhau theo
+// giờ thật nhưng xa nhau theo giờ game) → vẫn coi là một phiên. Xem docs/chicken-farm/design-hard-parts.md §H1.
+export function advance(state, now, { present = true, watchFrom, continuous = false } = {}) {
   const events = [];
   ensure(state);
   rollDaily(state, now);
+  let watchedFrom = Infinity; // bước mô phỏng bắt đầu từ mốc này trở đi mới là "người chơi có mặt"
   if (present) {
     const seen = state.seenAt ?? -Infinity;
+    if (watchFrom !== undefined) state.watchFrom = Math.max(watchFrom, state.createdAt ?? -Infinity);
+    else if (!continuous && now - seen > CONFIG.hatchPresenceGraceMs) state.watchFrom = now;
+    watchedFrom = state.watchFrom;
     const away = now - seen > CONFIG.hatchPresenceGraceMs;
     for (const egg of state.eggs.filter((e) => e.hatchAt !== null && e.hatchAt <= now).sort((a, b) => a.hatchAt - b.hatchAt)) {
       // vắng mặt → gà con chờ trong ổ tới lúc người chơi quay lại; đang xem → nở đúng giờ
@@ -372,7 +413,7 @@ export function advance(state, now, { present = true } = {}) {
   }
   // gà trống đi trước để biết chính xác lúc nào trống trưởng thành / mất
   const order = [...state.chickens].sort((a, b) => (a.sex === b.sex ? 0 : a.sex === "rooster" ? -1 : 1));
-  for (const ch of order) advanceChicken(state, ch, now, events);
+  for (const ch of order) advanceChicken(state, ch, now, events, watchedFrom);
   for (const ch of state.chickens.filter((c) => c.diedAt != null)) {
     state.memorial.push({ id: ch.id, name: ch.name, code: ch.code, hatchedAt: ch.hatchedAt, diedAt: ch.diedAt, dev: ch.dev, starvedMs: ch.starvedMs });
     state.stats.died++;
@@ -432,21 +473,46 @@ function eat(ch, seed) {
   if (s.mutation) ch.mutationBoost = Math.min(CONFIG.mutationBoostCap, ch.mutationBoost + s.mutation);
 }
 
-function advanceChicken(state, ch, now, events) {
+function advanceChicken(state, ch, now, events, watchedFrom = Infinity) {
   const step = CONFIG.stepMs;
   const end = Math.floor(now / step) * step;
   let t = ch.updatedAt;
   while (t < end && ch.diedAt == null) {
     const dt = Math.min((Math.floor(t / step) + 1) * step, end) - t;
-    stepChicken(state, ch, t, dt, events);
+    stepChicken(state, ch, t, dt, events, watchedFrom);
     t += dt;
   }
   ch.updatedAt = Math.max(ch.updatedAt, ch.diedAt ?? end);
 }
 
-function stepChicken(state, ch, t, dt, events) {
+// Hạt hợp nhất cho con gà trong số hạt đang có: bù nhiều nhất cho chất còn thiếu; hoà điểm thì hạt thường
+// (tiết kiệm hạt tốt), rồi theo thứ tự trong SEEDS. Không bao giờ tự chọn hạt lạ. Hết hạt → null.
+export function bestSeedFor(ch, counts) {
+  let best = null, bestScore = -1;
+  for (const k of Object.keys(SEEDS)) {
+    if (k === "odd" || !(counts[k] > 0)) continue;
+    let v = k === "common" ? 0.5 : 0;
+    for (const n of NUTRIENTS) v += Math.min(Math.max(0, CONFIG.nutrientFull - ch.n[n]), SEEDS[k].n[n]);
+    if (v > bestScore) { bestScore = v; best = k; }
+  }
+  return best;
+}
+
+function stepChicken(state, ch, t, dt, events, watchedFrom = Infinity) {
+  // tháp hạt: chỉ ở bước người chơi có mặt, gà đang ở chuồng và đói dưới ngưỡng; mỗi bước tối đa 1 hạt
+  if (t >= watchedFrom && ch.location === "coop" && ch.satiety < CONFIG.tower.eatBelow * CONFIG.satietyMax) {
+    const k = bestSeedFor(ch, state.tower);
+    if (k) {
+      state.tower[k]--;
+      eat(ch, k);
+    }
+  }
   const h = dt / HOUR;
   const fed = ch.satiety > 0;
+  // thể lực: ngoài đồng thì tiêu, ở chuồng và không đói thì hồi (đêm gấp đôi)
+  const S = CONFIG.stamina, sMax = staminaMaxOf(ch), sNow = Math.min(sMax, ch.stamina ?? sMax);
+  ch.stamina = ch.location === "field" ? Math.max(0, sNow - S.fieldPerHour * h)
+    : fed ? Math.min(sMax, sNow + S.regenPerHour * h * (isNight(t) ? S.nightMul : 1)) : sNow;
   const layReady = ch.satiety >= CONFIG.laySatiety;
   ch.satiety = Math.max(0, ch.satiety - CONFIG.satietyDrainPerHour * h);
 
@@ -623,6 +689,33 @@ export function incubate(state, eggId, now) {
   });
 }
 
+// THÁP HẠT (v7): đổ hạt từ kho vào tháp / lấy lại. Gà tự ăn trong stepChicken khi người chơi có mặt.
+const towerCount = (state) => Object.values(state.tower).reduce((a, b) => a + b, 0);
+export function fillTower(state, seed, n, now) {
+  return act(state, now, () => {
+    if (!SEEDS[seed]) return err("bad_seed", "Không có loại hạt này");
+    if (seed === "odd") return err("bad_seed", "Hạt lạ phải cho ăn riêng từng con");
+    if (!Number.isInteger(n) || n < 1) return err("bad_count", "Số hạt không hợp lệ");
+    if (!(state.inventory[seed] >= n)) return err("no_seed", `Kho không đủ ${SEEDS[seed].name.toLowerCase()}`);
+    if (towerCount(state) + n > CONFIG.tower.cap) return err("tower_full", "Tháp hạt không còn đủ chỗ");
+    state.inventory[seed] -= n;
+    state.tower[seed] += n;
+    bump(state, "feed", n);
+    return { seed, n, tower: towerCount(state) };
+  });
+}
+export function takeFromTower(state, seed, n, now) {
+  return act(state, now, () => {
+    if (!SEEDS[seed]) return err("bad_seed", "Không có loại hạt này");
+    if (!Number.isInteger(n) || n < 1) return err("bad_count", "Số hạt không hợp lệ");
+    if (!(state.tower[seed] >= n)) return err("no_seed", "Tháp không có đủ loại hạt này");
+    if (seedCount(state) + n > CONFIG.storage.seeds) return err("seeds_full", "Kho hạt đầy");
+    state.tower[seed] -= n;
+    state.inventory[seed] += n;
+    return { seed, n, tower: towerCount(state) };
+  });
+}
+
 // SƯỞI TRỨNG (v6): chạm trứng đang ấp → bớt một phần thời gian ấp. Có giới hạn số lần và nhịp chạm.
 export function warmEgg(state, eggId, now) {
   return act(state, now, () => {
@@ -793,8 +886,10 @@ export const eggTradeValue = () => CONFIG.trade.egg;
 export const chickenTradeValue = (ch) => Math.round(lerp(CONFIG.trade.chicken[0], CONFIG.trade.chicken[1], ch.growth / CONFIG.stages.adult));
 
 // Mỗi trứng / gà đổi được một túi hạt (2 hạt cho trứng, 4–9 hạt cho gà), mở ra ngẫu nhiên.
-export function tradeToShop(state, give, now) {
+// opts.want === "tickets": đổi lấy VÉ thay cho túi hạt — chỉ trứng có phôi (1 vé) và gà trưởng thành (2 vé), có trần mỗi ngày.
+export function tradeToShop(state, give, now, opts = {}) {
   return act(state, now, () => {
+    if (opts.want === "tickets") return tradeForTickets(state, give, now);
     const eggIds = [...new Set(give.eggs ?? [])], chickenIds = [...new Set(give.chickens ?? [])];
     const eggs = eggIds.map((id) => state.eggs.find((e) => e.id === id));
     const chickens = chickenIds.map((id) => state.chickens.find((c) => c.id === id));
@@ -814,6 +909,95 @@ export function tradeToShop(state, give, now) {
     state.stats.traded += bags.length;
     bump(state, "trade", bags.length);
     return { bags: bags.map((b) => b.id) };
+  });
+}
+
+function tradeForTickets(state, give, now) {
+  const T = CONFIG.tickets, day = dayIndex(now);
+  const eggIds = [...new Set(give.eggs ?? [])], chickenIds = [...new Set(give.chickens ?? [])];
+  const eggs = eggIds.map((id) => state.eggs.find((e) => e.id === id));
+  const chickens = chickenIds.map((id) => state.chickens.find((c) => c.id === id));
+  if (eggs.some((e) => !e)) return err("no_egg", "Có trứng không tồn tại");
+  if (chickens.some((c) => !c)) return err("no_chicken", "Có gà không tồn tại");
+  if (!eggs.length && !chickens.length) return err("nothing", "Chưa chọn gì để đổi");
+  if (eggs.some((e) => e.hatchAt !== null)) return err("incubating", "Trứng đang ấp không đổi được");
+  if (eggs.some((e) => !e.fertile)) return err("infertile", "Chỉ trứng có phôi mới đổi được vé");
+  if (chickens.some((c) => c.location !== "coop")) return err("in_field", "Gọi gà về chuồng trước khi đổi");
+  if (chickens.some((c) => c.growth < CONFIG.stages.adult)) return err("not_adult", "Chỉ gà đã trưởng thành mới đổi được vé");
+  if (chickens.some((c) => c.id === state.play?.id)) return err("playing", "Con gà này đang ở sân chơi");
+  const d = state.ticketDay?.day === day ? state.ticketDay : { day, eggs: 0, chickens: 0 };
+  if (d.eggs + eggs.length > T.eggsPerDay || d.chickens + chickens.length > T.chickensPerDay) return err("ticket_limit", "Hôm nay đổi đủ vé rồi — mai nhé (vẫn đổi được túi hạt)");
+  const gain = eggs.length * T.perEgg + chickens.length * T.perChicken;
+  if (state.tickets + gain > T.cap) return err("tickets_full", "Túi vé đã đầy");
+  state.eggs = state.eggs.filter((e) => !eggIds.includes(e.id));
+  state.chickens = state.chickens.filter((c) => !chickenIds.includes(c.id));
+  state.ticketDay = { day, eggs: d.eggs + eggs.length, chickens: d.chickens + chickens.length };
+  state.tickets += gain;
+  state.stats.traded += eggs.length + chickens.length;
+  bump(state, "trade", eggs.length + chickens.length);
+  return { tickets: gain };
+}
+
+/* ---------- sân chơi: minigame (v7) ---------- */
+
+const playKind = (subject, isEgg) => (isEgg ? "roll" : subject.growth < CONFIG.stages.juvenile ? "hop" : subject.growth < CONFIG.stages.adult ? "dash" : "peck");
+
+// Bắt đầu một lượt: `id` là gà (ở chuồng) hoặc trứng ĐANG ẤP. Trừ vé ngay; bỏ dở không hoàn.
+export function startPlay(state, id, now) {
+  return act(state, now, () => {
+    const P = CONFIG.play;
+    const ch = state.chickens.find((c) => c.id === id);
+    const egg = ch ? null : state.eggs.find((e) => e.id === id && e.hatchAt !== null);
+    if (!ch && !egg) return err("no_subject", "Không tìm thấy gà hay trứng đang ấp này");
+    if (state.play && now - state.play.at <= P.maxMs) return err("play_busy", "Đang có một lượt chơi dở");
+    state.play = null; // lượt cũ quá hạn: coi như bỏ dở, không hoàn vé
+    if (state.tickets < P.cost) return err("no_ticket", "Hết vé — thắng trò chơi, mở rương hoặc đổi trứng / gà để có vé");
+    if (ch) {
+      if (ch.location !== "coop") return err("in_field", `${ch.name} đang ngoài đồng`);
+      if (ch.satiety < P.hunger) return err("too_hungry", `${ch.name} đang đói — cho ăn rồi hãy chơi`);
+      if (staminaOf(ch) < P.stamina) return err("too_tired", `${ch.name} đang mệt — để nó nghỉ một lúc`);
+      ch.stamina = staminaOf(ch) - P.stamina;
+    } else if ((egg.played ?? 0) >= P.eggMax) return err("too_tired", "Quả trứng này đã chơi đủ rồi");
+    else egg.played = (egg.played ?? 0) + 1;
+    state.tickets -= P.cost;
+    state.play = { id, kind: playKind(ch ?? egg, !ch), at: now };
+    return { id, kind: state.play.kind };
+  });
+}
+
+// Kết thúc lượt: điểm do client báo, luật kẹp về 0..1 và chỉ nhận trong khoảng [minMs, maxMs] kể từ lúc bắt đầu.
+export function endPlay(state, score, now) {
+  return act(state, now, () => {
+    const P = CONFIG.play, p = state.play;
+    if (!p) return err("no_play", "Không có lượt chơi nào đang diễn ra");
+    state.play = null; // xoá TRƯỚC khi tính: không bao giờ nhận thưởng hai lần cho một lượt
+    const elapsed = now - p.at;
+    let s = typeof score === "number" && Number.isFinite(score) ? clamp(score, 0, 1) : 0;
+    if (elapsed < P.minMs || elapsed > P.maxMs) s = 0;
+    const ch = state.chickens.find((c) => c.id === p.id);
+    const egg = ch ? null : state.eggs.find((e) => e.id === p.id && e.hatchAt !== null);
+    if (!ch && !egg) return { score: 0, win: false, ticket: false, gone: true };
+    if (egg) egg.hatchAt = Math.max(now, egg.hatchAt - P.eggCutPct * (egg.incubateMs ?? incubateMsOf(egg.code)) * s);
+    else {
+      ch.satiety = Math.max(0, ch.satiety - P.hunger);
+      // chưa lớn: lớn thêm, nhưng dừng sát ngưỡng — bước mô phỏng kế tiếp mới là nơi phát "adult", chấm sổ, chấm giống
+      if (ch.growth < CONFIG.stages.adult) ch.growth = Math.min(CONFIG.stages.adult - 0.001, ch.growth + P.growth * s);
+      else ch.lifeUsed = Math.max(0, ch.lifeUsed - P.adultLifeMs * s);
+      if (s >= P.fitnessAt) ch.fitness = Math.min(CONFIG.stamina.fitnessMax, (ch.fitness ?? 0) + CONFIG.stamina.fitnessStep);
+    }
+    const win = s >= P.winAt, day = dayIndex(now);
+    let ticket = false;
+    if (win) {
+      bump(state, "play");
+      const d = state.playDay?.day === day ? state.playDay : { day, tickets: 0 };
+      if (d.tickets < P.winTicketsPerDay && state.tickets < CONFIG.tickets.cap) {
+        state.tickets++;
+        d.tickets++;
+        ticket = true;
+      }
+      state.playDay = d;
+    }
+    return { score: s, win, ticket, kind: p.kind };
   });
 }
 

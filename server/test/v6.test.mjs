@@ -136,3 +136,19 @@ test("v6: phát lại đúng cả chuỗi mở đầu, kể cả khi hệ thốn
   assert.equal(new Set(back.body.farm.chickens.map((c) => c.sex)).size, 2);
   assert.equal(replayFarm(s.app.store.db, pid).ok, true);
 });
+
+test("v7 T13: người chơi chỉ XEM (GET mỗi vài giây, không ghi) rồi mới bấm → gà đã ăn trong lúc xem; phát lại khớp", async () => {
+  const { token, chickenId } = await s.hatched();
+  s.patchless = true;
+  // đổ tháp; gà con mới nở có độ no 50/200 < ngưỡng 100 nên sẽ ăn
+  const fill = await s.act(token, "fillTower", { seed: "common", n: 10 });
+  assert.equal(fill.status, 200, JSON.stringify(fill.body));
+  for (let i = 0; i < 75; i++) { s.clock.t += 4000; await s.api("GET", "/api/farm", { token }); } // 5 phút chỉ xem
+  const act = await s.act(token, "feed", { chickenId, seed: "common" });
+  assert.equal(act.status, 200);
+  const tower = Object.values(act.body.farm.tower).reduce((a, b) => a + b, 0);
+  assert.ok(tower < 10, `gà phải ăn từ tháp trong lúc người chơi xem (tháp còn ${tower})`);
+  for (const bad of [0, 41, 1.5, "3"]) assert.equal((await s.act(token, "fillTower", { seed: "common", n: bad })).status, 400, String(bad));
+  const rep = replayFarm(s.app.store.db, s.playerIdOf(token));
+  assert.equal(rep.ok, true, rep.error ?? "lệch");
+});

@@ -42,6 +42,12 @@ function seedKind(body) {
   return v;
 }
 
+function count(body, key, max) {
+  const v = body[key];
+  if (!Number.isInteger(v) || v < 1 || v > max) throw bad(`"${key}" phải là số nguyên 1..${max}`);
+  return v;
+}
+
 // id nhiệm vụ: bước mở đầu hiện tại, một trong các việc trong ngày, hoặc rương ngày
 const QUEST_RE = /^(tutorial|chest|daily:[0-9])$/;
 function questId(body) {
@@ -59,11 +65,20 @@ export const ARGS = {
   recall: (b) => ({ chickenId: id(b, "chickenId") }),
   recallAll: () => ({}),
   fieldFind: (b) => ({ chickenId: id(b, "chickenId") }), // loại hạt do SERVER tung, client không gửi
-  tradeToShop: (b) => ({ eggs: idList(b, "eggs", R.CONFIG.storage.eggs), chickens: idList(b, "chickens", 12) }),
+  tradeToShop: (b) => ({ eggs: idList(b, "eggs", R.CONFIG.storage.eggs), chickens: idList(b, "chickens", 12), ...(b.want === "tickets" ? { want: "tickets" } : {}) }),
   tradeForEgg: (b) => ({ chickenId: id(b, "chickenId") }),
   openBag: (b) => ({ bagId: id(b, "bagId") }),
   // luật v6
   warmEgg: (b) => ({ eggId: id(b, "eggId") }), // sưởi trứng đang ấp
   fieldBonus: (b) => ({ chickenId: id(b, "chickenId") }), // đốm sáng: phần thưởng do SERVER tung
   claim: (b) => ({ id: questId(b) }), // nhận thưởng nhiệm vụ
+  // luật v7 — sân chơi: điểm phải là SỐ hữu hạn (luật còn kẹp về 0..1 lần nữa)
+  startPlay: (b) => ({ id: id(b, "id") }),
+  endPlay: (b) => {
+    if (typeof b.score !== "number" || !Number.isFinite(b.score)) throw bad('"score" phải là một số');
+    return { score: b.score };
+  },
+  // luật v7 — tháp hạt
+  fillTower: (b) => ({ seed: seedKind(b), n: count(b, "n", R.CONFIG.tower.cap) }),
+  takeFromTower: (b) => ({ seed: seedKind(b), n: count(b, "n", R.CONFIG.tower.cap) }),
 };

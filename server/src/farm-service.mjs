@@ -133,6 +133,19 @@ export class FarmService {
     return { status: 200, body };
   }
 
+  // Phiên MỞ GAME của người chơi (khác "đang xem cánh đồng"): mọi request có xác thực đều gọi. Trả về mốc đầu phiên;
+  // im lặng quá hatchPresenceGraceMs thì phiên mới bắt đầu từ `now`. Chỉ giữ trong bộ nhớ: khởi động lại = phiên mới.
+  #sessions = new Map();
+  seen(pid, now) {
+    let s = this.#sessions.get(pid);
+    if (!s || now - s.last > R.CONFIG.hatchPresenceGraceMs) s = { from: now, last: now };
+    s.last = now;
+    this.#sessions.delete(pid); // đưa về cuối để dọn theo thứ tự cũ nhất
+    this.#sessions.set(pid, s);
+    if (this.#sessions.size > 5000) this.#sessions.delete(this.#sessions.keys().next().value);
+    return s.from;
+  }
+
   getFarm(player) {
     const pid = player.id;
     let entry = this.#mustLoad(pid);
@@ -141,18 +154,19 @@ export class FarmService {
     let events = [];
     // Ghi một "advance" (người chơi có mặt) khi: vắng lâu (lần tính lười sau khỏi chạy quá dài), hoặc
     // có trứng ấp xong đang chờ trong ổ (Q14) — gà con nở ĐÚNG lúc này và được lưu, không nở lại mỗi lần xem.
+    const w = this.seen(pid, now);
     const eggReady = entry.state.eggs.some((e) => e.hatchAt !== null && e.hatchAt <= now);
     // v6: sang ngày mới → ghi luôn để 3 việc trong ngày cố định từ lần xem đầu tiên (không đổi giữa hai lần xem).
     const newDay = entry.state.daily?.day !== R.dayIndex(now);
     if (eggReady || newDay || now - entry.state.updatedAt > this.cfg.systemAdvanceMs) {
       const draft = structuredClone(entry.state);
-      const out = applyAction(draft, "advance", {}, null, now);
-      entry = this.#commit(pid, entry, draft, entry.rolls, { type: "advance", now, source: "view" });
+      const out = applyAction(draft, "advance", {}, { w }, now);
+      entry = this.#commit(pid, entry, draft, entry.rolls, { type: "advance", rolled: { w }, now, source: "view" });
       events = out.events;
     }
     // Phần còn lại: mô phỏng trên BẢN SAO, không ghi (xem không làm đổi state).
     const view = structuredClone(entry.state);
-    events = events.concat(R.advance(view, now));
+    events = events.concat(R.advance(view, now, { watchFrom: w }));
     return { status: 200, body: { ok: true, now, version: entry.version, events, farm: clientView(view, this.cfg.memorialInView), field: this.#fieldInfo(pid, now) } };
   }
 
@@ -177,7 +191,7 @@ export class FarmService {
     if ((type === "fieldFind" || type === "fieldBonus") && !this.presence.isWatching(pid, now)) return fail(409, "not_watching", "Bạn không còn xem cánh đồng — gà đã về chuồng");
 
     let rolls = entry.rolls;
-    const rolled = NEEDS_ROLL.has(type) ? rollFor(type, this.secret, pid, rolls++) : null;
+    const rolled = { ...(NEEDS_ROLL.has(type) ? rollFor(type, this.secret, pid, rolls++) : {}), w: this.seen(pid, now) };
     const draft = structuredClone(entry.state);
     let out;
     try {
@@ -202,6 +216,7 @@ export class FarmService {
     // Phiên cũ đã hết hạn mà gà còn ngoài đồng → gà về trước, rồi mới mở phiên mới.
     if (entry) entry = this.enforcePresence(pid, entry);
     this.presence.beat(pid, now);
+    this.seen(pid, now);
     return { status: 200, body: { ok: true, now, ...this.#fieldInfo(pid, now), inField: entry ? inField(entry.state) : [] } };
   }
 
