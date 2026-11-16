@@ -12,6 +12,10 @@
 
 ## Trạng thái luật v7 (2026-11-16) — ĐỌC TRƯỚC
 
+> **Cập nhật 16/11 (tối): giao diện v7 đã có bản đầu** trong `main.js` (các khối "v7: …"): ô vé, tháp hạt (hộp đổ hạt, nhãn mức hạt, cho ăn riêng qua Kho), thanh thể lực, nút "Gõ!" ở ổ ấp, rương theo giờ, thẻ "lấy vé" ở chợ, gian hàng + hộp thoại cho cả 7 loại khách, sân chơi với **một** trò "đúng nhịp" dùng chung cho mọi tuổi.
+> Đã xem trên trình duyệt (offline): tháp hạt, rương theo giờ, gian hàng lúc vắng khách, một lượt sân chơi trọn vẹn. **Chưa xem:** hộp thoại khi có khách thật (7 kiểu), gõ trứng, gà mái ấp giúp, bản online, màn hình dọc.
+> Còn thiếu so với cột "Còn lại" bên dưới: bốn trò chơi riêng theo tuổi (hiện một trò đổi tốc độ), trứng vào sân chơi (chưa có cách kéo trứng đang ấp), hình 4 món trang trí của nghệ nhân, con đường trước cổng, gà hết sức đi chậm ngoài đồng, chữ v7 chưa qua `i18n.js`.
+
 Phần **luật và server** của ba cơ chế khó đã cài và có test cốt lõi; phần **giao diện chưa có** (người chơi chưa thấy gì mới):
 
 | Cơ chế | Luật (`rules.js`) | Server | Test | Còn lại (việc giao diện, dễ) |
@@ -23,8 +27,10 @@ Phần **luật và server** của ba cơ chế khó đã cài và có test cố
 
 | Khách qua đường (ideas 15) | `visitorsOfDay`, `visitorView`, `buy`, `barter`, `deliver`, `candle`, `haggle`, `matchesOrder`; bảng hàng và giá trong `VISIT_CONFIG` | 5 hành động + `clientView` kèm `visitor`; **mã gen trứng chưa nở không còn gửi về client** (thay bằng `incubateMin`, `known`); giá sàn mặc cả không bao giờ gửi | `tests/chicken-farm/v7-visitors.test.mjs` | Con đường + gian hàng + 7 hình nhân vật; bảng hàng cho từng kiểu tương tác (mua, đổi, giao gà, soi trứng, mặc cả, ba giỏ); hình 4 món trang trí của nghệ nhân (`state.decorOwned`: bench, well, birdhouse, windchime) — chưa vẽ; test còn thiếu ghi ở đầu tệp test; **chưa kiểm tra trên trình duyệt rằng client online vẫn chạy khi trứng không còn `code`** |
 
+| Gà mái ấp giúp, gõ trứng, rương theo giờ (đợt B2–B4) | `brood()` trong `stepChicken`, `knockEgg`, `claim("timed")`, `questView().timed`, `giveReward({ ticket })` | `knockEgg`, `claim` nhận `timed` | `tests/chicken-farm/v7-brood-knock-timed.test.mjs` | Vẽ gà mái ngồi trong ổ (sự kiện `brood`, `ch.broodEgg`); ổ ấp qua mốc 85% hiện "Gõ!" và gọi `knockEgg` thay `warmEgg`; đồng hồ rương trên thẻ nhiệm vụ; việc trong ngày "Gõ nở 1 quả" (bộ đếm `knock` đã có) |
+
 Khác với thiết kế H2 ban đầu: giới hạn "2 lượt mỗi giờ" đã được **thay bằng thể lực** (35 mỗi lượt) cho gà, và "tối đa 2 lượt mỗi quả" cho trứng.
-Chưa làm gì: rương theo giờ, gà mái ấp giúp, gõ trứng, bạn bè (chủ dự án: làm chơi đơn trước).
+Chưa làm gì: mô phỏng cân bằng cho kinh tế vé (H3), bạn bè (chủ dự án: làm chơi đơn trước).
 
 ## Đã xong ở đợt A (2026-11-16)
 

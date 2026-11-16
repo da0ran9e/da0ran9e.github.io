@@ -53,7 +53,7 @@ function count(body, key, max) {
 }
 
 // id nhiệm vụ: bước mở đầu hiện tại, một trong các việc trong ngày, hoặc rương ngày
-const QUEST_RE = /^(tutorial|chest|daily:[0-9])$/;
+const QUEST_RE = /^(tutorial|chest|timed|daily:[0-9])$/;
 function questId(body) {
   const v = body.id;
   if (typeof v !== "string" || !QUEST_RE.test(v)) throw bad('Trường "id" không hợp lệ');
@@ -91,6 +91,7 @@ export const ARGS = {
     return { eggId: id(b, "eggId"), what: b.what };
   },
   haggle: (b) => ({ offer: count(b, "offer", R.CONFIG.tickets.cap) }),
+  knockEgg: (b) => ({ eggId: id(b, "eggId") }), // luật v7 — gõ cho trứng nở sớm
   // luật v7 — tháp hạt
   fillTower: (b) => ({ seed: seedKind(b), n: count(b, "n", R.CONFIG.tower.cap) }),
   takeFromTower: (b) => ({ seed: seedKind(b), n: count(b, "n", R.CONFIG.tower.cap) }),

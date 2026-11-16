@@ -58,6 +58,7 @@ export const ACTIONS = {
   deliver: (s, a, now) => R.deliver(s, a.chickenId, now),
   candle: (s, a, now, rolled) => R.candle(s, a.eggId, a.what, now, { rng: mulberry32(rolled.seed >>> 0) }),
   haggle: (s, a, now, rolled) => R.haggle(s, a.offer, now, { rng: mulberry32(rolled.seed >>> 0) }),
+  knockEgg: (s, a, now) => R.knockEgg(s, a.eggId, now),
   startPlay: (s, a, now) => R.startPlay(s, a.id, now),
   endPlay: (s, a, now) => R.endPlay(s, a.score, now),
   fillTower: (s, a, now) => R.fillTower(s, a.seed, a.n, now),

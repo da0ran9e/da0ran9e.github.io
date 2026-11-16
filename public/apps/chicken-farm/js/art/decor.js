@@ -116,3 +116,42 @@ export const flameSvg = () => svg("0 0 20 24", `
 // vết nứt phủ lên trứng trong ổ (viewBox của ổ ấp 96×96, trứng ở giữa ~ (48, 46))
 export const nestCrackSvg = (level) => svg("0 0 96 96", `
   <path d="M36,44 l5,-4 4,5 5,-6 4,5 5,-3${level > 1 ? " M45,45 l-2,6 4,3 M54,44 l2,6" : ""}${level > 2 ? " M41,40 l-3,-5 M50,39 l1,-6 4,-2" : ""}" fill="none" stroke="#5a4028" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/>`, "nest-crack");
+
+
+/* ---------- v7: gian hàng bên đường, khách qua đường, sân chơi ---------- */
+
+export const stallSvg = () => svg("0 0 90 70", `
+  <ellipse cx="45" cy="66" rx="38" ry="4" fill="#000" opacity=".12"/>
+  <rect x="12" y="34" width="62" height="26" rx="3" fill="#b98652"/><rect x="12" y="34" width="62" height="6" fill="#8d5f33"/>
+  <circle cx="24" cy="62" r="7" fill="#7d5a2e"/><circle cx="24" cy="62" r="2.4" fill="#d7a970"/><circle cx="62" cy="62" r="7" fill="#7d5a2e"/><circle cx="62" cy="62" r="2.4" fill="#d7a970"/>
+  <rect x="14" y="10" width="3" height="26" fill="#8d5f33"/><rect x="69" y="10" width="3" height="26" fill="#8d5f33"/>
+  <path d="M8,12 h70 l-6,10 h-58z" fill="#4a8f9c"/><path d="M20,12 h12 l-2,10 h-12z M44,12 h12 l-2,10 h-12z M66,12 h12 l-6,10 h-8z" fill="#fffdf6"/>`, "decor-stall", "Gian hàng bên đường");
+
+const LOOK = {
+  seller: ["#b23a9b", "#f2b318", "cone"], trader: ["#4a8f9c", "#8d5f33", "flat"], collector: ["#3f7a2c", "#2c2620", "top"],
+  reader: ["#5b7bd5", "#fffdf6", "none"], haggler: ["#e4572e", "#7d5a2e", "flat"], artisan: ["#e98a2c", "#b23a9b", "beret"], stranger: ["#3b3554", "#3b3554", "hood"],
+};
+export function visitorSvg(who) {
+  const [robe, hatC, hat] = LOOK[who] ?? LOOK.seller;
+  const hats = {
+    cone: `<path d="M22,26 L45,8 L68,26 Q45,31 22,26Z" fill="${hatC}"/>`,
+    flat: `<ellipse cx="45" cy="22" rx="20" ry="4.5" fill="${hatC}"/><path d="M33,22 q12,-14 24,0z" fill="${hatC}"/>`,
+    top: `<rect x="35" y="5" width="20" height="16" rx="2" fill="${hatC}"/><rect x="28" y="19" width="34" height="4" rx="2" fill="${hatC}"/>`,
+    beret: `<path d="M29,22 q4,-13 20,-11 q14,2 12,11z" fill="${hatC}"/>`,
+    hood: `<path d="M26,44 Q22,8 45,7 Q68,8 64,44 Q56,26 45,26 Q34,26 26,44Z" fill="${hatC}"/>`,
+    none: `<path d="M32,24 q13,-13 26,0" stroke="#d9d4c8" stroke-width="5" fill="none" stroke-linecap="round"/>`,
+  };
+  return svg("0 0 90 104", `
+    <ellipse cx="45" cy="100" rx="24" ry="3.4" fill="#000" opacity=".12"/>
+    <path d="M24,98 Q20,54 45,50 Q70,54 66,98Z" fill="${robe}"/><path d="M40,52 h10 v46 h-10z" fill="#000" opacity=".12"/>
+    <circle cx="45" cy="34" r="14" fill="${who === "stranger" ? "#55506e" : "#f0c9a0"}"/>
+    ${who === "stranger" ? `<circle cx="40" cy="34" r="2" fill="#ffd95a"/><circle cx="50" cy="34" r="2" fill="#ffd95a"/>` : `<circle cx="40" cy="33" r="1.7" fill="#3d2a17"/><circle cx="50" cy="33" r="1.7" fill="#3d2a17"/><path d="M40,40 q5,3.4 10,0" stroke="#3d2a17" stroke-width="1.6" fill="none" stroke-linecap="round"/>`}
+    ${hats[hat]}`, "visitor", "Khách qua đường");
+}
+export const playgroundSvg = () => svg("0 0 90 60", `
+  <ellipse cx="45" cy="52" rx="42" ry="7" fill="#e3d39b"/><ellipse cx="45" cy="52" rx="42" ry="7" fill="none" stroke="#cdb57a" stroke-width="2"/>
+  <rect x="14" y="20" width="3.4" height="32" fill="#8d5f33"/><rect x="72" y="20" width="3.4" height="32" fill="#8d5f33"/>
+  <path d="M15,22 Q45,34 74,22" fill="none" stroke="#7d5a2e" stroke-width="1.6"/>
+  <path d="M26,25 l4,9 4,-8z M40,28 l4,9 4,-9z M54,27 l4,9 4,-9z" fill="#e4572e"/><path d="M33,27 l4,9 4,-9z M47,28 l4,9 4,-9z" fill="#f2b318"/>
+  <rect x="34" y="44" width="22" height="4" rx="2" fill="#b98652"/><rect x="43" y="40" width="4" height="10" fill="#8d5f33"/>`, "decor-play", "Sân chơi");
+export const ticketSvg = (size = 16) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z" fill="#e4572e"/><path d="M9 7v10" stroke="#fffdf6" stroke-width="1.6" stroke-dasharray="2 2"/><circle cx="14.5" cy="12" r="2.4" fill="#ffd95a"/></svg>`;

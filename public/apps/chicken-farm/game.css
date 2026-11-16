@@ -532,3 +532,50 @@ main { flex: 1; min-height: 0; max-width: none; width: 100%; margin: 0; padding:
   .trade-deal { grid-template-columns: 1fr; justify-items: center; }
   .trade-arrow { transform: rotate(90deg); }
 }
+
+
+/* ===================== v7: vé, tháp hạt, rương theo giờ, khách qua đường, sân chơi ===================== */
+body.v7 #tray { display: none; }
+.hud-right { display: flex; gap: 8px; align-items: flex-end; flex: 0 1 520px; justify-content: flex-end; min-width: 0; }
+.hud-right .quest { flex: 1 1 auto; margin: 0; }
+.timed { display: grid; justify-items: center; gap: 0; padding: 5px 9px; border-radius: 14px; font-size: 11.5px; font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--card) 94%, transparent); }
+.timed svg { width: 34px; height: 30px; display: block; }
+.timed.ready { border-color: var(--gold); box-shadow: 0 2px 0 #c98f00, 0 0 0 3px rgb(242 179 24 / .25); animation: q-pulse 1.1s ease-in-out infinite; font-weight: 800; }
+.zone[data-zone="feeder"] .label, .zone[data-zone="stall"].has-visitor .label { opacity: 1; }
+.zone[data-zone="stall"].has-visitor .label { background: var(--accent); color: #fff; animation: bob 1.2s ease-in-out infinite; }
+.nest.knock .pips { background: var(--accent); font-size: 12px; padding: 1px 9px; animation: q-pulse .6s ease-in-out infinite; }
+.nest.knock .incubator-egg { animation-duration: .3s; }
+.tower-list { display: grid; gap: 6px; margin: 12px 0; }
+.tower-row { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: center; background: var(--chip); border-radius: 12px; padding: 6px 10px; font-size: 13.5px; }
+.tower-row svg { width: 28px; height: 28px; display: block; }
+.tower-row .btns { display: flex; gap: 4px; }
+.tower-row small { color: var(--muted); display: block; }
+.seed-card { grid-template-columns: 28px 1fr auto auto; }
+.v-head { display: grid; grid-template-columns: 84px 1fr; gap: 12px; align-items: center; margin: 6px 0 12px; }
+.v-head svg { width: 84px; height: 96px; display: block; }
+.v-say { background: var(--chip); border-radius: 14px; padding: 10px 12px; font-size: 14px; position: relative; }
+.v-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.v-card { display: grid; justify-items: center; gap: 4px; text-align: center; background: var(--chip); border-radius: 14px; padding: 10px 8px; font-size: 13px; }
+.v-card .art { width: 64px; height: 64px; display: grid; place-items: center; }
+.v-card .art svg { width: 100%; height: 100%; }
+.v-card.done { opacity: .5; }
+.v-card.match { box-shadow: 0 0 0 2px var(--ok) inset; }
+.v-price { font-weight: 800; }
+.v-haggle { display: flex; gap: 8px; align-items: center; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+.v-haggle input { width: 76px; font: inherit; font-weight: 700; text-align: center; padding: 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+.decor-stall svg, .decor-play svg { overflow: visible; }
+.known { font-size: 11.5px; color: var(--ok); }
+/* sân chơi: trò bấm đúng nhịp */
+.pg { width: min(400px, 92vw); text-align: center; }
+.pg-art { width: 150px; height: 150px; margin: 0 auto; }
+.pg-art svg { width: 100%; height: 100%; overflow: visible; }
+.pg-art.hop svg { animation: hop .4s cubic-bezier(.3, 1.4, .5, 1); transform-origin: 50% 90%; }
+.pg-bar { position: relative; height: 34px; margin: 14px 0 8px; border-radius: 99px; background: rgb(255 255 255 / .16); overflow: hidden; }
+.pg-zone { position: absolute; top: 0; bottom: 0; background: rgb(124 195 95 / .75); border-radius: 99px; }
+.pg-mark { position: absolute; top: 3px; bottom: 3px; width: 10px; margin-left: -5px; border-radius: 6px; background: #fff; box-shadow: 0 0 8px #fff; }
+.pg-dots { display: flex; gap: 5px; justify-content: center; margin: 8px 0 12px; }
+.pg-dots i { width: 12px; height: 12px; border-radius: 50%; background: rgb(255 255 255 / .22); }
+.pg-dots i.hit { background: #7cc35f; } .pg-dots i.miss { background: #ee7a62; }
+.pg button.gold { min-width: 220px; padding: 14px 18px; font-size: 18px; }
+@media (max-aspect-ratio: 1/1) { .hud-right { flex: none; } }
+body.v7 .hud { justify-content: flex-end; }
