@@ -1047,6 +1047,279 @@ export function openBag(state, bagId, now, opts = {}) {
   });
 }
 
+/* ---------- khách qua đường (v7): mỗi lúc một người ở gian hàng trước cổng ---------- */
+// Thiết kế: docs/chicken-farm/ideas.md mục 15. Ai ghé, lúc nào, mang gì đều tính từ (seed, ngày) — không lưu lịch.
+// Thứ duy nhất lưu là việc đã làm với khách đang ghé: state.visit = { from, bought, tries, price, floor, gone }.
+
+export const VISITORS = {
+  seller: { name: "Bà hàng hạt", perDay: 2, chance: 1 }, // bán hạt, giá rẻ, cố định
+  trader: { name: "Người đổi chác", chance: 0.5 }, // vật đổi vật, không dùng vé
+  collector: { name: "Người sưu tầm", chance: 0.4 }, // MUA gà theo yêu cầu, trả vé
+  reader: { name: "Thầy soi trứng", chance: 0.3 }, // bán thông tin về quả trứng
+  haggler: { name: "Lái buôn", chance: 0.2 }, // một món khá hiếm, mặc cả được
+  artisan: { name: "Nghệ nhân", weekly: true }, // đồ trang trí, mỗi tuần một lần
+  stranger: { name: "Khách lạ đêm khuya", chance: 0.2, night: true, minutes: 15 }, // ba giỏ đậy kín
+};
+const VISIT = {
+  slotMs: 30 * MIN, firstHour: 7, slots: 32, nightSlot: 24, // khung 30 phút từ 7:00 tới 23:00 (giờ Việt Nam); đêm từ 19:00
+  seller: [{ seeds: { protein: 3 }, price: 2 }, { seeds: { energy: 3 }, price: 2 }, { seeds: { mineral: 3 }, price: 2 }, { seeds: { pigment: 3 }, price: 2 }, { seeds: { premium: 2 }, price: 3 }, { bag: 5, price: 3 }],
+  trader: [{ give: { seed: "common", n: 6 }, get: { seeds: { premium: 1 } } }, { give: { seed: "pigment", n: 4 }, get: { seeds: { premium: 1 } } }, { give: { seed: "protein", n: 4 }, get: { seeds: { premium: 1 } } }, { give: { seed: "premium", n: 3 }, get: { seeds: { odd: 1 } } }, { give: { eggs: 2 }, get: { bag: 4, table: "gift" } }],
+  order: { pay: [2, 5, 9] }, // 1 đặc điểm · 2 đặc điểm · 2 đặc điểm + nuôi đủ chất
+  reader: { sex: 1, trait: 2 },
+  haggler: [{ seeds: { odd: 2 }, price: 8 }, { bag: 8, table: "gift", price: 7 }, { egg: "common", price: 18 }],
+  haggle: { floor: [0.6, 0.85], walk: 0.75, step: 0.08, tries: 3 }, // sàn bí mật; trả dưới 75% sàn → bỏ đi; mỗi lần hạ 8%
+  artisan: [{ decor: "bench", price: 12 }, { decor: "well", price: 18 }, { decor: "birdhouse", price: 10 }, { decor: "windchime", price: 14 }],
+  stranger: { price: 12, rare: 0.25, miss: [{ seeds: { premium: 3 } }, { seeds: { odd: 2 } }, { bag: 6, table: "gift" }] },
+  eggPrice: { common: 15, rare: 25 },
+};
+export const VISIT_CONFIG = VISIT;
+// Đặc điểm → alen phải ép vào bộ gen để gà nở ra CHẮC CHẮN mang nó (lặn thì ép cả hai bản).
+const TRAIT_GENES = {
+  mottled: { pattern: ["m", "m"] }, spangled: { pattern: ["S", "S"] }, laced: { pattern: ["L", "L"] }, barred: { pattern: ["B", "B"] },
+  blue: { dilute: ["D", "d"] }, splash: { dilute: ["D", "D"] }, darkSkin: { fm: ["Fm", "fm"] }, frizzle: { frizzle: ["Fz", "fz"] },
+  silkie: { silkie: ["h", "h"] }, crest: { crest: ["Cr", "cr"] }, muff: { muff: ["Mb", "mb"] }, feetFeather: { feetFeather: ["Pti", "pti"] },
+  longTail: { tailType: ["Gt", "t"] }, rumpless: { tailType: ["Rp", "t"] }, rose: { combR: ["R", "r"], combP: ["p", "p"] },
+  pea: { combR: ["r", "r"], combP: ["P", "p"] }, walnut: { combR: ["R", "r"], combP: ["P", "p"] }, fiveToes: { poly: ["Po", "po"] },
+};
+export const RARE_TRAITS = ["silkie", "splash", "fiveToes", "rumpless", "frizzle", "longTail"];
+const COMMON_TRAITS = DEX.map((d) => d.key).filter((k) => !RARE_TRAITS.includes(k));
+
+// Lịch khách của một ngày: [{ who, from, until }], không trùng khung giờ, xếp theo giờ.
+export function visitorsOfDay(seed, day) {
+  const rng = mulberry32(hash32(`${seed >>> 0}|visit|${day}`));
+  const dayStart = day * DAY - CONFIG.daily.tzOffsetMs + VISIT.firstHour * HOUR;
+  const free = Array.from({ length: VISIT.slots }, (_, i) => i);
+  const out = [];
+  const place = (who) => {
+    const v = VISITORS[who];
+    const pool = free.filter((i) => (v.night ? i >= VISIT.nightSlot : true));
+    if (!pool.length) return;
+    const slot = pool[Math.floor(rng() * pool.length)];
+    free.splice(free.indexOf(slot), 1);
+    const from = dayStart + slot * VISIT.slotMs;
+    out.push({ who, from, until: from + (v.minutes ? v.minutes * MIN : VISIT.slotMs) });
+  };
+  for (const [who, v] of Object.entries(VISITORS)) {
+    if (v.weekly) { if (((day % 7) + 7) % 7 === (seed >>> 0) % 7) place(who); continue; }
+    for (let i = 0; i < (v.perDay ?? 1); i++) if (rng() < v.chance) place(who);
+  }
+  return out.sort((a, b) => a.from - b.from);
+}
+const visitNow = (state, now) => visitorsOfDay(state.seed, dayIndex(now)).find((v) => now >= v.from && now < v.until) ?? null;
+
+// Hàng của một lượt ghé — tất định theo (seed, lúc tới) và, với người sưu tầm, theo sổ của trại lúc đó.
+function stockOf(state, v) {
+  const rng = rngFor(state, "stock", v.who, v.from);
+  const pickN = (list, n) => { const a = [...list], o = []; while (o.length < n && a.length) o.push(a.splice(Math.floor(rng() * a.length), 1)[0]); return o; };
+  if (v.who === "seller") return pickN(VISIT.seller, 3);
+  if (v.who === "trader") return pickN(VISIT.trader, 2);
+  if (v.who === "artisan") return pickN(VISIT.artisan, 2);
+  if (v.who === "haggler") {
+    const item = pickN(VISIT.haggler, 1)[0];
+    return [item.egg ? { ...item, egg: pickN(COMMON_TRAITS, 1)[0] } : item];
+  }
+  if (v.who === "stranger") return [{ basket: 0 }, { basket: 1 }, { basket: 2 }].map((b) => ({ ...b, price: VISIT.stranger.price }));
+  if (v.who === "reader") return [{ what: "sex", price: VISIT.reader.sex }, { what: "trait", price: VISIT.reader.trait }];
+  // người sưu tầm: chỉ đòi đặc điểm trại ĐÃ từng nở (có ★); trại chưa có gì thì đòi "một gà trưởng thành nuôi đủ chất"
+  const known = DEX.map((d) => d.key).filter((k) => (state.dex[k] ?? 0) >= 1);
+  const tier = known.length >= 2 ? Math.floor(rng() * 3) : known.length ? 0 : -1;
+  if (tier < 0) return [{ traits: [], quality: true, pay: VISIT.order.pay[0] }];
+  const traits = pickN(known, tier === 0 ? 1 : 2).filter((k, i, a) => !(a.length === 2 && conflict(a[0], a[1]) && i === 1));
+  return [{ traits, quality: tier === 2, pay: VISIT.order.pay[traits.length === 1 && tier > 0 ? 0 : tier] }];
+}
+// hai đặc điểm không thể cùng có trên một con (cùng một gen: hoa văn, kiểu mào, kiểu đuôi, mức pha loãng)
+const conflict = (a, b) => Object.keys(TRAIT_GENES[a]).some((g) => g in TRAIT_GENES[b]) && a !== b && !(["rose", "pea", "walnut"].includes(a) && false);
+
+// Khách đang ghé + hàng + việc đã làm; `next` = lượt ghé kế tiếp trong hôm nay. Giá sàn mặc cả KHÔNG bao giờ có ở đây.
+export function visitorView(state, now) {
+  if (state.seed == null) return state.visitor ?? null; // client online: server gửi sẵn trong farm.visitor
+  const today = visitorsOfDay(state.seed, dayIndex(now));
+  const next = today.find((v) => v.from > now);
+  const v = today.find((x) => now >= x.from && now < x.until);
+  const base = { next: next ? { who: next.who, from: next.from } : null };
+  if (!v) return { ...base, who: null };
+  const mine = state.visit?.from === v.from ? state.visit : {};
+  return { ...base, who: v.who, name: VISITORS[v.who].name, from: v.from, until: v.until, stock: stockOf(state, v), bought: mine.bought ?? [], price: mine.price ?? null, tries: mine.tries ?? 0, gone: !!mine.gone };
+}
+
+// Khách phải đang ở đó và đúng loại; trả về { v, stock, mine } hoặc lỗi. `mine` là sổ ghi của lượt ghé này.
+function visiting(state, now, who) {
+  const v = visitNow(state, now);
+  if (!v || (who && v.who !== who)) return err("no_visitor", "Người này không có ở gian hàng lúc này");
+  if (state.visit?.from !== v.from) state.visit = { from: v.from, bought: [] };
+  if (state.visit.gone) return err("visitor_gone", "Ông ấy bỏ đi rồi");
+  return { v, stock: stockOf(state, v), mine: state.visit };
+}
+const pay = (state, price) => (state.tickets < price ? err("no_ticket", `Cần ${price} vé`) : null);
+
+// Trứng chắc chắn nở ra gà mang đặc điểm `key`.
+function traitEgg(state, key, now, rng) {
+  const g = randomGenome(rng);
+  for (const [gene, alleles] of Object.entries(TRAIT_GENES[key])) g.g[gene] = [...alleles];
+  // mào: gen R/P phải khớp đúng kiểu; hoa văn trội theo bậc nên đã ép cả hai bản
+  const ph = express(randomGenome(rng, { sex: "hen" }));
+  return { id: nextId(state, "e"), code: encodeGenome(g), shell: ph.egg.shell, shellName: ph.egg.name, fertile: true, motherId: null, fatherId: null, laidAt: now, mutations: 0, hatchAt: null, gift: true, known: { traits: [key] } };
+}
+function giveItem(state, item, now, rng) {
+  if (item.decor) {
+    state.decorOwned ??= [];
+    if (state.decorOwned.includes(item.decor)) return err("owned", "Trại đã có món này");
+    state.decorOwned.push(item.decor);
+    return { ok: true, got: { decor: item.decor } };
+  }
+  if (item.egg) {
+    if (storedEggs(state) >= CONFIG.storage.eggs) return err("eggs_full", "Kho trứng đầy");
+    const egg = traitEgg(state, item.egg, now, rng);
+    state.eggs.push(egg);
+    return { ok: true, got: { eggId: egg.id, trait: item.egg } };
+  }
+  return giveReward(state, item, now, rng);
+}
+
+// Mua thẳng: bà hàng hạt, nghệ nhân (slot = thứ tự món), khách lạ (slot = giỏ 0..2; trong giỏ có gì tung SAU khi chọn).
+export function buy(state, slot, now, opts = {}) {
+  return act(state, now, () => {
+    const ctx = visiting(state, now);
+    if (ctx.ok === false) return ctx;
+    const { v, stock, mine } = ctx;
+    if (!["seller", "artisan", "stranger"].includes(v.who)) return err("bad_deal", "Người này không bán kiểu đó");
+    const item = stock[slot];
+    if (!item) return err("no_item", "Không có món này");
+    if (v.who === "stranger" ? mine.bought.length : mine.bought.includes(slot)) return err("sold", v.who === "stranger" ? "Mỗi lượt chỉ chọn một giỏ" : "Món này bạn mua rồi");
+    const short = pay(state, item.price);
+    if (short) return short;
+    const rng = opts.rng ?? rngFor(state, "buy", v.from, slot);
+    let give = item, rare = false;
+    if (v.who === "stranger") {
+      rare = rng() < VISIT.stranger.rare;
+      give = rare ? { egg: RARE_TRAITS[Math.floor(rng() * RARE_TRAITS.length)] } : VISIT.stranger.miss[Math.floor(rng() * VISIT.stranger.miss.length)];
+    }
+    const r = giveItem(state, give, now, rng);
+    if (!r.ok) return r;
+    state.tickets -= item.price;
+    mine.bought.push(slot);
+    return { slot, got: r.got, ...(v.who === "stranger" ? { rare } : {}) };
+  });
+}
+
+// Người đổi chác: đưa đúng thứ ông ấy cần (hạt theo loại, hoặc `eggs` = id các trứng KHÔNG phôi trong kho), nhận món kia.
+export function barter(state, slot, now, opts = {}) {
+  return act(state, now, () => {
+    const ctx = visiting(state, now, "trader");
+    if (ctx.ok === false) return ctx;
+    const offer = ctx.stock[slot];
+    if (!offer) return err("no_item", "Không có lời đổi này");
+    if (ctx.mine.bought.includes(slot)) return err("sold", "Lời đổi này bạn dùng rồi");
+    const g = offer.give;
+    let eggIds = [];
+    if (g.seed) { if (!(state.inventory[g.seed] >= g.n)) return err("no_seed", `Cần ${g.n} ${SEEDS[g.seed].name.toLowerCase()}`); }
+    else {
+      eggIds = [...new Set(opts.eggs ?? [])];
+      const eggs = eggIds.map((id) => state.eggs.find((e) => e.id === id && e.hatchAt === null && !e.fertile));
+      if (eggIds.length !== g.eggs || eggs.some((e) => !e)) return err("bad_give", `Cần đúng ${g.eggs} quả trứng không phôi`);
+    }
+    // thử trao trước trên phần chỗ chứa SAU khi đã lấy đi thứ đem đổi (đổi 6 hạt lấy 1 hạt không thể bị "kho đầy")
+    if (g.seed) state.inventory[g.seed] -= g.n;
+    const r = giveReward(state, offer.get, now, opts.rng ?? rngFor(state, "barter", ctx.v.from, slot));
+    if (!r.ok) { if (g.seed) state.inventory[g.seed] += g.n; return r; }
+    if (eggIds.length) state.eggs = state.eggs.filter((e) => !eggIds.includes(e.id));
+    ctx.mine.bought.push(slot);
+    return { slot, got: r.got };
+  });
+}
+
+// Con gà có khớp đơn không: trưởng thành, mang đủ đặc điểm, và (nếu đơn đòi) nuôi đủ chất cho từng đặc điểm / cả bốn chất.
+export function matchesOrder(ch, order) {
+  if (ch.growth < CONFIG.stages.adult) return false;
+  const keys = new Set(dexKeysOf(ch.code));
+  if (!order.traits.every((t) => keys.has(t))) return false;
+  if (!order.quality) return true;
+  const groups = order.traits.length ? order.traits.map((t) => DEX_GROUP[t]) : NUTRIENTS;
+  return groups.every((g) => ch.dev[g] >= CONFIG.dex.starDev);
+}
+// Người sưu tầm: giao con gà đúng đơn (gà rời trại), nhận vé.
+export function deliver(state, chickenId, now) {
+  return act(state, now, () => {
+    const ctx = visiting(state, now, "collector");
+    if (ctx.ok === false) return ctx;
+    if (ctx.mine.bought.length) return err("sold", "Đơn này bạn giao rồi");
+    const ch = state.chickens.find((c) => c.id === chickenId);
+    if (!ch) return err("no_chicken", "Không tìm thấy gà");
+    if (ch.location !== "coop") return err("in_field", "Gọi gà về chuồng trước đã");
+    if (ch.id === state.play?.id) return err("playing", "Con gà này đang ở sân chơi");
+    const order = ctx.stock[0];
+    if (!matchesOrder(ch, order)) return err("no_match", "Con gà này chưa đúng yêu cầu");
+    const gain = Math.min(order.pay, CONFIG.tickets.cap - state.tickets);
+    state.chickens = state.chickens.filter((c) => c.id !== chickenId);
+    state.tickets += gain;
+    state.stats.traded++;
+    bump(state, "trade");
+    ctx.mine.bought.push(0);
+    return { chickenId, tickets: gain };
+  });
+}
+
+// Thầy soi trứng: what = "sex" (trống hay mái) | "trait" (một đặc điểm quả trứng mang, hoặc "không có gì đặc biệt").
+export function candle(state, eggId, what, now, opts = {}) {
+  return act(state, now, () => {
+    const ctx = visiting(state, now, "reader");
+    if (ctx.ok === false) return ctx;
+    const price = VISIT.reader[what];
+    if (!price) return err("bad_deal", "Thầy không soi được điều đó");
+    const egg = state.eggs.find((e) => e.id === eggId);
+    if (!egg) return err("no_egg", "Không tìm thấy trứng");
+    if (!egg.fertile) return err("infertile", "Trứng không có phôi thì không có gì để soi");
+    egg.known ??= {};
+    const ph = express(decodeGenome(egg.code));
+    if (what === "sex") {
+      if (egg.known.sex) return err("known", "Điều này bạn biết rồi");
+      const short = pay(state, price);
+      if (short) return short;
+      egg.known.sex = ph.sex;
+    } else {
+      const left = dexKeysOf(egg.code).filter((k) => !(egg.known.traits ?? []).includes(k));
+      if (egg.known.all) return err("known", "Quả trứng này không còn gì để soi");
+      const short = pay(state, price);
+      if (short) return short;
+      const rng = opts.rng ?? rngFor(state, "candle", egg.id, (egg.known.traits ?? []).length);
+      if (left.length) egg.known.traits = [...(egg.known.traits ?? []), left[Math.floor(rng() * left.length)]];
+      if (left.length <= 1) egg.known.all = true;
+    }
+    state.tickets -= price;
+    return { eggId, known: egg.known };
+  });
+}
+
+// Lái buôn: trả giá `offer` (số vé). Sàn bí mật tung MỘT lần cho mỗi lượt ghé (server: nguồn ngẫu nhiên riêng).
+// Kết quả: { sold, price } | { counter: giá mới, left: số lần còn lại } | { gone: true }. Trả đúng giá đang niêm yết thì luôn mua được.
+export function haggle(state, offer, now, opts = {}) {
+  return act(state, now, () => {
+    const ctx = visiting(state, now, "haggler");
+    if (ctx.ok === false) return ctx;
+    const { stock, mine, v } = ctx, H = VISIT.haggle, item = stock[0];
+    if (mine.bought.length) return err("sold", "Món này bạn mua rồi");
+    if (!Number.isInteger(offer) || offer < 1) return err("bad_offer", "Giá trả phải là số vé nguyên dương");
+    const rng = opts.rng ?? rngFor(state, "haggle", v.from, mine.tries ?? 0);
+    mine.price ??= item.price;
+    mine.floor ??= Math.ceil(item.price * lerp(H.floor[0], H.floor[1], rng()));
+    if (offer >= mine.floor || offer >= mine.price) {
+      const price = Math.min(offer, mine.price);
+      const short = pay(state, price);
+      if (short) return short;
+      const r = giveItem(state, item, now, rng);
+      if (!r.ok) return r;
+      state.tickets -= price;
+      mine.bought.push(0);
+      return { sold: true, price, got: r.got };
+    }
+    if (offer < mine.floor * H.walk) { mine.gone = true; return { gone: true }; }
+    mine.tries = (mine.tries ?? 0) + 1;
+    if (mine.tries >= H.tries) return { counter: mine.price, left: 0 }; // hết lượt trả giá: mua giá này hoặc thôi
+    mine.price = Math.max(mine.floor, Math.round(mine.price * (1 - H.step)));
+    return { counter: mine.price, left: H.tries - mine.tries };
+  });
+}
+
 /* ---------- xem trạng thái (cho giao diện) ---------- */
 
 export function stageOf(ch) {

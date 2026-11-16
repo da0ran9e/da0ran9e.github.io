@@ -42,6 +42,10 @@ function seedKind(body) {
   return v;
 }
 
+function slot(body) {
+  if (!Number.isInteger(body.slot) || body.slot < 0 || body.slot > 5) throw bad('"slot" phải là số nguyên 0..5');
+  return body.slot;
+}
 function count(body, key, max) {
   const v = body[key];
   if (!Number.isInteger(v) || v < 1 || v > max) throw bad(`"${key}" phải là số nguyên 1..${max}`);
@@ -78,6 +82,15 @@ export const ARGS = {
     if (typeof b.score !== "number" || !Number.isFinite(b.score)) throw bad('"score" phải là một số');
     return { score: b.score };
   },
+  // luật v7 — khách qua đường
+  buy: (b) => ({ slot: slot(b) }),
+  barter: (b) => ({ slot: slot(b), eggs: idList(b, "eggs", 4) }),
+  deliver: (b) => ({ chickenId: id(b, "chickenId") }),
+  candle: (b) => {
+    if (b.what !== "sex" && b.what !== "trait") throw bad('"what" phải là "sex" hoặc "trait"');
+    return { eggId: id(b, "eggId"), what: b.what };
+  },
+  haggle: (b) => ({ offer: count(b, "offer", R.CONFIG.tickets.cap) }),
   // luật v7 — tháp hạt
   fillTower: (b) => ({ seed: seedKind(b), n: count(b, "n", R.CONFIG.tower.cap) }),
   takeFromTower: (b) => ({ seed: seedKind(b), n: count(b, "n", R.CONFIG.tower.cap) }),

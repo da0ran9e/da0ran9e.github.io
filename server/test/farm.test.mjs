@@ -25,7 +25,11 @@ test("POST /api/farm/new: tạo trại từ trứng đã chọn, không lộ see
   const r = await s.api("POST", "/api/farm/new", { token, body: { aid: s.aid(), choice: 2 } });
   assert.equal(r.status, 200);
   assert.equal(r.body.version, 1);
-  assert.equal(r.body.farm.eggs[0].code, st.body.choices[2].code);
+  // v7: mã gen của trứng chưa nở không bao giờ rời server (cả ở danh sách trứng khởi đầu lẫn trong trại)
+  assert.equal(r.body.farm.eggs[0].code, undefined);
+  assert.equal(st.body.choices[2].code, undefined);
+  assert.equal(r.body.farm.eggs[0].shellName, st.body.choices[2].shellName);
+  assert.ok(r.body.farm.eggs[0].incubateMin >= 5 && r.body.farm.eggs[0].incubateMin <= 30);
   assert.equal("seed" in r.body.farm, false);
   assert.equal(r.body.now, s.clock.t); // giờ do server cấp
   const again = await s.api("POST", "/api/farm/new", { token, body: { aid: s.aid(), choice: 0 } });
@@ -192,7 +196,7 @@ test("nhặt trứng ngoài sân (collectEgg): vào kho; nhặt lại / trứng 
   const { token, farm } = await s.player();
   yardToken = token;
   // Trứng mới đẻ nằm ngoài sân (inYard). Đẻ thật cần gà mái trưởng thành + vài giờ → nhét thẳng.
-  s.injectEgg(token, { id: "e-c9-yard", code: farm.eggs[0].code, fertile: false, inYard: true });
+  s.injectEgg(token, { id: "e-c9-yard", code: s.app.farms.load(s.playerIdOf(token)).state.eggs[0].code, fertile: false, inYard: true });
   const before = await s.farm(token);
   assert.equal(before.eggs.find((e) => e.id === "e-c9-yard").inYard, true);
   const r = await s.act(token, "collectEgg", { eggId: "e-c9-yard" });
@@ -204,7 +208,7 @@ test("nhặt trứng ngoài sân (collectEgg): vào kho; nhặt lại / trứng 
   assert.equal((await s.act(token, "collectEgg", { eggId: "e404" })).body.code, "no_egg");
   assert.equal((await s.act(token, "collectEgg", { eggId: "E!" })).status, 400);
   // trứng ngoài sân ấp / đổi trực tiếp được
-  s.injectEgg(token, { id: "e-c9-yard2", code: farm.eggs[0].code, inYard: true });
+  s.injectEgg(token, { id: "e-c9-yard2", code: s.app.farms.load(s.playerIdOf(token)).state.eggs[0].code, inYard: true });
   const inc = await s.act(token, "incubate", { eggId: "e-c9-yard2" });
   assert.equal(inc.status, 200);
   assert.equal(inc.body.farm.eggs.find((e) => e.id === "e-c9-yard2").inYard, false);

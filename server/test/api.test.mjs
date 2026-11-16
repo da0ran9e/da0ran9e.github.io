@@ -33,7 +33,7 @@ test("khách chưa có trại: GET /api/farm → 404 no_farm; starters trả 3 t
   const st = await s.api("GET", "/api/starters", { token });
   assert.equal(st.status, 200);
   assert.equal(st.body.choices.length, 3);
-  assert.ok(st.body.choices.every((c) => typeof c.code === "string" && c.shell));
+  assert.ok(st.body.choices.every((c) => c.code === undefined && c.shell && c.shellName)); // v7: chỉ nhìn được vỏ, không gửi mã gen
   assert.equal(JSON.stringify(st.body).includes('"seed"'), false);
 });
 

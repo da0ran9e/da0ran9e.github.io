@@ -26,7 +26,7 @@ export function serverRoll(secret, purpose, playerId, counter) {
 //   tradeForEgg → seed riêng cho quả trứng của cửa hàng
 //   fieldBonus  → seed riêng cho lần bới đốm sáng (số hạt, loại hạt, hay cả túi)
 //   claim       → seed riêng cho phần thưởng nhiệm vụ (trứng quà)
-const SEEDED = new Set(["openBag", "tradeForEgg", "fieldBonus", "claim"]);
+const SEEDED = new Set(["openBag", "tradeForEgg", "fieldBonus", "claim", "buy", "barter", "candle", "haggle"]);
 export function rollFor(type, secret, playerId, counter) {
   if (type === "fieldFind") return { kind: R.rollSeed("field", mulberry32(serverRoll(secret, "field", playerId, counter))) };
   if (SEEDED.has(type)) return { seed: serverRoll(secret, type, playerId, counter) };
@@ -52,6 +52,12 @@ export const ACTIONS = {
   // luật v6
   warmEgg: (s, a, now) => R.warmEgg(s, a.eggId, now),
   fieldBonus: (s, a, now, rolled) => R.fieldBonus(s, a.chickenId, now, { rng: mulberry32(rolled.seed >>> 0) }),
+  // luật v7 — khách qua đường (mọi thứ ngẫu nhiên do server tung)
+  buy: (s, a, now, rolled) => R.buy(s, a.slot, now, { rng: mulberry32(rolled.seed >>> 0) }),
+  barter: (s, a, now, rolled) => R.barter(s, a.slot, now, { eggs: a.eggs, rng: mulberry32(rolled.seed >>> 0) }),
+  deliver: (s, a, now) => R.deliver(s, a.chickenId, now),
+  candle: (s, a, now, rolled) => R.candle(s, a.eggId, a.what, now, { rng: mulberry32(rolled.seed >>> 0) }),
+  haggle: (s, a, now, rolled) => R.haggle(s, a.offer, now, { rng: mulberry32(rolled.seed >>> 0) }),
   startPlay: (s, a, now) => R.startPlay(s, a.id, now),
   endPlay: (s, a, now) => R.endPlay(s, a.score, now),
   fillTower: (s, a, now) => R.fillTower(s, a.seed, a.n, now),
@@ -84,9 +90,20 @@ export const createFarmState = (seed, now, choice) => R.newGame(seed, now, choic
 export const sha256 = (s) => createHash("sha256").update(s).digest("hex");
 
 // Bản client được thấy: KHÔNG có seed (seed cho phép đoán lượt đẻ, tên gà…); sổ kỷ niệm chỉ phần cuối.
-export function clientView(state, memorialMax = 20) {
-  const { seed, memorial, ...rest } = state;
-  return { ...rest, memorial: memorial.slice(-memorialMax), memorialTotal: memorial.length };
+// v7: trứng CHƯA NỞ không gửi mã gen (không thì ai mở công cụ lập trình cũng đọc được trống/mái, đặc điểm — thầy soi trứng
+// hết nghĩa); thay bằng số phút ấp và những gì đã soi (egg.known). Giá sàn mặc cả (visit.floor) cũng không bao giờ gửi.
+// `now` có thì kèm khách đang ghé (client không có seed nên không tự tính được lịch).
+export function clientView(state, memorialMax = 20, now = null) {
+  const { seed, memorial, visit, eggs, ...rest } = state;
+  const { floor, ...visitPublic } = visit ?? {};
+  return {
+    ...rest,
+    eggs: eggs.map(({ code, mutations, ...e }) => ({ ...e, incubateMin: Math.round(R.incubateMsOf(code) / 6000) / 10 })),
+    ...(visit ? { visit: visitPublic } : {}),
+    ...(now != null ? { visitor: R.visitorView(state, now) } : {}),
+    memorial: memorial.slice(-memorialMax),
+    memorialTotal: memorial.length,
+  };
 }
 
 export const inField = (state) => state.chickens.filter((c) => c.location === "field").map((c) => c.id);

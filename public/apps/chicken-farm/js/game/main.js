@@ -314,6 +314,11 @@ const OFFLINE = {
   claim: (a, t) => R.claim(state, a.id, t),
   fillTower: (a, t) => R.fillTower(state, a.seed, a.n, t),
   takeFromTower: (a, t) => R.takeFromTower(state, a.seed, a.n, t),
+  buy: (a, t) => R.buy(state, a.slot, t),
+  barter: (a, t) => R.barter(state, a.slot, t, { eggs: a.eggs }),
+  deliver: (a, t) => R.deliver(state, a.chickenId, t),
+  candle: (a, t) => R.candle(state, a.eggId, a.what, t),
+  haggle: (a, t) => R.haggle(state, a.offer, t),
   startPlay: (a, t) => R.startPlay(state, a.id, t),
   endPlay: (a, t) => R.endPlay(state, a.score, t),
 };
@@ -1404,7 +1409,7 @@ function renderStore() {
   $("#egg-cap").textContent = `(${stored.length} trong kho · ${all}/${R.CONFIG.storage.eggs} cả ngoài sân)`;
   const freeSlot = state.incubators.includes(null);
   setHTML($("#eggs"), stored.length
-    ? stored.map((e) => `<div class="item"><div class="art">${eggArt(e)}</div><div>${e.fertile ? '<span class="badge ok">Có phôi</span>' : '<span class="badge">Không phôi</span>'}</div>${e.fertile ? `<div class="muted">Ấp ${Math.round(R.incubateMsOf(e.code) / MIN)} phút</div>` : '<div class="muted">Chỉ để đổi hạt</div>'}<div class="row">${e.fertile ? `<button type="button" class="small primary" data-incubate="${e.id}" ${freeSlot ? "" : 'disabled title="Ổ ấp đang bận"'}>Ấp</button>` : ""}<button type="button" class="small" data-trade-egg="${e.id}">Đổi túi 2 hạt</button></div></div>`).join("")
+    ? stored.map((e) => `<div class="item"><div class="art">${eggArt(e)}</div><div>${e.fertile ? '<span class="badge ok">Có phôi</span>' : '<span class="badge">Không phôi</span>'}</div>${e.fertile ? `<div class="muted">Ấp ${Math.round((e.incubateMin ?? R.incubateMsOf(e.code) / MIN))} phút</div>` : '<div class="muted">Chỉ để đổi hạt</div>'}<div class="row">${e.fertile ? `<button type="button" class="small primary" data-incubate="${e.id}" ${freeSlot ? "" : 'disabled title="Ổ ấp đang bận"'}>Ấp</button>` : ""}<button type="button" class="small" data-trade-egg="${e.id}">Đổi túi 2 hạt</button></div></div>`).join("")
     : '<p class="muted">Kho chưa có trứng. Trứng gà mái đẻ nằm ngoài sân — chạm để nhặt.</p>');
 }
 $("#store-dialog").addEventListener("click", async (ev) => {

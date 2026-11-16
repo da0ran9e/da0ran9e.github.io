@@ -110,7 +110,7 @@ export class FarmService {
 
   starters(player) {
     if (this.load(player.id)) throw new HttpError(409, "farm_exists", "Bạn đã có trại");
-    const choices = R.starterEggs(player.seed).map((e, i) => ({ choice: i, code: e.code, shell: e.shell, shellName: e.shellName }));
+    const choices = R.starterEggs(player.seed).map((e, i) => ({ choice: i, shell: e.shell, shellName: e.shellName })) /* không gửi mã gen: chỉ nhìn được vỏ */;
     return { ok: true, now: this.clock(), choices };
   }
 
@@ -124,7 +124,7 @@ export class FarmService {
     const now = this.clock();
     const state = createFarmState(player.seed, now, choice);
     const json = JSON.stringify(state);
-    const body = { ok: true, aid, now, version: 1, result: { choice }, events: [], farm: clientView(state, this.cfg.memorialInView) };
+    const body = { ok: true, aid, now, version: 1, result: { choice }, events: [], farm: clientView(state, this.cfg.memorialInView, now) };
     this.store.tx(() => {
       this.q.insertFarm.run(pid, R.CONFIG.version, json, 1, 0, now, sha256(json));
       this.q.insertAction.run(pid, 1, aid, "newGame", JSON.stringify(args), JSON.stringify({ seed: player.seed }), now, "http", "ok", reqHash, JSON.stringify(body));
@@ -167,7 +167,7 @@ export class FarmService {
     // Phần còn lại: mô phỏng trên BẢN SAO, không ghi (xem không làm đổi state).
     const view = structuredClone(entry.state);
     events = events.concat(R.advance(view, now, { watchFrom: w }));
-    return { status: 200, body: { ok: true, now, version: entry.version, events, farm: clientView(view, this.cfg.memorialInView), field: this.#fieldInfo(pid, now) } };
+    return { status: 200, body: { ok: true, now, version: entry.version, events, farm: clientView(view, this.cfg.memorialInView, now), field: this.#fieldInfo(pid, now) } };
   }
 
   // Một hành động trại (tên trùng hàm luật). args đã qua validate.mjs.
@@ -204,7 +204,7 @@ export class FarmService {
     }
     if (!out.ok) return fail(409, out.code, out.message, rolls);
 
-    const body = { ok: true, aid, now, version: entry.version + 1, result: out.result, events: out.events, farm: clientView(draft, this.cfg.memorialInView) };
+    const body = { ok: true, aid, now, version: entry.version + 1, result: out.result, events: out.events, farm: clientView(draft, this.cfg.memorialInView, now) };
     this.#commit(pid, entry, draft, rolls, { type, aid, args, rolled, now, source, reqHash, response: JSON.stringify(body) });
     return { status: 200, body };
   }

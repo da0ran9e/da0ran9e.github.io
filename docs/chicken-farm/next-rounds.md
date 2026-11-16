@@ -21,8 +21,10 @@ Phần **luật và server** của ba cơ chế khó đã cài và có test cố
 | Thể lực (ideas 12) | `staminaOf`, `staminaMaxOf`, hồi/tiêu trong `stepChicken`, `ch.fitness` | — | `v7-play.test.mjs` | Thanh thể lực trong bảng gà; gà hết sức đi chậm ngoài đồng (chưa cài: hiện chỉ trừ thể lực) |
 | Sân chơi (H2) | `startPlay`, `endPlay` (kẹp điểm, cửa sổ thời gian, trần vé ngày) | `startPlay`, `endPlay` + kiểm tra kiểu `score` | `v7-play.test.mjs` | Điểm thả "Sân chơi", `view = "play"`, bốn module trò chơi, màn kết quả; test P6, P11, P13, P14, P15 |
 
+| Khách qua đường (ideas 15) | `visitorsOfDay`, `visitorView`, `buy`, `barter`, `deliver`, `candle`, `haggle`, `matchesOrder`; bảng hàng và giá trong `VISIT_CONFIG` | 5 hành động + `clientView` kèm `visitor`; **mã gen trứng chưa nở không còn gửi về client** (thay bằng `incubateMin`, `known`); giá sàn mặc cả không bao giờ gửi | `tests/chicken-farm/v7-visitors.test.mjs` | Con đường + gian hàng + 7 hình nhân vật; bảng hàng cho từng kiểu tương tác (mua, đổi, giao gà, soi trứng, mặc cả, ba giỏ); hình 4 món trang trí của nghệ nhân (`state.decorOwned`: bench, well, birdhouse, windchime) — chưa vẽ; test còn thiếu ghi ở đầu tệp test; **chưa kiểm tra trên trình duyệt rằng client online vẫn chạy khi trứng không còn `code`** |
+
 Khác với thiết kế H2 ban đầu: giới hạn "2 lượt mỗi giờ" đã được **thay bằng thể lực** (35 mỗi lượt) cho gà, và "tối đa 2 lượt mỗi quả" cho trứng.
-Chưa làm gì: thương nhân / khách qua đường, rương theo giờ, gà mái ấp giúp, gõ trứng, bạn bè (chủ dự án: làm chơi đơn trước).
+Chưa làm gì: rương theo giờ, gà mái ấp giúp, gõ trứng, bạn bè (chủ dự án: làm chơi đơn trước).
 
 ## Đã xong ở đợt A (2026-11-16)
 
