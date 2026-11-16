@@ -14,7 +14,8 @@
 
 > **Cập nhật 16/11 (tối): giao diện v7 đã có bản đầu** trong `main.js` (các khối "v7: …"): ô vé, tháp hạt (hộp đổ hạt, nhãn mức hạt, cho ăn riêng qua Kho), thanh thể lực, nút "Gõ!" ở ổ ấp, rương theo giờ, thẻ "lấy vé" ở chợ, gian hàng + hộp thoại cho cả 7 loại khách, sân chơi với **một** trò "đúng nhịp" dùng chung cho mọi tuổi.
 > Đã xem trên trình duyệt (offline): tháp hạt, rương theo giờ, gian hàng lúc vắng khách, một lượt sân chơi trọn vẹn. **Chưa xem:** hộp thoại khi có khách thật (7 kiểu), gõ trứng, gà mái ấp giúp, bản online, màn hình dọc.
-> Còn thiếu so với cột "Còn lại" bên dưới: bốn trò chơi riêng theo tuổi (hiện một trò đổi tốc độ), trứng vào sân chơi (chưa có cách kéo trứng đang ấp), hình 4 món trang trí của nghệ nhân, con đường trước cổng, gà hết sức đi chậm ngoài đồng, chữ v7 chưa qua `i18n.js`.
+> **Cập nhật 17/11:** bốn trò chơi theo tuổi đã có trong `js/game/play.js` (nhảy vũng nước / chạy đua đèn xanh đèn đỏ / mổ hạt / giữ trứng thăng bằng), nhận thuộc tính của gà (`stats`); trứng đang ấp vào chơi bằng cách chạm điểm "Sân chơi". Đã chạy thử cả bốn bằng thao tác giả lập và xem trò trứng trên màn hình dọc; ba trò còn lại chưa xem bằng mắt.
+> Còn thiếu so với cột "Còn lại" bên dưới: hình 4 món trang trí của nghệ nhân, con đường trước cổng, gà hết sức đi chậm ngoài đồng, chữ v7 chưa qua `i18n.js`.
 
 Phần **luật và server** của ba cơ chế khó đã cài và có test cốt lõi; phần **giao diện chưa có** (người chơi chưa thấy gì mới):
 

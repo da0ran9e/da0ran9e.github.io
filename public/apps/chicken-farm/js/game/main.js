@@ -13,6 +13,7 @@ import { renderChickenFlat, renderEggFlat } from "../chicken-flat.js";
 import * as R from "./rules.js";
 import { FIELD, createField, addChicken, removeChicken, tickField, snapshot, fieldTraits, setReadyAt, setLure } from "./field.js";
 import { sfx, sound, buzz, burst, confetti, flyTo, bump } from "./fx.js";
+import { GAMES, GAME_NAMES } from "./play.js";
 import { t, name as tname, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
 import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, ticketSvg } from "../art/decor.js";
 
@@ -682,7 +683,12 @@ function zoneTap(z) {
   if (z === "market") toast("Kéo gà hoặc trứng vào chợ để đổi lấy hạt / trứng");
   if (z === "feeder") hasV7() ? openTower() : toast("Kéo gà vào máng: tự chọn hạt hợp với gà nhất");
   if (z === "stall") openVisitor();
-  if (z === "play") toast("Kéo một con gà vào sân chơi (tốn 1 vé)");
+  if (z === "play") {
+    // trứng đang ấp không kéo được: chạm sân chơi để chơi với quả trứng trong ổ
+    const egg = hasV7() && state.eggs.find((e) => e.hatchAt !== null && (e.played ?? 0) < R.CONFIG.play.eggMax);
+    if (egg && state.tickets > 0) playFlow(egg.id);
+    else toast(egg ? "Hết vé" : "Kéo một con gà vào sân chơi (tốn 1 vé). Có trứng đang ấp thì chạm vào đây để chơi với trứng");
+  }
 }
 $("#yard-zones").addEventListener("click", (ev) => zoneTap(ev.target.closest("[data-zone]")?.dataset.zone));
 // bàn phím: Enter / Space trên điểm thả hoặc trứng ngoài sân
@@ -2107,8 +2113,15 @@ function rhythmGame(host, ch, kind) {
     addEventListener("keydown", key);
   });
 }
+// Thuộc tính đưa vào trò chơi (0..1), suy từ kiểu hình — chỉ đổi cách trò diễn ra, không gửi lên server.
+function playStats(ch) {
+  if (!ch) return { speed: 0.5, jump: 0.5, eye: 0.5 };
+  const ph = express(decodeGenome(ch.code), R.chickenView(ch, now()).care);
+  return { speed: clampN(ph.stats.speed ?? 0.5, 0, 1), jump: clampN((ph.shape.legLen - 0.55) / 0.9, 0, 1), eye: clampN((ph.shape.eyeSize - 0.8) / 0.45, 0, 1) };
+}
 async function playFlow(id) {
   const ch = state.chickens.find((c) => c.id === id);
+  const eggSubject = ch ? null : state.eggs.find((e) => e.id === id);
   const st = await act("startPlay", { id });
   handleEvents(st.events ?? []);
   if (!st.ok) { sfx("error"); toast(st.message); return renderAll(); }
@@ -2120,7 +2133,11 @@ async function playFlow(id) {
     rvBody().innerHTML = "";
     if (!dlg.open) dlg.showModal();
     sfx("whoosh");
-    const score = await rhythmGame(rvBody(), ch, st.kind);
+    const art = ch ? chickenSvg(ch, { detail: "high" }).svg : eggArt(eggSubject ?? { id: "p", shell: "#f3ead8", fertile: true });
+    const game = GAMES[st.kind];
+    const running = game ? game(rvBody(), { art, name: ch?.name ?? "Trứng", stats: playStats(ch), sfx }) : rhythmGame(rvBody(), ch, st.kind);
+    for (const el of rvBody().querySelectorAll(".pg-hero")) zoomArt(el); // gà con / trứng chỉ chiếm một góc bản vẽ
+    const score = await running;
     // luật chỉ nhận kết quả sau ít nhất minMs kể từ lúc bắt đầu
     const wait = R.CONFIG.play.minMs + 300 - (Date.now() - t0);
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
@@ -2128,10 +2145,10 @@ async function playFlow(id) {
     handleEvents(r.events ?? []);
     save();
     const pct = Math.round((r.score ?? 0) * 100);
-    rvShow(`${r.win ? '<div class="rv-rays"></div>' : ""}<p class="rv-kicker">${PLAY_INFO[st.kind].name}</p>
-      <div class="rv-art">${ch ? chickenSvg(ch, { detail: "high" }).svg : chestSvg(true)}</div>
+    rvShow(`${r.win ? '<div class="rv-rays"></div>' : ""}<p class="rv-kicker">${GAME_NAMES[st.kind] ?? PLAY_INFO[st.kind].name}</p>
+      <div class="rv-art">${ch ? chickenSvg(ch, { detail: "high" }).svg : eggArt(eggSubject ?? { id: "p", shell: "#f3ead8", fertile: true })}</div>
       <h2 class="rv-title">${r.win ? "Thắng rồi!" : pct >= 30 ? "Cũng được đấy" : "Hụt mất rồi"}</h2>
-      <p class="rv-sub">Trúng ${Math.round((r.score ?? 0) * 8)}/8 lần</p>
+      <p class="rv-sub">Điểm ${pct}/100${r.win ? "" : ` · cần ${Math.round(R.CONFIG.play.winAt * 100)} để thắng`}</p>
       <ul class="rv-list"><li>${!ch ? "Quả trứng sẽ nở sớm hơn" : (r.score ?? 0) <= 0 ? `${esc(ch.name)} chơi xong thì đói và mệt hơn` : st.kind === "peck" ? `${esc(ch.name)} khoẻ ra một chút, nhưng đói và mệt hơn` : `${esc(ch.name)} lớn nhanh hơn một chút, nhưng đói và mệt hơn`}</li>${r.ticket ? `<li>${ticketSvg(16)} Thắng: nhận lại 1 vé</li>` : r.win ? "<li>Hôm nay đã nhận đủ vé thưởng</li>" : ""}</ul>
       <div class="rv-actions"><button type="button" class="gold" data-go="ok">Về trại</button></div>`);
     sfx(r.win ? "claim" : "pop");

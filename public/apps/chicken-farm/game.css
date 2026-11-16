@@ -579,3 +579,36 @@ body.v7 #tray { display: none; }
 .pg button.gold { min-width: 220px; padding: 14px 18px; font-size: 18px; }
 @media (max-aspect-ratio: 1/1) { .hud-right { flex: none; } }
 body.v7 .hud { justify-content: flex-end; }
+
+/* sân chơi: bốn trò theo tuổi (js/game/play.js) */
+.pg-time { height: 6px; border-radius: 99px; background: rgb(255 255 255 / .18); overflow: hidden; margin: 8px 0 10px; }
+.pg-time i { display: block; height: 100%; width: 100%; background: #ffd95a; border-radius: 99px; }
+.pg-field { position: relative; height: 170px; border-radius: 16px; overflow: hidden; background: linear-gradient(#bfe6ff 0 58%, #a6d36f 58%); }
+.pg-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 30%; background: #a6d36f; border-top: 3px solid #7fb552; }
+.pg-hero { position: absolute; bottom: 20%; width: 92px; height: 92px; transform: translate(-50%, 0); z-index: 2; }
+.pg-hero svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.pg-hero.small { position: static; transform: none; margin: 0 auto; width: 96px; height: 96px; }
+.pg-hero.hop svg, .pg-hero.small.hop svg { animation: hop .3s cubic-bezier(.3, 1.4, .5, 1); transform-origin: 50% 90%; }
+.pg-hero.oops { filter: saturate(.3); }
+.pg-hero.oops svg { animation: nope .35s; }
+.pg-puddle { position: absolute; bottom: 14%; width: 15%; height: 9%; margin-left: -7.5%; border-radius: 50%; background: #5aa9e0; box-shadow: 0 0 0 3px #8cc6f0 inset; z-index: 1; }
+.pg-puddle.splash { background: #3d86bd; transform: scale(1.25, .7); }
+.pg-field.track { background: linear-gradient(#bfe6ff 0 50%, #e3d39b 50%); }
+.pg-field.track .pg-ground { background: #e3d39b; border-top: 3px dashed #cdb57a; }
+.pg-light { position: absolute; left: 50%; top: 10px; width: 44px; height: 44px; margin-left: -22px; border-radius: 50%; border: 4px solid #fffdf6; }
+.pg-light.go { background: #5fbf5f; box-shadow: 0 0 18px #5fbf5f; } .pg-light.stop { background: #e4572e; box-shadow: 0 0 18px #e4572e; }
+.pg-flag { position: absolute; left: 88%; bottom: 22%; width: 4px; height: 54%; background: #8d5f33; }
+.pg-flag::after { content: ""; position: absolute; left: 4px; top: 0; border: 12px solid transparent; border-left: 22px solid #e4572e; }
+.pg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 300px; margin: 10px auto 0; }
+.pg-hole { aspect-ratio: 1; border-radius: 50%; border: 0; padding: 0; background: #7a5a36; box-shadow: 0 4px 0 #5a4028 inset; position: relative; cursor: pointer; touch-action: manipulation; }
+.pg-hole::after { content: ""; position: absolute; inset: 24%; border-radius: 50% 50% 46% 46%; transform: scale(0); transition: transform .1s; }
+.pg-hole.seed::after { background: #ffd95a; box-shadow: 0 0 14px #ffd95a; transform: scale(1); }
+.pg-hole.stone::after { background: #9aa0a6; border-radius: 40% 46% 42% 50%; transform: scale(1); }
+.pg-hole.got { background: #5d8a3c; } .pg-hole.bad { background: #b0412b; }
+.pg-beam { position: relative; height: 150px; margin-top: 6px; }
+.pg-beam::before { content: ""; position: absolute; left: 2%; right: 2%; bottom: 18px; height: 14px; border-radius: 8px; background: #b98652; box-shadow: 0 4px 0 #8d5f33; }
+.pg-safe { position: absolute; bottom: 14px; height: 22px; border-radius: 10px; background: rgb(124 195 95 / .8); }
+.pg-hero.egg { bottom: 30px; width: 84px; height: 84px; }
+.pg-hero.egg.warn { filter: drop-shadow(0 0 8px #e4572e); }
+.pg-lr { grid-template-columns: 1fr 1fr; gap: 12px; }
+.pg-lr button.gold { min-width: 0; font-size: 26px; padding: 14px; touch-action: none; }
