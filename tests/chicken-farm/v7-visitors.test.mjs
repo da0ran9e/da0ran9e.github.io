@@ -2,7 +2,7 @@
 // CHƯA có test (để lại): nghệ nhân, người đổi chác bằng trứng, kho đầy khi mua, khách hết giờ giữa chừng.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CONFIG, TIME, NUTRIENTS, VISITORS, VISIT_CONFIG, RARE_TRAITS, newGame, advance, incubate, visitorsOfDay, visitorView, buy, barter, deliver, candle, haggle, matchesOrder, dexKeysOf, dayIndex } from "../../public/apps/chicken-farm/js/game/rules.js";
+import { CONFIG, TIME, NUTRIENTS, VISITORS, VISIT_CONFIG, MYSTERY, newGame, advance, incubate, visitorsOfDay, visitorView, buy, barter, deliver, candle, haggle, matchesOrder, dexKeysOf, dayIndex } from "../../public/apps/chicken-farm/js/game/rules.js";
 
 const { MIN, HOUR, DAY } = TIME;
 const T0 = Date.UTC(2026, 10, 16, 2, 0, 0);
@@ -52,19 +52,36 @@ test("bà hàng hạt: mua bằng vé, mỗi món một lần; sai loại khách
   if (visitorView(s, v.until + 1).who === null) assert.equal(buy(s, 1, v.until + 1).code, "no_visitor");
 });
 
-test("khách lạ: mỗi lượt một giỏ; trúng thì trứng CHẮC CHẮN mang đặc điểm hiếm; trượt vẫn có quà", () => {
+test("khách lạ: bán MỘT trứng bí ẩn rất đắt; kết quả giấu lúc mua; trúng thì gà nở ra mang kỳ vật (không nằm trong gen)", async () => {
+  const { clientView } = await import("../../server/src/actions.mjs");
   const a = farmWith("stranger");
-  const r = buy(a.s, 1, a.t, { rng: () => 0 });
-  assert.equal(r.rare, true);
+  assert.equal(visitorView(a.s, a.t).stock.length, 1);
+  a.s.tickets = CONFIG.mystery.price - 1;
+  assert.equal(buy(a.s, 0, a.t).code, "no_ticket");
+  a.s.tickets = CONFIG.mystery.price;
+  const r = buy(a.s, 0, a.t, { rng: () => 0 }); // rng 0 → luôn trúng, kỳ vật đầu bảng
+  assert.equal(r.ok, true);
+  assert.equal(Object.keys(r).includes("rare") || JSON.stringify(r).includes(MYSTERY[0].key), false, "câu trả lời không lộ kết quả");
+  assert.equal(a.s.tickets, 0);
   const egg = a.s.eggs.find((e) => e.id === r.got.eggId);
-  assert.ok(RARE_TRAITS.includes(r.got.trait));
-  assert.ok(dexKeysOf(egg.code).includes(r.got.trait));
-  assert.deepEqual(egg.known.traits, [r.got.trait]);
-  assert.equal(buy(a.s, 2, a.t).code, "sold");
+  assert.ok(egg.mysteryEgg && egg.fertile);
+  assert.equal(egg.mystery, MYSTERY[0].key);
+  const view = clientView(a.s, 20, a.t).eggs.find((e) => e.id === egg.id);
+  assert.equal(view.mystery, undefined, "bản gửi cho client giấu kết quả");
+  assert.equal(view.mysteryEgg, true);
+  assert.equal(buy(a.s, 0, a.t).code, "sold");
+  // nở: gà mang kỳ vật, sổ ghi kỳ vật, sự kiện relic; bộ gen không đổi gì
+  const { hatchAt } = incubate(a.s, egg.id, a.t);
+  const ev = advance(a.s, hatchAt);
+  const ch = a.s.chickens.find((c) => c.code === egg.code);
+  assert.equal(ch.relic, MYSTERY[0].key);
+  assert.ok(a.s.relics[MYSTERY[0].key] != null);
+  assert.ok(ev.some((e) => e.type === "relic" && e.first));
+  // trượt: trứng thường
   const b = farmWith("stranger", 11);
+  b.s.tickets = CONFIG.mystery.price;
   const miss = buy(b.s, 0, b.t, { rng: () => 0.99 });
-  assert.equal(miss.rare, false);
-  assert.ok(miss.got.seeds || miss.got.bagId);
+  assert.equal(b.s.eggs.find((e) => e.id === miss.got.eggId).mystery, null);
 });
 
 test("trứng theo đặc điểm của lái buôn: nở ra chắc chắn mang đặc điểm đã ghi (thử nhiều đặc điểm thường gặp)", () => {

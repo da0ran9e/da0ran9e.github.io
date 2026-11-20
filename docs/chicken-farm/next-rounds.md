@@ -10,11 +10,54 @@
 > - Mỗi lần phát hành tăng cùng một số `v=` trong `game.html` (css, importmap, main.js).
 > - Test: `node --test tests/chicken-farm/*.test.mjs` và `node --test server/test/`. Test mới phải thấy đỏ một lần (phá luật tạm) rồi mới tin.
 
+## Quyết định mới của chủ dự án (2026-11-17) — CHƯA CÀI, thay cho thiết kế cũ ở những chỗ ghi dưới đây
+
+Chủ dự án chốt năm điểm. Mã hiện tại **chưa** theo các điểm này; phiên sau cài theo đúng mục này, không theo phần cũ.
+
+> **Cập nhật 20/11 — luật v8:** Q1 (sức chơi), Q2 và Q3 (rương mốc tích luỹ) **đã cài**, có test, đã xem trên trình duyệt (offline). Thể lực từng con gà không còn chặn sân chơi (theo đề nghị ở Q1). Q4 và Q5 **đã cài 20/11**: khách lạ bán một trứng bí ẩn 40 vé, 30% nở ra gà mang kỳ vật (`MYSTERY`: đuôi công, cánh bướm, móng vàng, đầu cún; `ch.relic`, `state.relics`, trang Kỳ vật trong Sổ); đoạn mở đầu 4 khung (`playIntro`, xem lại trong Cách chơi). **Kỳ vật mới hiện bằng biểu tượng nổi trên đầu gà, chưa vẽ thành bộ phận thật trên thân gà** — việc của đợt vẽ sau (lớp đè trong `chicken-flat.js` theo `slot`). Cũng đã làm: con đường trước cổng, gà hết thể lực đi chậm một nửa và không chạy tới đốm sáng. Server phải cập nhật lên luật v8 cùng lúc với trang game.
+
+### Q1. Sân chơi có trò MIỄN PHÍ, tốn "sức chơi" thay cho vé
+
+- Người chơi (không phải từng con gà) có **sức chơi 0–5**. Mỗi điểm hồi sau **30 phút**, tích tối đa 5. Mỗi lượt trò miễn phí tốn 1 điểm.
+- Cài: `state.energy = { n, at }` tính lười — `n` hiện tại = `min(5, n + floor((now − at) / 30 phút))`, khi cộng thì dời `at` theo số điểm đã cộng (không mất phần lẻ); đang đầy 5 thì `at = now` lúc tiêu. `CONFIG.energy = { max: 5, regenMs: 30 * MIN }`. Trại mới bắt đầu đầy 5.
+- `startPlay(state, id, now, { pay: "energy" | "ticket" })`: `energy` → trừ 1 sức chơi (lỗi `no_energy`, kèm thời gian tới điểm kế tiếp); `ticket` → trừ vé như hiện nay.
+- **Việc phải quyết khi cài (producer đề nghị):** lượt bằng sức chơi cho phần thưởng như hiện nay nhưng **không thưởng vé**; lượt bằng vé thì thưởng gấp rưỡi (`growth` × 1,5) và thắng được hoàn vé. Như vậy vé là "chơi thêm khi hết sức chơi", không phải cửa bắt buộc.
+- **Xung đột với mã hiện tại:** đang có **thể lực riêng từng con gà** (0–100, mỗi lượt 35 — `CONFIG.stamina`, `staminaOf`). Chủ dự án mô tả "stamina" là 5 điểm hồi 30 phút một điểm, tức mức người chơi. Đề nghị: giữ thể lực từng con cho việc **kiếm ăn ngoài đồng và chọn gà cho trò** (đã cài, có test), bỏ khoản trừ 35 thể lực mỗi lượt chơi trong `startPlay` và bỏ lỗi `too_tired` cho gà; giới hạn số lượt do sức chơi đảm nhiệm. Hỏi lại chủ dự án nếu muốn gộp hẳn hai thứ làm một.
+- Giao diện: năm chấm sức chơi cạnh ô vé; hộp chọn trò hiện hai nút "Chơi (1 sức chơi)" và "Chơi bằng vé".
+
+### Q2. Giá vé vào trò không được đắt
+
+Sân chơi là hoạt động thường xuyên. Giữ 1 vé mỗi lượt; cùng với Q1 thì người chơi có 5 lượt miễn phí mỗi 2,5 giờ. Khi đo kinh tế vé (H3) phải kiểm tra: người Ghé thăm chơi được ít nhất 5 lượt mỗi ngày mà không tốn vé.
+
+### Q3. Rương theo giờ: mốc là thời gian TÍCH LUỸ, rương cuối đúng 24 giờ
+
+- Sáu rương mở ở **5 phút, 15 phút, 1 giờ, 4 giờ, 12 giờ, 24 giờ tính từ đầu vòng** (rương 2 mở sau 15 phút kể cả 5 phút của rương 1 — không cộng dồn thời gian chờ).
+- Cài: `state.timed = { start, claimed }` (`claimed` = số rương đã nhận trong vòng). Rương thứ `i` nhận được khi `now − start ≥ CONFIG.timed[i].at` và `i === claimed`. Vắng mặt lâu rồi quay lại thì nhận **lần lượt mọi rương đã tới mốc** (mỗi lần một rương). Nhận rương cuối → vòng mới: `start = now`, `claimed = 0`.
+- Đổi `CONFIG.timed[i].after` thành `at` (mốc tích luỹ). `questView().timed` trả `{ index, readyAt: start + at, reward }`.
+- **Mã hiện tại sai với điểm này**: đang tính thời gian chờ nối tiếp (tổng ~41 giờ) và vừa được sửa thành "quay vòng sau rương cuối" — phải viết lại theo mốc tích luỹ; sửa test trong `tests/chicken-farm/v7-brood-knock-timed.test.mjs`.
+
+### Q4. Khách lạ đêm khuya bán TRỨNG BÍ ẨN, rất đắt
+
+- Không bán trứng mang đặc điểm thường/hiếm của sổ nữa. Trứng bí ẩn nở ra gà **có tỉ lệ** mang một **bộ phận độc nhất không thể có bằng lai giống** (ví dụ đuôi công, đầu chó).
+- Cài (đề nghị):
+  - Bộ phận độc nhất **không nằm trong bộ gen** (`genome.js` không đổi → không di truyền, không lai ra được): `ch.relic = "peacockTail" | "dogHead" | …`, gán lúc nở từ `egg.mystery`.
+  - `MYSTERY = [{ key, name, slot: "tail" | "head" | "wings" | "feet", weight }]` trong `rules.js`; `CONFIG.mystery = { price: 40, chance: 0.3 }` (giá và tỉ lệ là đề nghị — chủ dự án chỉ nói "rất đắt"). Trứng trượt nở ra gà thường với bộ gen ngẫu nhiên.
+  - Kết quả tung **lúc mua** bằng nguồn ngẫu nhiên của server và giấu khỏi client (`clientView` đã bỏ `code` của trứng chưa nở; bỏ thêm `mystery`) → chỉ biết khi trứng nở.
+  - Bỏ kiểu "ba giỏ đậy kín" hay giữ? Đề nghị **bỏ**: khách lạ bán đúng một quả trứng bí ẩn mỗi lượt ghé, không chọn giỏ.
+  - Sổ sưu tầm thêm trang "Kỳ vật" liệt kê các bộ phận độc nhất đã từng nở.
+- Hình: mỗi bộ phận cần một lớp vẽ đè trong `chicken-flat.js` theo `slot` (thay đuôi / thay đầu). Đây là phần tốn công nhất; bắt đầu với 3–4 bộ phận.
+- Kinh tế: với thu nhập ~5–8 vé/ngày (H3 bổ sung), giá 40 nghĩa là dành dụm 5–8 ngày cho một lần thử, 30% trúng → trung bình ~20 ngày một kỳ vật. Đo lại khi có mô phỏng.
+
+### Q5. Đoạn mở đầu: đơn giản
+
+Không cần cốt truyện cầu kỳ: **vài khung hình chạy lúc lần đầu vào game** là đủ (3–4 khung, có nút bỏ qua, dùng hình sẵn có). Khung kỹ thuật ở đợt F3 bên dưới giữ nguyên; bỏ yêu cầu chủ dự án phải viết nội dung — dùng bản nháp trong F3.
+
 ## Trạng thái luật v7 (2026-11-16) — ĐỌC TRƯỚC
 
 > **Cập nhật 16/11 (tối): giao diện v7 đã có bản đầu** trong `main.js` (các khối "v7: …"): ô vé, tháp hạt (hộp đổ hạt, nhãn mức hạt, cho ăn riêng qua Kho), thanh thể lực, nút "Gõ!" ở ổ ấp, rương theo giờ, thẻ "lấy vé" ở chợ, gian hàng + hộp thoại cho cả 7 loại khách, sân chơi với **một** trò "đúng nhịp" dùng chung cho mọi tuổi.
 > Đã xem trên trình duyệt (offline): tháp hạt, rương theo giờ, gian hàng lúc vắng khách, một lượt sân chơi trọn vẹn. **Chưa xem:** hộp thoại khi có khách thật (7 kiểu), gõ trứng, gà mái ấp giúp, bản online, màn hình dọc.
 > **Cập nhật 17/11:** bốn trò chơi theo tuổi đã có trong `js/game/play.js` (nhảy vũng nước / chạy đua đèn xanh đèn đỏ / mổ hạt / giữ trứng thăng bằng), nhận thuộc tính của gà (`stats`); trứng đang ấp vào chơi bằng cách chạm điểm "Sân chơi". Đã chạy thử cả bốn bằng thao tác giả lập và xem trò trứng trên màn hình dọc; ba trò còn lại chưa xem bằng mắt.
+> **Cập nhật 17/11 (2):** đã thử trên trình duyệt cả 7 bảng khách với khách thật (mua, đổi, giao đơn lúc chưa có gà, soi trứng, mặc cả, ba giỏ) — đều chạy. Bốn món trang trí của nghệ nhân đã có hình (`ownedDecor` trong `decor.js`) nhưng CHƯA xem trên trình duyệt.
 > Còn thiếu so với cột "Còn lại" bên dưới: hình 4 món trang trí của nghệ nhân, con đường trước cổng, gà hết sức đi chậm ngoài đồng, chữ v7 chưa qua `i18n.js`.
 
 Phần **luật và server** của ba cơ chế khó đã cài và có test cốt lõi; phần **giao diện chưa có** (người chơi chưa thấy gì mới):

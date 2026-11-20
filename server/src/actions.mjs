@@ -59,7 +59,7 @@ export const ACTIONS = {
   candle: (s, a, now, rolled) => R.candle(s, a.eggId, a.what, now, { rng: mulberry32(rolled.seed >>> 0) }),
   haggle: (s, a, now, rolled) => R.haggle(s, a.offer, now, { rng: mulberry32(rolled.seed >>> 0) }),
   knockEgg: (s, a, now) => R.knockEgg(s, a.eggId, now),
-  startPlay: (s, a, now) => R.startPlay(s, a.id, now),
+  startPlay: (s, a, now) => R.startPlay(s, a.id, now, { pay: a.pay }),
   endPlay: (s, a, now) => R.endPlay(s, a.score, now),
   fillTower: (s, a, now) => R.fillTower(s, a.seed, a.n, now),
   takeFromTower: (s, a, now) => R.takeFromTower(s, a.seed, a.n, now),
@@ -99,7 +99,8 @@ export function clientView(state, memorialMax = 20, now = null) {
   const { floor, ...visitPublic } = visit ?? {};
   return {
     ...rest,
-    eggs: eggs.map(({ code, mutations, ...e }) => ({ ...e, incubateMin: Math.round(R.incubateMsOf(code) / 6000) / 10 })),
+    // trứng bí ẩn: kết quả (mystery) giấu tới khi nở
+    eggs: eggs.map(({ code, mutations, mystery, ...e }) => ({ ...e, incubateMin: Math.round(R.incubateMsOf(code) / 6000) / 10 })),
     ...(visit ? { visit: visitPublic } : {}),
     ...(now != null ? { visitor: R.visitorView(state, now) } : {}),
     memorial: memorial.slice(-memorialMax),

@@ -15,7 +15,7 @@ import { FIELD, createField, addChicken, removeChicken, tickField, snapshot, fie
 import { sfx, sound, buzz, burst, confetti, flyTo, bump } from "./fx.js";
 import { GAMES, GAME_NAMES } from "./play.js";
 import { t, name as tname, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
-import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, ticketSvg } from "../art/decor.js";
+import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, ticketSvg, ownedDecor, roadSvg, relicSvg } from "../art/decor.js";
 
 let ICONS = null;
 try {
@@ -432,6 +432,7 @@ $("#reveal").addEventListener("cancel", (e) => e.preventDefault()); // Esc khôn
 
 // Độ quý của một bộ gen (chỉ để trình diễn): đặc điểm càng hiếm càng nặng điểm.
 // Ngưỡng chỉnh theo 20.000 bộ gen ngẫu nhiên: thường ~60%, đẹp ~26%, quý ~11%, huyền thoại ~3%.
+const relicName = (k) => tname("relic", k, R.MYSTERY.find((m) => m.key === k)?.name ?? k);
 const RARE_W = { silkie: 5, splash: 5, fiveToes: 3, rumpless: 3, frizzle: 3, longTail: 3, mottled: 2, spangled: 2, laced: 2, barred: 2, darkSkin: 2, crest: 2, muff: 2, feetFeather: 2, blue: 1.5, rose: 0.5, pea: 0.5, walnut: 0.5 };
 const TIERS = [[12, 4, "Gà huyền thoại"], [9, 3, "Gà quý"], [6, 2, "Gà đẹp"], [0, 1, "Gà thường"]];
 const TIER_COLORS = { 1: ["#fff", "#ffe9a6", "#cfd8dc"], 2: ["#7fd0ff", "#fff", "#bfe6ff"], 3: ["#d0a8ff", "#fff", "#f0b3ff"], 4: ["#ffd95a", "#fff3b0", "#ff9d5c"] };
@@ -484,6 +485,7 @@ const REVEAL = {
     if (st.speed >= 0.62) perks.push("Chạy nhanh");
     if (ph.sex === "hen" && st.eggRate >= 0.62) perks.push("Sai trứng");
     const breeds = R.breedsOf(ch.code).map((k) => R.BREEDS.find((b) => b.key === k).name);
+    const relic = ch.relic ? `<div class="rv-relic">${relicSvg(ch.relic, 56)}<span><b>Kỳ vật: ${esc(relicName(ch.relic))}</b><br><small>Bộ phận độc nhất — không lai giống ra được, không truyền cho con</small></span></div>` : "";
     const note = breeds.length
       ? `Mang đủ gen của giống <b>${esc(breeds.join(", "))}</b> — nuôi đủ chất tới lớn là đạt giống!`
       : keys.length ? "Các đặc điểm này hiện rõ dần khi gà lớn — nếu được ăn đủ chất." : "";
@@ -491,7 +493,7 @@ const REVEAL = {
       <p class="rv-kicker">${ph.sex === "rooster" ? "Một chú gà trống" : "Một cô gà mái"} chào đời</p>
       <div class="rv-art">${chickenSvg(ch, { detail: "high" }).svg}</div>
       <h2 class="rv-title">${ph.sex === "rooster" ? "♂" : "♀"} ${esc(ch.name)}</h2>
-      <span class="rv-tier tier-${tier.n}">${tier.name}</span>
+      <span class="rv-tier tier-${ch.relic ? 4 : tier.n}">${ch.relic ? "Gà kỳ vật" : tier.name}</span>${relic}
       ${keys.length ? `<ul class="rv-chips" aria-label="Đặc điểm mang trong gen">${keys.map((k) => dexChip(k, r.fresh.includes(k))).join("")}</ul>` : `<p class="rv-sub">Một bé gà mộc mạc — nuôi khéo vẫn đẹp.</p>`}
       ${perks.length ? `<p class="rv-sub">${perks.join(" · ")}</p>` : ""}
       ${note ? `<p class="rv-note">${note}</p>` : ""}
@@ -499,7 +501,8 @@ const REVEAL = {
     sfx("hatch");
     sfx("cheep", 0.55);
     buzz(30);
-    confetti($("#reveal"), { colors: [...TIER_COLORS[tier.n], "#e4572e", "#7cc35f"] });
+    confetti($("#reveal"), { n: ch.relic ? 90 : 44, colors: [...TIER_COLORS[ch.relic ? 4 : tier.n], "#e4572e", "#7cc35f"] });
+    if (ch.relic) sfx("fanfare", 0.4);
     await rvWait();
     hiddenChicks.delete(r.chickenId);
   },
@@ -529,7 +532,7 @@ const REVEAL = {
     if (g.tickets) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${ticketSvg(34)}<b>×${g.tickets}</b><span>vé</span></li>`);
     if (g.decor) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${chestSvg(true)}<b>Đồ trang trí</b></li>`);
     const egg = g.eggId && state.eggs.find((e) => e.id === g.eggId);
-    if (egg) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${eggArt(egg)}<b>Trứng quà</b><span>có phôi</span></li>`);
+    if (egg) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${eggArt(egg)}<b>${egg.mysteryEgg ? "Trứng bí ẩn" : "Trứng quà"}</b><span>${egg.mysteryEgg ? "nở ra mới biết" : "có phôi"}</span></li>`);
     const canIncubate = !!egg && state.incubators.includes(null) && state.chickens.length + state.incubators.filter(Boolean).length < state.coopCap;
     const title = r.title ?? (r.id === "chest" ? "Rương ngày!" : r.id === "timed" ? "Rương theo giờ!" : r.id === "tutorial" ? "Xong một bước!" : "Xong việc!");
     const act2 = g.bagId || canIncubate;
@@ -620,6 +623,12 @@ async function openBags(ids, { direct = false } = {}) {
 
 /* ---------- thanh tài nguyên ---------- */
 
+// Sức chơi: 5 chấm; rê chuột xem khi nào có thêm điểm.
+function energyChip() {
+  const n = R.energyOf(state, now()), max = R.CONFIG.energy.max, next = R.energyNextAt(state, now());
+  const tip = n >= max ? "Sức chơi đầy — chơi miễn phí ở sân chơi" : `Sức chơi ${n}/${max} — thêm 1 sau ${fmtEta(next - now())}`;
+  return `<span class="chip energy" data-res="energy" title="${tip}" aria-label="${tip}">${"<i class=on></i>".repeat(n)}${"<i></i>".repeat(max - n)}</span>`;
+}
 let resPrev = null;
 function renderRes() {
   const seeds = Object.values(state.inventory).reduce((a, b) => a + b, 0);
@@ -629,6 +638,7 @@ function renderRes() {
     <button type="button" class="chip" data-res="seeds" data-open="store" title="Hạt trong kho" aria-label="${seeds} hạt trong kho">${seedIcon("common", 16)} ${seeds}</button>
     <button type="button" class="chip" data-res="eggs" data-open="store" title="Trứng trong kho / tổng (sân + kho)" aria-label="${stored} trứng trong kho, tổng ${eggs.length}/${R.CONFIG.storage.eggs}">🥚 ${stored} · ${eggs.length}/${R.CONFIG.storage.eggs}</button>
     <button type="button" class="chip" data-res="bags" data-open="store" title="Túi hạt chưa mở" aria-label="${state.bags.length} túi hạt chưa mở">${bagArt(16)} ${state.bags.length}</button>
+    ${state.energy ? energyChip() : ""}
     ${hasV7() ? `<span class="chip" data-res="tickets" title="Vé — vào sân chơi, mua ở gian hàng" aria-label="${state.tickets} vé">${ticketSvg(16)} ${state.tickets}</span>` : ""}
     <span class="chip" data-res="chickens" title="Gà trong trại" aria-label="${state.chickens.length}/${state.coopCap} gà trong trại">🐔 ${state.chickens.length}/${state.coopCap}</span>`);
   $("#clock").textContent = `Giờ trong game: ${new Date(now()).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`;
@@ -663,7 +673,7 @@ const ZONES = [
   { key: "coop", label: "Chuồng · Kho", accepts: ["egg"], aria: "Chuồng: mở Kho. Kéo trứng vào để cất" },
   { key: "feeder", label: "Tháp hạt", accepts: [], aria: "Tháp hạt: đổ hạt vào cho gà tự ăn" },
   { key: "stall", label: "Gian hàng", accepts: [], aria: "Gian hàng bên đường: xem khách đang ghé" },
-  { key: "play", label: "Sân chơi", accepts: ["chicken"], aria: "Sân chơi: kéo gà vào để chơi (tốn 1 vé)" },
+  { key: "play", label: "Sân chơi", accepts: ["chicken"], aria: "Sân chơi: kéo gà vào để chơi (tốn 1 sức chơi, hết thì 1 vé)" },
 ];
 
 function renderZones() {
@@ -686,8 +696,8 @@ function zoneTap(z) {
   if (z === "play") {
     // trứng đang ấp không kéo được: chạm sân chơi để chơi với quả trứng trong ổ
     const egg = hasV7() && state.eggs.find((e) => e.hatchAt !== null && (e.played ?? 0) < R.CONFIG.play.eggMax);
-    if (egg && state.tickets > 0) playFlow(egg.id);
-    else toast(egg ? "Hết vé" : "Kéo một con gà vào sân chơi (tốn 1 vé). Có trứng đang ấp thì chạm vào đây để chơi với trứng");
+    if (egg && canPlay()) playFlow(egg.id);
+    else toast(egg ? "Hết sức chơi và vé — sức chơi hồi 1 điểm mỗi 30 phút" : "Kéo một con gà vào sân chơi. Có trứng đang ấp thì chạm vào đây để chơi với trứng");
   }
 }
 $("#yard-zones").addEventListener("click", (ev) => zoneTap(ev.target.closest("[data-zone]")?.dataset.zone));
@@ -968,6 +978,7 @@ function drawChickens(list, layer, els, poseOf) {
       layer.append(el);
     }
     el.querySelector(".tag").textContent = ch.name;
+    if (ch.relic && !el.querySelector(".relic-float")) el.insertAdjacentHTML("beforeend", `<span class="relic-float" title="${esc(relicName(ch.relic))}">${relicSvg(ch.relic, 22)}</span>`);
     el.style.left = `${(c.x / W) * 100}%`;
     el.style.top = `${(c.y / H) * 100}%`;
     el.style.zIndex = String(Math.round(c.y));
@@ -1017,7 +1028,7 @@ function dropPreview(d, z, cx, cy) {
   if (d.kind === "chicken") {
     if (z.key === "gate") return { text: "Ra cánh đồng", ok: true };
     if (z.key === "market") return { text: "Đổi ở chợ", ok: true };
-    if (z.key === "play") return (state.tickets ?? 0) > 0 ? { text: "Vào sân chơi · 1 vé", ok: true } : { text: "Hết vé", ok: false };
+    if (z.key === "play") return canPlay() ? { text: canPlay() === "energy" ? "Vào sân chơi" : "Vào sân chơi · 1 vé", ok: true } : { text: "Hết sức chơi và vé", ok: false };
     if (z.key === "feeder") return Object.values(state.inventory).some((n) => n > 0) ? { text: "Tự chọn hạt", ok: true } : { text: "Kho hết hạt", ok: false };
   }
   if (d.kind === "egg") {
@@ -1297,6 +1308,7 @@ function renderInfo() {
   else if (v.satiety01 < 0.3) b.push('<span class="badge warn">Sắp đói</span>');
   if (ch.sex === "hen" && v.stage === "adult") b.push(v.canLay ? '<span class="badge ok">Có thể đẻ</span>' : '<span class="badge">Chưa đủ no để đẻ</span>');
   if (ch.mutationBoost > 0) b.push('<span class="badge">Dễ biến dị</span>');
+  if (ch.relic) b.push(`<span class="badge gold">Kỳ vật: ${esc(relicName(ch.relic))}</span>`);
   for (const k of R.breedsOf(ch.code)) {
     const br = R.BREEDS.find((x) => x.key === k);
     b.push(`<span class="badge gold" title="${br.traits.map((t) => R.DEX.find((d) => d.key === t).name).join(" + ")}">${v.stage === "adult" && state.breeds?.[k] != null ? "Giống" : "Mang gen giống"} ${esc(br.name)}</span>`);
@@ -1482,6 +1494,7 @@ $("#store-dialog").addEventListener("click", async (ev) => {
 $("#open-store").addEventListener("click", openStore);
 $("#open-log").addEventListener("click", () => $("#log-dialog").showModal());
 $("#open-help").addEventListener("click", () => $("#help-dialog").showModal());
+$("#replay-intro")?.addEventListener("click", () => { $("#help-dialog").close(); playIntro(true); });
 
 /* ---------- sổ sưu tầm (★ đã nở · ★★ nuôi đủ chất) + mốc mở chuồng (Q13) ---------- */
 
@@ -1501,6 +1514,8 @@ function renderDex() {
     return `<li class="dex-item${st ? "" : " unknown"}"><span class="dot" style="background:var(--${d.group})" title="${esc(R.NUTRIENT_INFO[d.group].name)}"></span><span class="nm">${st ? esc(d.name) : "???"}</span>${stars}</li>`;
   }).join("");
   const got = state.breeds ?? {};
+  const relics = state.relics ?? {};
+  $("#relic-list").innerHTML = R.MYSTERY.map((m) => `<div class="breed${relics[m.key] != null ? " got" : ""}"><span class="tier">Kỳ vật</span>${relics[m.key] != null ? relicSvg(m.key, 36) : ""}<b>${relics[m.key] != null ? esc(relicName(m.key)) : "???"}</b></div>`).join("");
   $("#breed-cap").textContent = `(${Object.keys(got).length}/${R.BREEDS.length})`;
   $("#breed-list").innerHTML = R.BREEDS.map((b) => `<div class="breed${got[b.key] != null ? " got" : ""}"><span class="tier">${BREED_TIER[b.tier]}</span><b>${esc(b.name)}</b><ul>${b.traits.map((t) => `<li class="${dex[t] ? "has" : ""}">${dex[t] ? esc(R.DEX.find((d) => d.key === t).name) : "???"}</li>`).join("")}</ul></div>`).join("");
 }
@@ -1608,6 +1623,7 @@ function stepLucky() {
 function takeLucky(ev) {
   const out = state?.chickens.find((c) => c.location === "field");
   if (!lucky || lucky.taken || !out || ev.target.closest(".lucky") !== lucky.el) return;
+  if (hasV7() && R.staminaOf(out) < 1) return toast(`${out.name} mệt quá, chạy không nổi — về chuồng nghỉ đã`);
   if (!setLure(field, out.id, lucky.x, lucky.y)) return;
   lucky.taken = true;
   lucky.el.classList.add("taken");
@@ -1687,6 +1703,12 @@ $("#field-roster").addEventListener("click", async (ev) => {
 });
 function stepField() {
   if (!fieldRunning || !field) return;
+  // gà hết thể lực thì đi chậm một nửa
+  for (const [id, a] of field.chickens) {
+    const ch = state.chickens.find((c) => c.id === id);
+    a.base ??= a.speed;
+    a.speed = a.base * (hasV7() && ch && R.staminaOf(ch) < 1 ? 0.5 : 1);
+  }
   const target = now() - fieldOrigin;
   let n = 0;
   while (field.t + FIELD.tickMs <= target && n < 400) {
@@ -1883,6 +1905,8 @@ function renderDecor() {
   if (hasV7()) {
     const vis = R.visitorView(state, now());
     const here = vis?.who && !vis.gone;
+    extra.unshift({ key: "road", x: 400, y: 480, w: 800, html: roadSvg() }); // vẽ trước mọi thứ khác
+    extra.push(...ownedDecor(state.decorOwned));
     extra.push({ key: "stall", x: SPOTS.stall.x, y: SPOTS.stall.y + 34, w: 96, html: stallSvg() }, { key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 30, w: 96, html: playgroundSvg() });
     if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.stall.x - 46, y: SPOTS.stall.y + 40, w: 62, html: visitorSvg(vis.who) });
     const z = $('#yard-zones [data-zone="stall"]');
@@ -2014,7 +2038,8 @@ function renderVisitor() {
   if (v.who === "seller" || v.who === "artisan") {
     html = `<div class="v-list">${v.stock.map((it, i) => `<div class="v-card${done(i) ? " done" : ""}"><div class="art">${itemArt(it)}</div><b>${esc(itemText(it))}</b><button type="button" class="small primary" data-buy="${i}"${done(i) ? " disabled" : ""}>${done(i) ? "Đã mua" : `Mua ${price(it.price)}`}</button></div>`).join("")}</div>`;
   } else if (v.who === "stranger") {
-    html = `<p class="muted">Tỉ lệ: 1 trong 4 giỏ có trứng mang đặc điểm hiếm; các giỏ còn lại có hạt quý, hạt lạ hoặc túi quà. Mỗi lượt chỉ chọn một giỏ.</p><div class="v-list">${v.stock.map((it, i) => `<div class="v-card${v.bought.length ? " done" : ""}"><div class="art">${bagArt(64)}</div><b>Giỏ ${i + 1}</b><button type="button" class="small primary" data-buy="${i}"${v.bought.length ? " disabled" : ""}>Chọn ${price(it.price)}</button></div>`).join("")}</div>`;
+    const it = v.stock[0];
+    html = `<p class="muted">Trứng bí ẩn: khoảng ${Math.round(R.CONFIG.mystery.chance * 100)}% nở ra gà mang một <b>kỳ vật</b> — bộ phận độc nhất không lai giống ra được (đuôi công, cánh bướm…). Có hay không, chỉ biết khi trứng nở.</p><div class="v-list"><div class="v-card${done(0) ? " done" : ""}"><div class="art">${eggArt({ id: "m", shell: R.CONFIG.mystery.shell, fertile: true })}</div><b>Trứng bí ẩn</b><button type="button" class="small primary" data-buy="0"${done(0) ? " disabled" : ""}>${done(0) ? "Đã mua" : `Mua ${price(it.price)}`}</button></div></div>`;
   } else if (v.who === "trader") {
     html = `<div class="v-list">${v.stock.map((o, i) => `<div class="v-card${done(i) ? " done" : ""}"><div class="art">${itemArt(o.get)}</div><b>${esc(rewardText(o.get))}</b><span class="muted">đổi lấy ${o.give.seed ? `${o.give.n} ${seedName(o.give.seed).toLowerCase()}` : `${o.give.eggs} trứng không phôi`}</span><button type="button" class="small primary" data-barter="${i}"${done(i) ? " disabled" : ""}>${done(i) ? "Đã đổi" : "Đổi"}</button></div>`).join("")}</div>`;
   } else if (v.who === "collector") {
@@ -2062,7 +2087,7 @@ $("#visitor-body").addEventListener("click", async (ev) => {
     else if (d.deliver) { sfx("coin"); if (d.deliver === selectedId) select(null); toast(`Giao gà, nhận ${r.tickets} vé`); }
     else if (r.got) {
       $("#visitor-dialog").close();
-      queueReveal({ kind: "reward", id: "shop", title: r.rare ? "Trúng giỏ quý!" : r.rare === false ? "Trong giỏ có…" : "Mua xong!", got: r.got });
+      queueReveal({ kind: "reward", id: "shop", title: d.barter != null ? "Đổi xong!" : "Mua xong!", got: r.got });
       pumpReveals();
     }
   }
@@ -2119,10 +2144,15 @@ function playStats(ch) {
   const ph = express(decodeGenome(ch.code), R.chickenView(ch, now()).care);
   return { speed: clampN(ph.stats.speed ?? 0.5, 0, 1), jump: clampN((ph.shape.legLen - 0.55) / 0.9, 0, 1), eye: clampN((ph.shape.eyeSize - 0.8) / 0.45, 0, 1) };
 }
+// Cách trả cho lượt kế tiếp: sức chơi trước (miễn phí), hết thì vé; không còn gì → null.
+const canPlay = () => (state.energy && R.energyOf(state, now()) > 0 ? "energy" : (state.tickets ?? 0) >= R.CONFIG.play.cost ? "ticket" : null);
 async function playFlow(id) {
   const ch = state.chickens.find((c) => c.id === id);
   const eggSubject = ch ? null : state.eggs.find((e) => e.id === id);
-  const st = await act("startPlay", { id });
+  const pay = canPlay();
+  if (!pay) { sfx("error"); return toast("Hết sức chơi và vé — sức chơi hồi 1 điểm mỗi 30 phút"); }
+  if (pay === "ticket" && !confirm("Hết sức chơi. Chơi bằng 1 vé (thưởng gấp rưỡi, thắng thì hoàn vé)?")) return;
+  const st = await act("startPlay", { id, ...(pay === "ticket" ? { pay } : {}) });
   handleEvents(st.events ?? []);
   if (!st.ok) { sfx("error"); toast(st.message); return renderAll(); }
   save();
@@ -2149,7 +2179,7 @@ async function playFlow(id) {
       <div class="rv-art">${ch ? chickenSvg(ch, { detail: "high" }).svg : eggArt(eggSubject ?? { id: "p", shell: "#f3ead8", fertile: true })}</div>
       <h2 class="rv-title">${r.win ? "Thắng rồi!" : pct >= 30 ? "Cũng được đấy" : "Hụt mất rồi"}</h2>
       <p class="rv-sub">Điểm ${pct}/100${r.win ? "" : ` · cần ${Math.round(R.CONFIG.play.winAt * 100)} để thắng`}</p>
-      <ul class="rv-list"><li>${!ch ? "Quả trứng sẽ nở sớm hơn" : (r.score ?? 0) <= 0 ? `${esc(ch.name)} chơi xong thì đói và mệt hơn` : st.kind === "peck" ? `${esc(ch.name)} khoẻ ra một chút, nhưng đói và mệt hơn` : `${esc(ch.name)} lớn nhanh hơn một chút, nhưng đói và mệt hơn`}</li>${r.ticket ? `<li>${ticketSvg(16)} Thắng: nhận lại 1 vé</li>` : r.win ? "<li>Hôm nay đã nhận đủ vé thưởng</li>" : ""}</ul>
+      <ul class="rv-list"><li>${!ch ? "Quả trứng sẽ nở sớm hơn" : (r.score ?? 0) <= 0 ? `${esc(ch.name)} chơi xong thì đói và mệt hơn` : st.kind === "peck" ? `${esc(ch.name)} khoẻ ra một chút, nhưng đói và mệt hơn` : `${esc(ch.name)} lớn nhanh hơn một chút, nhưng đói và mệt hơn`}</li>${r.ticket ? `<li>${ticketSvg(16)} Thắng: nhận lại 1 vé</li>` : r.win && r.pay === "ticket" ? "<li>Hôm nay đã nhận đủ vé thưởng</li>" : ""}${r.pay === "ticket" ? "<li>Chơi bằng vé: thưởng gấp rưỡi</li>" : `<li>Sức chơi còn ${R.energyOf(state, now())}/${R.CONFIG.energy.max}</li>`}</ul>
       <div class="rv-actions"><button type="button" class="gold" data-go="ok">Về trại</button></div>`);
     sfx(r.win ? "claim" : "pop");
     if (r.win) confetti($("#reveal"), { n: 30 });
@@ -2306,7 +2336,36 @@ async function showStarterOnline() {
   $("#starter").showModal();
 }
 
-function showStarter() {
+// Đoạn mở đầu: vài khung hình chạy một lần trước màn chọn trứng (xem lại được trong Cách chơi).
+const INTRO_KEY = "trai-ga-intro";
+async function playIntro(force = false) {
+  try { if (!force && localStorage.getItem(INTRO_KEY)) return; localStorage.setItem(INTRO_KEY, "1"); } catch {}
+  const yard = ICONS?.yardBackdrop ? ICONS.yardBackdrop(800, 480, 7) : "";
+  const egg = (shell, i) => renderEggFlat({ egg: { shell, speckle: 0.2, seed: 11 + i } }, { label: "Trứng" });
+  const letter = `<svg viewBox="0 0 120 90"><rect x="14" y="8" width="92" height="74" rx="6" fill="#fffdf6" stroke="#d6ccb4" stroke-width="2"/>${[24, 36, 48, 60].map((y, i) => `<path d="M28,${y} h${i === 3 ? 40 : 64}" stroke="#b9ad94" stroke-width="3" stroke-linecap="round"/>`).join("")}<path d="M80,68 q8,-10 16,0" stroke="#e4572e" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`;
+  const frames = [
+    { art: `<div class="intro-art old">${yard}</div>`, text: "Trại gà cũ bỏ hoang đã lâu. Cỏ mọc kín sân, chuồng không còn tiếng gà." },
+    { art: `<div class="intro-eggs">${["#f3ead8", "#b5dccd", "#c69a72"].map(egg).join("")}</div>`, text: "Nhưng trong ổ rơm vẫn còn sót lại ba quả trứng." },
+    { art: `<div class="intro-letter">${letter}</div>`, text: "Kèm một lá thư: “Mỗi quả mang một dòng giống riêng. Hãy chọn một quả và sưởi ấm nó…”" },
+    { art: `<div class="intro-art">${yard}</div>`, text: "…rồi cùng dựng lại trại gà nhé!", last: true },
+  ];
+  revealBusy = true;
+  try {
+    for (const f of frames) {
+      rvShow(`<div class="intro">${f.art}<p class="rv-title intro-text">${f.text}</p><div class="rv-actions"><button type="button" class="gold" data-go="next">${f.last ? "Bắt đầu" : "Tiếp"}</button>${f.last ? "" : '<button type="button" class="plain" data-go="skip">Bỏ qua</button>'}</div></div>`);
+      for (const el of rvBody().querySelectorAll(".intro-eggs svg")) zoomArt(el);
+      sfx(f.last ? "claim" : "pop");
+      if ((await rvWait()) === "skip") break;
+    }
+  } finally {
+    revealBusy = false;
+    if ($("#reveal").open) $("#reveal").close();
+    rvBody().innerHTML = "";
+  }
+}
+
+async function showStarter() {
+  await playIntro();
   if (online) return showStarterOnline();
   const seed = (Math.random() * 2 ** 32) >>> 0;
   const eggs = R.starterEggs(seed);

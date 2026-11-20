@@ -155,3 +155,28 @@ export const playgroundSvg = () => svg("0 0 90 60", `
   <path d="M26,25 l4,9 4,-8z M40,28 l4,9 4,-9z M54,27 l4,9 4,-9z" fill="#e4572e"/><path d="M33,27 l4,9 4,-9z M47,28 l4,9 4,-9z" fill="#f2b318"/>
   <rect x="34" y="44" width="22" height="4" rx="2" fill="#b98652"/><rect x="43" y="40" width="4" height="10" fill="#8d5f33"/>`, "decor-play", "Sân chơi");
 export const ticketSvg = (size = 16) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path d="M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z" fill="#e4572e"/><path d="M9 7v10" stroke="#fffdf6" stroke-width="1.6" stroke-dasharray="2 2"/><circle cx="14.5" cy="12" r="2.4" fill="#ffd95a"/></svg>`;
+
+/* ---------- v7: đồ trang trí mua của nghệ nhân (state.decorOwned) ---------- */
+const OWNED = {
+  bench: { x: 560, y: 196, w: 62, html: () => svg("0 0 60 34", `<ellipse cx="30" cy="31" rx="26" ry="2.6" fill="#000" opacity=".12"/><rect x="6" y="6" width="48" height="5" rx="2" fill="#d7a970"/><rect x="6" y="13" width="48" height="4" rx="2" fill="#b98652"/><rect x="4" y="19" width="52" height="5" rx="2" fill="#d7a970"/><rect x="9" y="6" width="3.4" height="24" fill="#8d5f33"/><rect x="47.6" y="6" width="3.4" height="24" fill="#8d5f33"/>`, "decor-bench", "Ghế gỗ") },
+  well: { x: 232, y: 318, w: 58, html: () => svg("0 0 56 64", `<ellipse cx="28" cy="60" rx="22" ry="3" fill="#000" opacity=".12"/><rect x="9" y="8" width="3.4" height="34" fill="#8d5f33"/><rect x="43.6" y="8" width="3.4" height="34" fill="#8d5f33"/><path d="M4,12 L28,0 L52,12Z" fill="#c4643f"/><path d="M12,10 h32" stroke="#7d5a2e" stroke-width="2.4"/><path d="M28,10 v16" stroke="#7d5a2e" stroke-width="1.4"/><rect x="24" y="25" width="8" height="8" rx="1.6" fill="#b98652"/><path d="M8,40 h40 v16 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4z" fill="#a9a59c"/><path d="M8,40 h40 v5 h-40z" fill="#8d8a82"/><path d="M14,48 h8 M26,52 h9 M38,48 h6" stroke="#8d8a82" stroke-width="2" stroke-linecap="round"/>`, "decor-well", "Giếng nước") },
+  birdhouse: { x: 548, y: 66, w: 30, html: () => svg("0 0 28 46", `<rect x="12.4" y="26" width="3.2" height="20" fill="#8d5f33"/><rect x="5" y="10" width="18" height="17" rx="2" fill="#f2b318"/><path d="M2,12 L14,1 L26,12Z" fill="#e4572e"/><circle cx="14" cy="18" r="3.6" fill="#3d2a17"/><rect x="12.6" y="23" width="6" height="1.6" rx=".8" fill="#8d5f33"/>`, "decor-birdhouse", "Chuồng chim") },
+  windchime: { x: 178, y: 128, w: 24, html: () => svg("0 0 22 44", `<path d="M11,0 v8" stroke="#7d5a2e" stroke-width="1.4"/><ellipse cx="11" cy="9" rx="9" ry="2.6" fill="#b98652"/><g class="chime"><rect x="3" y="11" width="2.6" height="20" rx="1.3" fill="#9fd0d8"/><rect x="7.6" y="11" width="2.6" height="27" rx="1.3" fill="#c9e6ea"/><rect x="12.2" y="11" width="2.6" height="23" rx="1.3" fill="#9fd0d8"/><rect x="16.8" y="11" width="2.6" height="17" rx="1.3" fill="#c9e6ea"/></g>`, "decor-windchime", "Chuông gió") },
+};
+// Trang trí đã mua → danh sách cùng dạng với decorItems().
+export const ownedDecor = (keys = []) => keys.filter((k) => OWNED[k]).map((k) => ({ key: `own-${k}`, x: OWNED[k].x, y: OWNED[k].y, w: OWNED[k].w, html: OWNED[k].html() }));
+
+/* ---------- v8: con đường trước cổng, kỳ vật ---------- */
+// Dải đường đất từ cổng (762, 208) vòng xuống mép dưới, đi ngang gian hàng — vẽ trên toàn sân 800×480.
+export const roadSvg = () => `<svg viewBox="0 0 800 480" aria-hidden="true" class="decor-road">
+  <path d="M800,196 C760,214 742,236 726,276 C708,320 700,350 676,392 C650,436 622,458 610,480" fill="none" stroke="#cdb57a" stroke-width="54" stroke-linecap="round"/>
+  <path d="M800,196 C760,214 742,236 726,276 C708,320 700,350 676,392 C650,436 622,458 610,480" fill="none" stroke="#e3d39b" stroke-width="40" stroke-linecap="round"/>
+  <path d="M790,206 C758,224 744,244 732,280 M700,360 C690,380 676,404 660,426" fill="none" stroke="#ecdfad" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 14" opacity=".8"/></svg>`;
+
+const RELIC = {
+  peacockTail: `<path d="M20,34 L6,8 M20,34 L14,4 M20,34 L26,4 M20,34 L34,8" stroke="#2f8f6a" stroke-width="1.6"/>${[[6, 8], [14, 4], [26, 4], [34, 8]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4.6" fill="#2f8f6a"/><circle cx="${x}" cy="${y}" r="2.8" fill="#3d7bd5"/><circle cx="${x}" cy="${y}" r="1.2" fill="#f2b318"/>`).join("")}`,
+  butterflyWings: `<path d="M20,22 C8,4 0,12 4,22 C0,32 10,36 20,24Z" fill="#e98a2c"/><path d="M20,22 C32,4 40,12 36,22 C40,32 30,36 20,24Z" fill="#b23a9b"/><circle cx="9" cy="17" r="2.4" fill="#fffdf6"/><circle cx="31" cy="17" r="2.4" fill="#fffdf6"/><rect x="18.8" y="12" width="2.4" height="18" rx="1.2" fill="#3d2a17"/>`,
+  goldenClaws: `<path d="M8,10 L14,30 M20,8 L20,30 M32,10 L26,30" stroke="#f2b318" stroke-width="4" stroke-linecap="round"/><path d="M14,30 l-4,6 M20,30 v7 M26,30 l4,6" stroke="#c98f00" stroke-width="2.6" stroke-linecap="round"/>`,
+  dogHead: `<ellipse cx="20" cy="22" rx="12" ry="11" fill="#c08a52"/><path d="M8,16 C2,22 4,32 10,30 Z M32,16 C38,22 36,32 30,30 Z" fill="#7d5a2e"/><circle cx="15.5" cy="19" r="1.8" fill="#2c2620"/><circle cx="24.5" cy="19" r="1.8" fill="#2c2620"/><ellipse cx="20" cy="26" rx="4" ry="3" fill="#2c2620"/><path d="M20,29 q0,4 -3,5 M20,29 q0,4 3,5" stroke="#2c2620" stroke-width="1.2" fill="none"/>`,
+};
+export const relicSvg = (key, size = 40) => `<svg viewBox="0 0 40 40" width="${size}" height="${size}" class="relic-icon" aria-hidden="true">${RELIC[key] ?? `<circle cx="20" cy="20" r="12" fill="#ffd95a"/>`}</svg>`;

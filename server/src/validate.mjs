@@ -77,7 +77,7 @@ export const ARGS = {
   fieldBonus: (b) => ({ chickenId: id(b, "chickenId") }), // đốm sáng: phần thưởng do SERVER tung
   claim: (b) => ({ id: questId(b) }), // nhận thưởng nhiệm vụ
   // luật v7 — sân chơi: điểm phải là SỐ hữu hạn (luật còn kẹp về 0..1 lần nữa)
-  startPlay: (b) => ({ id: id(b, "id") }),
+  startPlay: (b) => ({ id: id(b, "id"), ...(b.pay === "ticket" ? { pay: "ticket" } : {}) }),
   endPlay: (b) => {
     if (typeof b.score !== "number" || !Number.isFinite(b.score)) throw bad('"score" phải là một số');
     return { score: b.score };

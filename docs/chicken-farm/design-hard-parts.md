@@ -340,3 +340,34 @@ Tặng hạt/trứng/vé của chính mình = chuyển vật phẩm giữa ngư�
 - Giới hạn chung 20 thư/ngày đã có; bưu thiếp tính vào đó.
 - Chữ tự do: **không làm** cho tới khi có đủ cả ba: tài khoản thật (email), nút báo cáo + chặn có người xử lý, lọc từ. Ghi vào `production-plan.md` như một mốc riêng, không phải việc "làm thêm sau".
 - Test: S23 `chickenId` không thuộc trại người gửi → từ chối · S24 thân request có trường `name` / `text` tự đặt → bị bỏ qua, thư chứa tên thật của gà · S25 gà bị đổi sau khi gửi → người nhận vẫn mở được bưu thiếp.
+
+---
+
+## H3 bổ sung (17/11) — soát kinh tế vé bằng tính tay, trước khi có mô phỏng
+
+Tính từ số liệu `balance-sim` đã có (trứng có phôi mỗi ngày: Ghé thăm ~5, Chăm ~17, Cày ~20) và cấu hình hiện tại. Ba lỗi thiết kế tìm được và đã sửa trong `rules.js`:
+
+| Lỗi | Vì sao | Sửa |
+|---|---|---|
+| **Người mới không bao giờ vào được sân chơi** | Vào chơi tốn 1 vé; nguồn vé (đổi trứng có phôi / gà lớn, người sưu tầm) đều cần đã có đàn sinh sản → ngày đầu 0 vé | Trại mới có sẵn 3 vé (`CONFIG.tickets.start`) |
+| **Vé của rương theo giờ không ai lấy được** | Tổng thời gian chờ tới bậc cuối là 5′ + 15′ + 1h + 4h + 12h + 24h ≈ 41 giờ, trong khi rương về bậc đầu mỗi ngày | Bỏ việc về bậc đầu theo ngày; nhận bậc cuối xong thì quay vòng → khoảng 1 vé mỗi 2 ngày cho người vào đều |
+| **Trứng hiếm chậm gấp 3 mục tiêu, bất kể có bao nhiêu vé** | Trứng hiếm chỉ đến từ khách lạ: ghé 20% số ngày × trúng 25% = 1 quả mỗi ~20 ngày (mục tiêu 5–7 ngày) | Khách lạ ghé 35% số ngày, trúng 35% → 1 quả mỗi ~8 ngày, tốn trung bình ~34 vé |
+
+Thu chi mỗi ngày sau khi sửa (ước tính, **chưa mô phỏng**):
+
+| | Ghé thăm | Chăm / Cày |
+|---|---|---|
+| Đổi trứng có phôi (trần 3) | +3 | +3 |
+| Đổi gà trưởng thành (trần 2 con, 2 vé/con) | +2 | +4 |
+| Người sưu tầm (ghé 40% số ngày, ~4 vé, giao được ~nửa số lần) | +0,4 | +0,8 |
+| Rương theo giờ | +0,2 | +0,5 |
+| **Thu** | **~5,5** | **~8** |
+| Khách lạ (12 vé × 35% số ngày) | −4,2 nếu lần nào cũng chọn | −4,2 |
+| Lái buôn (≈13 vé × 20% số ngày) | −2,6 | −2,6 |
+| Bà hàng hạt (tới 7–8 vé mỗi lượt, 2 lượt/ngày) | tuỳ ý | tuỳ ý |
+| Sân chơi (thua mất 1 vé, thắng hoà) | −1…0 | −3…0 |
+| Nghệ nhân (10–18 vé, 1 lần/tuần) | −2 | −2 |
+
+Nhận xét: chỗ tiêu luôn nhiều hơn chỗ thu, nên vé không dồn tới trần 99 và người chơi phải chọn mua gì — đúng ý đồ. Trần đổi theo ngày làm Chăm và Cày gần bằng nhau (Cày không vượt Chăm quá 1,5 lần ✓). Người Ghé thăm mua nổi một giỏ của khách lạ mỗi 2–3 ngày.
+
+Hai điểm còn ngờ, cần mô phỏng mới chắc: (1) người Ghé thăm có thật sự giữ được 2 gà trưởng thành dư mỗi ngày để đổi không (ước tính trên có thể cao); (2) đổi 3 trứng + 2 gà mỗi ngày lấy vé thì còn đủ trứng/gà đổi túi hạt để nuôi đàn không.

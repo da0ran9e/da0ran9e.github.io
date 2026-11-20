@@ -2,11 +2,13 @@
 // CHƯA có test ở đây (để lại): P6 lượt dở quá hạn, P11 gà bị đổi giữa lượt, P13 kiểu trò theo tuổi, thể lực ngoài đồng / ban đêm.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CONFIG, TIME, NUTRIENTS, newGame, advance, incubate, startPlay, endPlay, tradeToShop, staminaOf, staminaMaxOf } from "../../public/apps/chicken-farm/js/game/rules.js";
+import { CONFIG, TIME, NUTRIENTS, newGame, advance, incubate, startPlay as startPlayAny, endPlay, tradeToShop, staminaOf, staminaMaxOf, energyOf, energyNextAt } from "../../public/apps/chicken-farm/js/game/rules.js";
 
 const T0 = Date.UTC(2026, 10, 16, 3, 0, 0); // 10:00 giờ Việt Nam (ban ngày)
 const { MIN, HOUR, DAY } = TIME;
 const P = CONFIG.play;
+// Các test cũ thử lượt chơi BẰNG VÉ; lượt miễn phí (sức chơi) có test riêng ở cuối tệp.
+const startPlay = (s, id, t) => startPlayAny(s, id, t, { pay: "ticket" });
 
 function farm(tickets = 5, seed = 8) {
   const s = newGame(seed, T0);
@@ -106,28 +108,54 @@ test("P10 trứng đang ấp: rút thời gian ấp theo điểm, không sớm h
   const total = hatchAt - T0;
   assert.equal(startPlay(s, id, T0 + 1000).kind, "roll");
   endPlay(s, 0.5, T0 + 21_000);
-  assert.ok(Math.abs(hatchAt - s.eggs[0].hatchAt - P.eggCutPct * total * 0.5) < 2);
+  assert.ok(Math.abs(hatchAt - s.eggs[0].hatchAt - P.eggCutPct * P.ticketMul * total * 0.5) < 2);
   startPlay(s, id, T0 + 30_000);
   endPlay(s, 1, T0 + 50_000);
   assert.equal(startPlay(s, id, T0 + 60_000).code, "too_tired");
 });
 
-test("thể lực: mỗi lượt tốn, hết thì too_tired, nghỉ ở chuồng (không đói) thì hồi; đói thì không chơi được", () => {
-  const { s, ch, t } = farm(9);
-  const max = staminaMaxOf(ch);
-  assert.equal(staminaOf(ch), max);
-  assert.ok(max < 100 * CONFIG.stamina.stage.chick + 1, "gà con có trần thể lực thấp");
-  assert.equal(startPlay(s, ch.id, t).ok, true);
-  assert.equal(staminaOf(ch), max - P.stamina);
-  endPlay(s, 0.9, t + 20_000);
-  assert.ok(ch.fitness > 0, "chơi xong có rèn luyện");
+test("sức chơi: lượt miễn phí tốn 1 điểm, hết thì no_energy (vẫn chơi được bằng vé); hồi 1 điểm mỗi 30 phút, tối đa 5", () => {
+  const E = CONFIG.energy;
+  const { s, ch, t } = farm(0);
+  assert.equal(energyOf(s, t), E.max);
+  let at = t;
+  for (let i = 0; i < E.max; i++) {
+    ch.satiety = CONFIG.satietyMax;
+    assert.equal(startPlayAny(s, ch.id, at).ok, true, `lượt ${i + 1}`);
+    endPlay(s, 0.9, at + 20_000);
+    at += 30_000;
+  }
+  assert.equal(s.tickets, 0, "lượt miễn phí không tốn vé");
+  assert.equal(energyOf(s, at), 0);
   ch.satiety = CONFIG.satietyMax;
-  assert.equal(startPlay(s, ch.id, t + 30_000).code, "too_tired");
-  for (let i = 1; i <= 8; i++) { ch.satiety = CONFIG.satietyMax; advance(s, t + i * 30 * MIN); }
-  assert.ok(staminaOf(ch) > max - P.stamina, "đã hồi");
-  ch.satiety = P.hunger - 1;
-  ch.stamina = 999;
-  assert.equal(startPlay(s, ch.id, s.updatedAt + 1000).code, "too_hungry");
+  assert.equal(startPlayAny(s, ch.id, at).code, "no_energy");
+  assert.equal(startPlayAny(s, ch.id, at, { pay: "ticket" }).code, "no_ticket");
+  // hồi: đủ 30 phút kể từ lúc tiêu điểm đầu tiên (lúc đang đầy) mới có 1 điểm; phần lẻ không mất
+  assert.equal(energyNextAt(s, at), t + E.regenMs);
+  assert.equal(energyOf(s, t + E.regenMs - 1), 0);
+  assert.equal(energyOf(s, t + E.regenMs), 1);
+  assert.equal(energyOf(s, t + 2.5 * E.regenMs), 2);
+  assert.equal(energyOf(s, t + 99 * E.regenMs), E.max, "tối đa 5");
+  ch.satiety = CONFIG.satietyMax;
+  assert.equal(startPlayAny(s, ch.id, t + 2.5 * E.regenMs).ok, true);
+  assert.equal(energyOf(s, t + 2.5 * E.regenMs), 1);
+  assert.equal(energyOf(s, t + 3 * E.regenMs), 2, "mốc hồi giữ nguyên nhịp 30 phút cũ");
+});
+
+test("lượt miễn phí không hoàn vé; lượt bằng vé thưởng gấp rưỡi; thể lực từng con không chặn việc chơi", () => {
+  const a = farm(3);
+  a.ch.stamina = 0;
+  const g0 = a.ch.growth;
+  assert.equal(startPlayAny(a.s, a.ch.id, a.t).ok, true, "thể lực của gà không còn chặn sân chơi");
+  const r = endPlay(a.s, 1, a.t + 20_000);
+  assert.deepEqual([r.win, r.ticket, a.s.tickets], [true, false, 3]);
+  const gFree = a.ch.growth - g0;
+  const b = farm(3);
+  const g1 = b.ch.growth;
+  startPlay(b.s, b.ch.id, b.t);
+  endPlay(b.s, 1, b.t + 20_000);
+  assert.ok(Math.abs(b.ch.growth - g1 - gFree * P.ticketMul) < 0.01);
+  assert.ok(staminaMaxOf(a.ch) > 0 && staminaOf(a.ch) >= 0);
 });
 
 test("đổi lấy vé: chỉ trứng có phôi và gà trưởng thành, có trần mỗi ngày; vượt trần vẫn đổi được túi hạt", () => {

@@ -61,33 +61,34 @@ test("gõ trứng: trước mốc 85% → too_early; từ mốc đó gõ là n�
   assert.equal(knockEgg(s, id, hatchAt).code, "no_egg");
 });
 
-test("rương theo giờ: chưa tới giờ → not_done; nhận xong mới đếm bậc sau; bậc cuối có vé; sang ngày về bậc đầu", () => {
+test("rương theo giờ: mốc TÍCH LUỸ từ đầu vòng (5′, 15′, 1h, 4h, 12h, 24h); vắng lâu thì nhận liền mấy rương; hết vòng bắt đầu lại", () => {
   const s = newGame(9, T0);
   const C = CONFIG.timed;
-  assert.equal(claim(s, "timed", T0 + C[0].after - 1).code, "not_done");
-  let t = T0 + C[0].after;
-  assert.equal(claim(s, "timed", t).ok, true);
+  assert.deepEqual(C.map((c) => c.at), [5 * MIN, 15 * MIN, HOUR, 4 * HOUR, 12 * HOUR, 24 * HOUR]);
+  assert.equal(claim(s, "timed", T0 + C[0].at - 1).code, "not_done");
+  assert.equal(claim(s, "timed", T0 + C[0].at).ok, true);
   assert.equal(s.bags.at(-1).size, C[0].bag);
-  assert.equal(s.timed.step, 1);
-  assert.equal(s.timed.readyAt, t + C[1].after);
-  // vắng mặt rất lâu vẫn chỉ có MỘT rương chờ (không dồn)
-  assert.equal(claim(s, "timed", t + 1).code, "not_done");
-  // đi hết các bậc trong cùng một "ngày" giả lập bằng cách chặn việc sang ngày
-  const day = s.daily.day;
-  for (let i = 1; i < C.length; i++) {
-    t = s.timed.readyAt;
-    s.daily.day = Math.floor((t + CONFIG.daily.tzOffsetMs) / DAY); // coi như vẫn trong ngày (chỉ thử thứ tự bậc)
+  // rương 2 mở ở phút 15 tính từ đầu vòng (không phải 15 phút sau khi nhận rương 1)
+  assert.equal(questView(s).timed.readyAt, T0 + C[1].at);
+  assert.equal(claim(s, "timed", T0 + C[1].at - 1).code, "not_done");
+  // vắng mặt tới giờ thứ 13: rương 2, 3, 4, 5 đều đã tới mốc → nhận liền, mỗi lần một rương
+  const back = T0 + 13 * HOUR;
+  for (let i = 1; i <= 4; i++) {
     s.bags.length = 0;
-    const r = claim(s, "timed", t);
-    assert.equal(r.ok, true, `bậc ${i}`);
+    assert.equal(claim(s, "timed", back).ok, true, `rương ${i + 1}`);
     assert.equal(s.bags.at(-1).size, C[i].bag);
   }
-  assert.equal(s.tickets, 1, "bậc cuối tặng 1 vé");
-  assert.equal(s.timed.step, C.length - 1, "ở lại bậc cuối");
-  assert.ok(day <= s.daily.day);
-  // sang ngày mới thật: về bậc đầu, chờ không quá bậc đầu
-  advance(s, t + 2 * DAY);
-  assert.equal(s.timed.step, 0);
-  assert.ok(s.timed.readyAt <= t + 2 * DAY + C[0].after);
-  assert.equal(questView(s).timed.reward.bag, C[0].bag);
+  assert.equal(claim(s, "timed", back).code, "not_done", "rương cuối chưa tới mốc 24 giờ");
+  const tickets = s.tickets;
+  assert.equal(claim(s, "timed", T0 + 24 * HOUR).ok, true);
+  assert.equal(s.tickets, tickets + 1, "rương cuối tặng 1 vé");
+  assert.deepEqual(s.timed, { start: T0 + 24 * HOUR, claimed: 0 }, "vòng mới tính từ lúc nhận rương cuối");
+  // sang ngày không làm gì vòng đang chạy; bản lưu v7 ({step, readyAt}) được chuyển sang dạng mới
+  advance(s, T0 + 2 * DAY);
+  assert.equal(s.timed.start, T0 + 24 * HOUR);
+  const old = newGame(10, T0);
+  old.timed = { step: 3, readyAt: T0 + HOUR };
+  advance(old, T0 + MIN);
+  assert.equal(old.timed.claimed, 0);
+  assert.equal(typeof old.timed.start, "number");
 });
