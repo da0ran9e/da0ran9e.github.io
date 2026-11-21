@@ -43,9 +43,10 @@ export function createField({ seed = 1, width = FIELD.width, height = FIELD.heig
 const randIn = (f, lo, hi) => lo + f.rng() * (hi - lo);
 const randPoint = (f) => ({ x: randIn(f, f.opts.margin, f.w - f.opts.margin), y: randIn(f, f.opts.margin + f.opts.top, f.h - f.opts.margin) });
 
-export function addChicken(f, { id, speed, sight, x, y }) {
+// home {x, y, pull 0..1}: chỗ con gà thích quanh quẩn (tính cách) · restMul: nghỉ lâu / ngắn hơn bình thường
+export function addChicken(f, { id, speed, sight, x, y, home = null, restMul = 1 }) {
   const p = x == null ? randPoint(f) : { x, y };
-  f.chickens.set(id, { id, x: p.x, y: p.y, dir: f.rng() < 0.5 ? -1 : 1, speed, sight, mode: "rest", timer: randIn(f, ...FIELD.restMs), target: null, wander: null, readyAt: 0, moving: false });
+  f.chickens.set(id, { id, x: p.x, y: p.y, dir: f.rng() < 0.5 ? -1 : 1, speed, sight, mode: "rest", timer: randIn(f, ...FIELD.restMs) * restMul, target: null, wander: null, readyAt: 0, moving: false, home, restMul });
 }
 
 export function removeChicken(f, id) {
@@ -178,7 +179,8 @@ export function tickField(f, dt = FIELD.tickMs) {
       c.timer -= dt;
       if (c.timer <= 0) {
         c.mode = "wander";
-        const p = randPoint(f);
+        let p = randPoint(f);
+        if (c.home) p = { x: lerp(p.x, c.home.x, c.home.pull), y: lerp(p.y, c.home.y, c.home.pull) };
         c.wander = { x: lerp(c.x, p.x, 0.6), y: lerp(c.y, p.y, 0.6) };
       }
     } else {
@@ -187,7 +189,7 @@ export function tickField(f, dt = FIELD.tickMs) {
       if (left <= 1) {
         c.mode = "rest";
         c.wander = null;
-        c.timer = randIn(f, ...FIELD.restMs);
+        c.timer = randIn(f, ...FIELD.restMs) * (c.restMul ?? 1);
       }
     }
   }

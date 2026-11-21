@@ -16,7 +16,7 @@ Game hiện có vòng ngắn tốt (ấp, nuôi, kiếm hạt, nhận thưởng)
 - **Hợp trụ cột** 1 và 2. Thay thế tốt cho "đổi gà lấy vé" đồng giá: gà đúng đơn có giá hơn hẳn gà thường.
 - **Công sức:** vừa (luật `orderView`, `deliver`; so khớp kiểu hình đã có sẵn qua `dexKeysOf`). **Rủi ro:** phải tính lại kinh tế vé (H3) — đơn hàng là một vòi vé mới; đề nghị thay hẳn "đổi gà trưởng thành lấy 2 vé".
 
-### 2. Gia phả
+### 2. Gia phả — ĐÃ CÀI (luật v9, 21/11)
 
 - **Giải quyết:** gà chết sau 2–5 ngày; dòng gen là thứ duy nhất còn lại nhưng người chơi không nhìn thấy nó.
 - **Luật:** không có luật mới — `motherId` / `fatherId` đã lưu. Thêm vào sổ kỷ niệm đủ thông tin để vẽ (đã có `code`); cần giữ thêm `motherId`, `fatherId` trong mục kỷ niệm.
@@ -32,14 +32,14 @@ Game hiện có vòng ngắn tốt (ấp, nuôi, kiếm hạt, nhận thưởng)
 
 ## Nhóm 2 — gắn bó với từng con gà
 
-### 4. Tính cách từ gen
+### 4. Tính cách từ gen — ĐÃ CÀI (luật v9, 21/11)
 
 - **Giải quyết:** hai con gà khác màu nhưng hành xử y hệt nhau.
 - **Luật:** suy ra từ gen đã có, không thêm gen: *tham ăn* (`appetite` cao → tự ăn ở tháp sớm hơn), *hiếu động* (`speed` cao → đi lại nhiều, trò chạy đua dễ hơn), *nhút nhát* (`hardiness` thấp → hay nép gần chuồng, sống ngắn hơn như đã có), *chăm đẻ* (`eggRate`). Mỗi con mang 1–2 nhãn.
 - Chủ yếu là **hành vi trên màn hình** (bộ mô phỏng sân trại) và một dòng chữ trong màn nở trứng; ảnh hưởng luật rất nhẹ để không phá cân bằng.
 - **Công sức:** nhỏ. **Rủi ro:** thấp. Hiệu quả cảm xúc cao so với công.
 
-### 5. Lông kỷ niệm
+### 5. Lông kỷ niệm — ĐÃ CÀI (luật v9, 21/11)
 
 - **Giải quyết:** gà chết là khoảnh khắc buồn và chỉ mất, không được gì.
 - **Luật:** gà sống trọn đời (chết vì tuổi già, không phải vì đói) để lại một **chiếc lông** mang màu và hoa văn của nó, lưu vào album. Gà bị bỏ đói không để lại lông → thưởng cho chăm sóc tốt mà không phạt thêm.

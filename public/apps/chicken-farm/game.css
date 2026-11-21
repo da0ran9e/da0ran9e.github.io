@@ -733,3 +733,34 @@ body.idle .bar, body.idle .field-head, body.idle .field-roster { opacity: 0; poi
 .bar, .field-head, .field-roster { transition: opacity .3s; }
 body.idle { cursor: none; }
 .seeds { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+
+/* v9 — tính cách, gia phả, lông kỷ niệm */
+.badge.mood { background: color-mix(in srgb, var(--accent) 16%, transparent); cursor: help; }
+.rv-mood b { cursor: help; }
+.tree { display: grid; gap: 14px; padding: 4px 0 8px; }
+.tree-row { display: grid; gap: 8px; position: relative; }
+.tree-row.g2 { grid-template-columns: repeat(4, 1fr); }
+.tree-row.g1 { grid-template-columns: repeat(2, 1fr); padding-inline: 12%; }
+.tree-row.g0 { grid-template-columns: minmax(0, 220px); justify-content: center; }
+.tree-row:not(.g2)::before { content: ""; position: absolute; left: 25%; right: 25%; top: -9px; border-top: 2px dashed color-mix(in srgb, var(--muted) 45%, transparent); }
+.tree-row.g0::before { left: 30%; right: 30%; }
+.tree-row.alone::before { display: none; }
+.tree-node { background: var(--chip); border-radius: 14px; padding: 8px; display: grid; justify-items: center; gap: 2px; text-align: center; min-width: 0; }
+.tree-node.me { box-shadow: 0 0 0 2px var(--gold) inset; }
+.tree-node.gone .tn-art { opacity: .75; filter: saturate(.7); }
+.tree-node.unknown { opacity: .55; }
+.tree-node .tn-art { width: 84px; height: 84px; display: grid; place-items: center; font-size: 30px; color: var(--muted); }
+.tree-node .tn-art svg { width: 100%; height: 100%; }
+.tree-node b { font-size: 14px; overflow-wrap: anywhere; }
+.tree-node small { color: var(--muted); font-size: 12px; }
+.tree-node ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
+.tree-node li { font-size: 11px; border-radius: 999px; padding: 1px 7px; background: color-mix(in srgb, var(--muted) 14%, transparent); }
+.tree-node li.passed { background: color-mix(in srgb, var(--gold) 38%, transparent); font-weight: 700; }
+.tree-note { text-align: center; font-size: 12px; }
+@media (max-width: 560px) { .tree-row.g2 { grid-template-columns: repeat(2, 1fr); } .tree-node .tn-art { width: 64px; height: 64px; } .tree-row.g1 { padding-inline: 0; } }
+.feathers { margin: 6px 0 14px; }
+.feathers h3 { margin: 0 0 6px; font-size: 15px; }
+.feather-row { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 8px; }
+.feather-item { display: grid; justify-items: center; gap: 4px; flex: none; width: 60px; }
+.feather-item svg { filter: drop-shadow(0 2px 2px rgb(0 0 0 / .15)); transform: rotate(-12deg); }
+.feather-item small { font-size: 11px; color: var(--muted); max-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

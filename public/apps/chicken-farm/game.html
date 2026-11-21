@@ -187,10 +187,18 @@
     </form>
   </dialog>
 
+  <dialog id="tree-dialog" class="sheet">
+    <form method="dialog">
+      <div class="sheet-head"><h2 id="tree-title">Gia phả</h2><button value="close" aria-label="Đóng">✕</button></div>
+      <div class="tree" id="tree"></div>
+    </form>
+  </dialog>
+
   <dialog id="memorial-dialog" class="sheet">
     <form method="dialog">
       <div class="sheet-head"><h2>Kỷ niệm</h2><button value="close" aria-label="Đóng">✕</button></div>
       <p class="muted">Những con gà đã sống trọn đời ở trại.</p>
+      <section class="feathers" id="feathers" hidden></section>
       <div class="memorial" id="memorial"></div>
     </form>
   </dialog>

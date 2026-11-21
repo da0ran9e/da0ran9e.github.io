@@ -18,6 +18,7 @@
 - Đã dịch nhãn SVG (`icons.js`, `decor.js`, `chicken-flat.js`) và tên màu vỏ trứng. **Còn tiếng Việt: trang Phòng gen (`index.html`, `app.js`, tên gen trong `genome.js`, ~215 chuỗi) — trang thử nghiệm, chỉ mở từ bảng Dev.**
 - Đã kiểm tra online với server cục bộ: trứng không gửi `code` về client vẫn sưởi, nở, hiện màn chào gà bình thường.
 - Đã viết các test còn để lại ở đầu `v7-tower`, `v7-play`, `v7-visitors`, `v7-brood-knock-timed`.
+- **"Có hồn" (ideas 2, 4, 5) ĐÃ CÀI:** tính cách từ gen (`PERSONALITY`, `personalityOf`: tham ăn / hiếu động / nhút nhát / chăm đẻ / điềm tĩnh — đổi chỗ quanh quẩn và nhịp nghỉ trên sân qua `addChicken({home, restMul})`, hiện ở bảng gà và màn chào đời); gia phả 3 đời (`state.family` nhớ gà đã rời trại khi còn là bố mẹ / ông bà của gà, trứng đang có — `leave()`, `kinOf()`; hộp "Gia phả" từ bảng gà, đặc điểm truyền xuống tô màu); lông kỷ niệm (`CONFIG.feather`: gà trưởng thành, đói ≤ 10% đời, chết vì tuổi già → `state.feathers`, sự kiện `feather`, album trong Kỷ niệm). Test: `v9-soul.test.mjs`. Còn có thể làm: mốc album lông mở trang trí.
 
 ## Quyết định mới của chủ dự án (2026-11-17) — CHƯA CÀI, thay cho thiết kế cũ ở những chỗ ghi dưới đây
 

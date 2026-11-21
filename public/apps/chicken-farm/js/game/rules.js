@@ -117,6 +117,9 @@ export const CONFIG = {
   },
   // v9 — ĐÊM TRĂNG TRÒN (ideas 9): ±1 ngày quanh lúc trăng tròn thiên văn, từ 18:00 tới 6:00 giờ Việt Nam. Trứng có phôi đẻ lúc đó
   // có tỉ lệ biến dị ×mutationMul (nhân với phần tăng của hạt lạ). Tính từ chu kỳ trăng trung bình — lệch vài giờ so với lịch, đủ dùng.
+  // v9 — LÔNG KỶ NIỆM (ideas 5): gà đã trưởng thành, sống trọn đời và đói không quá maxStarvedPct đời mình thì để lại một chiếc lông
+  // (album trong Kỷ niệm). Thuần kỷ niệm, không tác dụng lên luật. Album giữ tối đa `cap` chiếc gần nhất.
+  feather: { maxStarvedPct: 0.1, cap: 200 },
   moon: { newRef: Date.UTC(2000, 0, 6, 18, 14), synodicMs: 29.530588853 * DAY, halfWidth: 0.034, night: [18, 6], mutationMul: 3 },
   // Q14 (chủ dự án chốt 12/11): trứng ấp xong lúc người chơi vắng thì CHỜ trong ổ, nở khi người chơi
   // quay lại. Vắng ≤ khoảng này (đang mở game, chỉ giữa hai lần đồng bộ) thì vẫn nở đúng giờ.
@@ -325,6 +328,7 @@ function ensure(state) {
   if (state.tickets == null) { state.tickets = 0; state.play = null; } // v7
   if (state.timed?.start == null) state.timed = { start: state.updatedAt ?? 0, claimed: 0 }; // v8: bản v7 lưu {step, readyAt}
   if (!state.energy) state.energy = { n: CONFIG.energy.max, at: state.updatedAt ?? 0 };
+  if (!state.feathers) { state.feathers = []; state.family = {}; } // v9
   if (!state.count) {
     // v6: bộ đếm nhiệm vụ, chuỗi mở đầu, chuỗi ngày, giống
     state.count = Object.fromEntries(COUNTERS.map((k) => [k, 0]));
@@ -430,6 +434,8 @@ export function newGame(seed, now, choice = 0) {
     chickens: [],
     eggs: [],
     memorial: [],
+    feathers: [], // v9: lông kỷ niệm
+    family: {}, // v9: gà đã rời trại còn trong gia phả
     stats: { hatched: 0, laid: 0, traded: 0, died: 0 },
     seenAt: now, // lần cuối người chơi có mặt (Q14)
     watchFrom: now, // đầu phiên có mặt hiện tại (v7: tháp hạt chỉ nuôi gà trong phiên)
@@ -482,14 +488,69 @@ export function advance(state, now, { present = true, watchFrom, continuous = fa
   // gà trống đi trước để biết chính xác lúc nào trống trưởng thành / mất
   const order = [...state.chickens].sort((a, b) => (a.sex === b.sex ? 0 : a.sex === "rooster" ? -1 : 1));
   for (const ch of order) advanceChicken(state, ch, now, events, watchedFrom);
-  for (const ch of state.chickens.filter((c) => c.diedAt != null)) {
-    state.memorial.push({ id: ch.id, name: ch.name, code: ch.code, hatchedAt: ch.hatchedAt, diedAt: ch.diedAt, dev: ch.dev, starvedMs: ch.starvedMs, ...(ch.relic ? { relic: ch.relic } : {}) });
+  const gone = state.chickens.filter((c) => c.diedAt != null);
+  for (const ch of gone) {
+    const feather = ch.adultAt != null && ch.starvedMs <= CONFIG.feather.maxStarvedPct * ch.lifespanMs;
+    state.memorial.push({ id: ch.id, name: ch.name, code: ch.code, hatchedAt: ch.hatchedAt, diedAt: ch.diedAt, dev: ch.dev, starvedMs: ch.starvedMs,
+      motherId: ch.motherId ?? null, fatherId: ch.fatherId ?? null, ...(ch.relic ? { relic: ch.relic } : {}), ...(feather ? { feather: true } : {}) });
+    if (feather) {
+      state.feathers.push({ id: ch.id, name: ch.name, code: ch.code, at: ch.diedAt, ...(ch.relic ? { relic: ch.relic } : {}) });
+      if (state.feathers.length > CONFIG.feather.cap) state.feathers.shift();
+      events.push({ type: "feather", at: ch.diedAt, chickenId: ch.id, name: ch.name });
+    }
     state.stats.died++;
   }
-  state.chickens = state.chickens.filter((c) => c.diedAt == null);
+  if (gone.length) leave(state, gone.map((c) => c.id));
   state.updatedAt = now;
   events.sort((a, b) => a.at - b.at);
   return events;
+}
+
+/* ---------- gia phả, tính cách (v9) ---------- */
+
+// Gà rời trại (mất / đổi / giao đơn): bỏ khỏi đàn, nhớ tên + mã gen + bố mẹ vào `state.family` để vẽ gia phả 3 đời.
+// Chỉ giữ những con còn là bố mẹ hoặc ông bà của gà / trứng đang có — bảng luôn nhỏ.
+function leave(state, ids) {
+  state.family ??= {};
+  for (const ch of state.chickens.filter((c) => ids.includes(c.id))) state.family[ch.id] = [ch.name, ch.code, ch.motherId ?? null, ch.fatherId ?? null];
+  state.chickens = state.chickens.filter((c) => !ids.includes(c.id));
+  const keep = new Set();
+  const up = (id, depth) => {
+    if (!id || depth > 2) return;
+    keep.add(id);
+    const c = state.chickens.find((x) => x.id === id), f = state.family[id];
+    up(c ? c.motherId : f?.[2], depth + 1);
+    up(c ? c.fatherId : f?.[3], depth + 1);
+  };
+  for (const c of state.chickens) up(c.id, 0);
+  for (const e of state.eggs) { up(e.motherId, 1); up(e.fatherId, 1); }
+  for (const id of Object.keys(state.family)) if (!keep.has(id)) delete state.family[id];
+}
+// Một con trong gia phả: gà đang ở trại hoặc đã rời trại (còn nhớ). null = không rõ (gà khởi đầu, trứng quà, đã quên).
+export function kinOf(state, id) {
+  if (!id) return null;
+  const c = state.chickens.find((x) => x.id === id);
+  if (c) return { id, name: c.name, code: c.code, motherId: c.motherId ?? null, fatherId: c.fatherId ?? null, here: true };
+  const f = state.family?.[id];
+  return f ? { id, name: f[0], code: f[1], motherId: f[2], fatherId: f[3], here: false } : null;
+}
+
+// Tính cách suy từ gen sẵn có (ideas 4): tối đa 2 nhãn, nhãn rõ nhất trước. Chủ yếu là dáng đi đứng trên sân;
+// không đổi luật. greedy: hay quanh máng · lively: đi lại nhiều · shy: nép gần chuồng · layer: hay quanh ổ (chỉ gà mái).
+export const PERSONALITY = {
+  greedy: { name: "Tham ăn", stat: "appetite", hi: true },
+  lively: { name: "Hiếu động", stat: "speed", hi: true },
+  shy: { name: "Nhút nhát", stat: "hardiness", hi: false },
+  layer: { name: "Chăm đẻ", stat: "eggRate", hi: true, hen: true },
+  calm: { name: "Điềm tĩnh" }, // không nổi bật điều gì
+};
+export function personalityOf(code) {
+  const ph = express(decodeGenome(code));
+  const out = Object.entries(PERSONALITY).filter(([, p]) => p.stat)
+    .map(([k, p]) => [k, p.hi ? ph.stats[p.stat] - 0.6 : 0.4 - ph.stats[p.stat]])
+    .filter(([k, d]) => d >= 0 && !(PERSONALITY[k].hen && ph.sex !== "hen"))
+    .sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => k);
+  return out.length ? out : ["calm"];
 }
 
 function hatch(state, egg, at, events) {
@@ -1034,7 +1095,7 @@ export function tradeToShop(state, give, now, opts = {}) {
       ...chickens.map((c) => ({ id: nextId(state, "b"), size: chickenTradeValue(c), from: "chicken", at: now })),
     ];
     state.eggs = state.eggs.filter((e) => !eggIds.includes(e.id));
-    state.chickens = state.chickens.filter((c) => !chickenIds.includes(c.id));
+    leave(state, chickenIds);
     state.bags.push(...bags);
     state.stats.traded += bags.length;
     bump(state, "trade", bags.length);
@@ -1060,7 +1121,7 @@ function tradeForTickets(state, give, now) {
   const gain = eggs.length * T.perEgg + chickens.length * T.perChicken;
   if (state.tickets + gain > T.cap) return err("tickets_full", "Túi vé đã đầy");
   state.eggs = state.eggs.filter((e) => !eggIds.includes(e.id));
-  state.chickens = state.chickens.filter((c) => !chickenIds.includes(c.id));
+  leave(state, chickenIds);
   state.ticketDay = { day, eggs: d.eggs + eggs.length, chickens: d.chickens + chickens.length };
   state.tickets += gain;
   state.stats.traded += eggs.length + chickens.length;
@@ -1175,7 +1236,7 @@ export function tradeForEgg(state, chickenId, now, opts = {}) {
       const ph = express(mother);
       eggs.push({ id: nextId(state, "e"), code: encodeGenome(child), shell: ph.egg.shell, shellName: ph.egg.name, fertile: true, motherId: null, fatherId: null, laidAt: now, mutations: 0, hatchAt: null, fromShop: true });
     }
-    state.chickens = state.chickens.filter((c) => c.id !== chickenId);
+    leave(state, [chickenId]);
     state.eggs.push(...eggs);
     state.stats.traded++;
     bump(state, "trade");
@@ -1425,7 +1486,7 @@ export function deliver(state, chickenId, now) {
     const order = ctx.stock[0];
     if (!matchesOrder(ch, order)) return err("no_match", "Con gà này chưa đúng yêu cầu");
     const gain = Math.min(order.pay, CONFIG.tickets.cap - state.tickets);
-    state.chickens = state.chickens.filter((c) => c.id !== chickenId);
+    leave(state, [chickenId]);
     state.tickets += gain;
     state.stats.traded++;
     bump(state, "trade");

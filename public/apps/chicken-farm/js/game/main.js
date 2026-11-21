@@ -197,6 +197,39 @@ function chickenSvg(ch, { pose = "stand", phase = 0, detail = "low" } = {}) {
   }
   return { svg, key };
 }
+// v9 — tính cách (từ gen) và chỗ con gà thích quanh quẩn trên sân
+const MOOD_TIP = () => ({
+  greedy: tr("Hay quanh quẩn bên máng ăn"), lively: tr("Đi lại không ngừng, ít khi đứng yên"), shy: tr("Thích nép gần chuồng"),
+  layer: tr("Hay ghé quanh ổ"), calm: tr("Thong thả, không vội gì"),
+});
+const moodName = (k) => tr(R.PERSONALITY[k].name);
+const moodsOf = (ch) => (R.personalityOf ? R.personalityOf(ch.code) : []);
+function yardMood(ch) {
+  const m = moodsOf(ch)[0];
+  if (m === "greedy") return { home: { x: SPOTS.feeder.x, y: SPOTS.feeder.y + 60, pull: 0.55 }, restMul: 1 };
+  if (m === "shy") return { home: { x: SPOTS.coopDoor.x + 30, y: SPOTS.coopDoor.y + 70, pull: 0.6 }, restMul: 1.3 };
+  if (m === "layer") return { home: { x: SPOTS.nest.x - 40, y: SPOTS.nest.y + 80, pull: 0.4 }, restMul: 1 };
+  if (m === "lively") return { home: null, restMul: 0.4 };
+  if (m === "calm") return { home: null, restMul: 1.5 };
+  return {};
+}
+// Lông kỷ niệm: vẽ từ màu và hoa văn trong gen của con gà
+function featherSvg(code, size = 34, relic = null) {
+  const ph = express(decodeGenome(code), { gloss: 0.5 }), K = ph.colors;
+  const base = K.base, acc = K.accent ?? K.hackle ?? base, id = `fe${(featherSvg.n = (featherSvg.n ?? 0) + 1)}`;
+  const vane = "M15,6 C24,14 25,34 22,54 C20,64 17,70 15,72 C13,70 10,64 8,54 C5,34 6,14 15,6Z";
+  let deco = "";
+  if (ph.pattern === "barred") deco = [18, 28, 38, 48, 58].map((y) => `<path d="M4,${y} Q15,${y - 4} 26,${y}" stroke="${acc}" stroke-width="3.2" fill="none"/>`).join("");
+  else if (ph.pattern === "laced") deco = `<path d="${vane}" fill="none" stroke="${acc}" stroke-width="3"/>`;
+  else if (ph.pattern === "spangled") deco = `<ellipse cx="15" cy="16" rx="6" ry="8" fill="${acc}"/>`;
+  else if (ph.pattern === "mottled") deco = [[11, 20], [19, 30], [12, 42], [18, 52]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.2" fill="#fff" opacity=".85"/>`).join("");
+  else deco = `<path d="M15,8 C20,16 21,30 19,44" stroke="${acc}" stroke-width="4" fill="none" opacity=".45"/>`;
+  if (relic === "peacockTail") deco += `<circle cx="15" cy="18" r="6" fill="#e9c449"/><circle cx="15" cy="18" r="4" fill="#1fa9a2"/><circle cx="15" cy="18" r="2.2" fill="#14306e"/>`;
+  const rim = relic ? `<path d="${vane}" fill="none" stroke="#e9b922" stroke-width="1.6"/>` : "";
+  return `<svg class="feather" viewBox="0 0 30 80" width="${size * 0.38}" height="${size}" aria-hidden="true"><defs><clipPath id="${id}"><path d="${vane}"/></clipPath></defs>`
+    + `<path d="${vane}" fill="${base}"/><g clip-path="url(#${id})">${deco}<path d="M15,6 L15,72" stroke="#000" stroke-opacity=".1" stroke-width="5"/></g>${rim}`
+    + `<path d="M15,4 L15,78" stroke="#f4ead8" stroke-width="1.4" stroke-linecap="round"/><path d="M8,62 l-3,4 M22,62 l3,4" stroke="${base}" stroke-width="1.4"/></svg>`;
+}
 const memorialSvg = (m) => renderChickenFlat(express(decodeGenome(m.code), { dev: m.dev, gloss: 0.4 }), { growth: 1, detail: "low", label: m.name, relic: m.relic ?? null });
 
 /* ---------- thông báo, nhật ký ---------- */
@@ -266,6 +299,8 @@ function handleEvents(events, { quiet = false } = {}) {
       loud = true;
       if (recap) recap.died.push({ name: nameOf(e.chickenId), starved: e.starved });
       else sfx("sad");
+    } else if (e.type === "feather") {
+      text = `🪶 <b>${esc(e.name)}</b> ${tr("để lại một chiếc lông kỷ niệm")}`;
     } else if (e.type === "dex") {
       const d = R.DEX.find((x) => x.key === e.key);
       const nm = `<b>${esc(tr(d?.name ?? e.key))}</b>`;
@@ -516,6 +551,7 @@ const REVEAL = {
       <span class="rv-tier tier-${ch.relic ? 4 : tier.n}">${ch.relic ? tr("Gà kỳ vật") : tier.name}</span>${relic}
       ${keys.length ? `<ul class="rv-chips" aria-label="${tr("Đặc điểm mang trong gen")}">${keys.map((k) => dexChip(k, r.fresh.includes(k))).join("")}</ul>` : `<p class="rv-sub">${tr("Một bé gà mộc mạc — nuôi khéo vẫn đẹp.")}</p>`}
       ${perks.length ? `<p class="rv-sub">${perks.join(" · ")}</p>` : ""}
+      ${R.personalityOf ? `<p class="rv-sub rv-mood">${tr("Tính cách:")} ${moodsOf(ch).map((k) => `<b title="${MOOD_TIP()[k]}">${moodName(k)}</b>`).join(" · ")}</p>` : ""}
       ${note ? `<p class="rv-note">${note}</p>` : ""}
       <div class="rv-actions"><button type="button" class="gold" data-go="ok">${tr("Chào")} ${esc(ch.name)}!</button></div>`);
     sfx("hatch");
@@ -959,7 +995,7 @@ function syncYard() {
       setTimeout(() => {
         entering.delete(id);
         if (!yard || yard.chickens.has(id) || !state?.chickens.some((c) => c.id === id && c.location === "coop")) return;
-        addChicken(yard, { id, speed, sight: 0, x: SPOTS.coopDoor.x + (Math.random() - 0.5) * 16, y: SPOTS.coopDoor.y + 12 });
+        addChicken(yard, { id, speed, sight: 0, x: SPOTS.coopDoor.x + (Math.random() - 0.5) * 16, y: SPOTS.coopDoor.y + 12, ...yardMood(ch) });
         const a = yard.chickens.get(id);
         a.mode = "wander";
         a.wander = { x: 220 + Math.random() * 380, y: 230 + Math.random() * 170 };
@@ -978,7 +1014,7 @@ function syncYard() {
         burst($("#yard-pops"), `${(pos.x / W) * 100}%`, `${((pos.y - 20) / H) * 100}%`, { kind: "star", n: 8, colors: ["#ffd95a", "#fff"] });
       }, 50);
     }
-    addChicken(yard, { id: ch.id, speed: t.speed * (0.6 + 0.4 * v.growth01) * 0.7, sight: 0, ...pos });
+    addChicken(yard, { id: ch.id, speed: t.speed * (0.6 + 0.4 * v.growth01) * 0.7, sight: 0, ...pos, ...yardMood(ch) });
   }
   if (state.chickens.length || state.eggs.length) entryDone = true;
 }
@@ -1338,6 +1374,7 @@ function renderInfo() {
           <button type="button" class="small" data-act="auto" title="${tr("Như kéo gà vào máng: tự chọn hạt hợp nhất")}">${tr("Máng ăn")}</button>
           <button type="button" class="small" data-act="field">${tr("Ra cánh đồng")}</button>
           <button type="button" class="small" data-act="trade">${tr("Đổi ở chợ")}</button>
+          <button type="button" class="small" data-act="tree" title="${tr("Bố mẹ, ông bà — đặc điểm truyền từ ai sang")}">${tr("Gia phả")}</button>
         </div>
       </article>`;
   }
@@ -1347,7 +1384,7 @@ function renderInfo() {
   if (artEl.dataset.key !== art.key) { artEl.innerHTML = art.svg; artEl.dataset.key = art.key; }
   host.querySelector(".ck-name").textContent = `${ch.sex === "rooster" ? "♂" : "♀"} ${ch.name}`;
   host.querySelector(".ck-sub").textContent = `${STAGE[v.stage]} · ${fmtDur(v.ageMs)} ${tr("tuổi")}${v.stage === "adult" ? "" : ` ${tr("· lớn sau ~")}${fmtDur(R.msToAdult(ch))}`}`;
-  const b = [];
+  const b = moodsOf(ch).map((k) => `<span class="badge mood" title="${MOOD_TIP()[k]}">${moodName(k)}</span>`);
   if (ch.location === "field") b.push(`<span class="badge ok">${tr("Đang ngoài đồng")}</span>`);
   if (v.hungry) b.push(`<span class="badge bad">${tr("Đói — chóng già")}</span>`);
   else if (v.satiety01 < 0.3) b.push(`<span class="badge warn">${tr("Sắp đói")}</span>`);
@@ -1391,7 +1428,36 @@ $("#info").addEventListener("click", (ev) => {
     else sendToField(ch.id).then((ok) => ok && showField());
   }
   if (act === "trade") openTrade({ chickenId: ch.id });
+  if (act === "tree") openTree(ch.id);
 });
+
+/* ---------- gia phả 3 đời (v9) ---------- */
+
+function openTree(id) {
+  const me = R.kinOf(state, id);
+  if (!me) return;
+  const mine = new Set(R.dexKeysOf(me.code));
+  const mom = R.kinOf(state, me.motherId), dad = R.kinOf(state, me.fatherId);
+  const node = (k, role, cls = "") => {
+    if (!k) return `<div class="tree-node unknown ${cls}"><div class="tn-art">?</div><b>${role}</b><small>${tr("Không rõ")}</small></div>`;
+    const live = state.chickens.find((c) => c.id === k.id);
+    const art = live ? chickenSvg(live).svg : renderChickenFlat(express(decodeGenome(k.code), { gloss: 0.4 }), { growth: 1, detail: "low", label: k.name });
+    const keys = R.dexKeysOf(k.code);
+    const chips = keys.map((x) => `<li class="${cls !== "me" && mine.has(x) ? "passed" : ""}">${esc(tr(R.DEX.find((d) => d.key === x)?.name ?? x))}</li>`).join("");
+    return `<div class="tree-node ${cls}${k.here ? "" : " gone"}"><div class="tn-art">${art}</div><b>${esc(k.name)}</b><small>${role}${k.here ? "" : ` · ${tr("đã rời trại")}`}</small>${chips ? `<ul>${chips}</ul>` : ""}</div>`;
+  };
+  const gp = (p) => [R.kinOf(state, p?.motherId), R.kinOf(state, p?.fatherId)];
+  const [mm, mf] = mom ? gp(mom) : [null, null], [fm, ff] = dad ? gp(dad) : [null, null];
+  // hàng nào không biết ai thì bỏ hẳn (gà khởi đầu, trứng quà, trứng mua không có bố mẹ trong trại)
+  const g2 = mm || mf || fm || ff, g1 = mom || dad;
+  $("#tree").innerHTML = `
+    ${g2 ? `<div class="tree-row g2">${node(mm, tr("Bà ngoại"))}${node(mf, tr("Ông ngoại"))}${node(fm, tr("Bà nội"))}${node(ff, tr("Ông nội"))}</div>` : ""}
+    ${g1 ? `<div class="tree-row g1">${node(mom, tr("Mẹ"))}${node(dad, tr("Bố"))}</div>` : ""}
+    <div class="tree-row g0${g1 ? "" : " alone"}">${node(me, tr("Con gà này"), "me")}</div>
+    <p class="muted tree-note">${g1 ? tr("Đặc điểm tô màu: con gà này cũng mang — được truyền xuống từ đời trước.") : tr("Không rõ bố mẹ: gà nở từ trứng khởi đầu, trứng quà hoặc trứng mua. Gà nở từ trứng đẻ trong trại mới có gia phả.")}</p>`;
+  $("#tree-title").textContent = `${tr("Gia phả")} · ${me.name}`;
+  $("#tree-dialog").showModal();
+}
 
 function renderFlock() {
   setHTML($("#flock"), state.chickens.map((c) => {
@@ -1588,8 +1654,13 @@ function offerRoom() {
 }
 $("#open-memorial").addEventListener("click", () => {
   if (!state) return;
+  const fs = state.feathers ?? [];
+  $("#feathers").innerHTML = `<h3>${tr("Lông kỷ niệm")} <span class="muted">${fs.length}</span></h3>`
+    + (fs.length ? `<div class="feather-row">${[...fs].reverse().map((f) => `<span class="feather-item" title="${esc(f.name)}">${featherSvg(f.code, 76, f.relic)}<small>${esc(f.name)}</small></span>`).join("")}</div>`
+      : `<p class="muted">${tr("Gà được chăm no đủ, sống tới tuổi già sẽ để lại một chiếc lông mang màu của nó.")}</p>`);
+  $("#feathers").hidden = !state.feathers;
   $("#memorial").innerHTML = state.memorial.length
-    ? [...state.memorial].reverse().map((m) => `<div class="item"><div class="art">${memorialSvg(m)}</div><b>${esc(m.name)}</b><div class="muted">${tr("Sống")} ${fmtDur(m.diedAt - m.hatchedAt)}${m.starvedMs > HOUR ? ` ${tr("· từng đói")} ${fmtDur(m.starvedMs)}` : ""}</div></div>`).join("")
+    ? [...state.memorial].reverse().map((m) => `<div class="item"><div class="art">${memorialSvg(m)}</div><b>${m.feather ? "🪶 " : ""}${esc(m.name)}</b><div class="muted">${tr("Sống")} ${fmtDur(m.diedAt - m.hatchedAt)}${m.starvedMs > HOUR ? ` ${tr("· từng đói")} ${fmtDur(m.starvedMs)}` : ""}</div></div>`).join("")
     : `<p class="muted">${tr("Chưa có con gà nào rời trại.")}</p>`;
   $("#memorial-dialog").showModal();
 });
