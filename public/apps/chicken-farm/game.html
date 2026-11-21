@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Trại Gà</title>
   <meta name="description" content="Nuôi gà, thả đồng, ấp trứng, sưu tầm — mỗi con gà được vẽ từ bộ gen riêng.">
-  <link rel="stylesheet" href="game.css?v=41">
+  <link rel="stylesheet" href="game.css?v=42">
 </head>
 <body>
   <header class="bar">
@@ -157,13 +157,23 @@
   <dialog id="store-dialog" class="sheet">
     <form method="dialog">
       <div class="sheet-head"><h2 data-i18n="menu.store">Kho</h2><button value="close" aria-label="Đóng">✕</button></div>
-      <h3 class="section-title">Hạt <span class="muted" id="seed-cap"></span></h3>
-      <div class="seeds" id="seeds"></div>
-      <h3 class="section-title">Túi hạt chưa mở <button type="button" class="small primary" id="open-all-bags" hidden>Mở hết</button></h3>
-      <div class="bags" id="bags"></div>
-      <h3 class="section-title">Trứng trong kho <span class="muted" id="egg-cap"></span></h3>
-      <p class="muted">Trứng có phôi (cần gà trống trong trại) thì ấp được. Trứng nào cũng đổi được túi 2 hạt.</p>
-      <div class="eggs" id="eggs"></div>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab" role="tab" data-tab="seeds" aria-selected="true"><span data-i18n="store.seeds">Hạt</span> <span class="tab-n" id="seed-cap"></span></button>
+        <button type="button" class="tab" role="tab" data-tab="bags" aria-selected="false"><span data-i18n="store.bags">Túi hạt</span> <span class="tab-n" id="bag-cap"></span></button>
+        <button type="button" class="tab" role="tab" data-tab="eggs" aria-selected="false"><span data-i18n="store.eggs">Trứng</span> <span class="tab-n" id="egg-cap"></span></button>
+      </div>
+      <section class="pane" data-pane="seeds">
+        <div class="cap-bar" id="seed-bar" title="Sức chứa kho hạt"><i></i></div>
+        <div class="seed-tiles" id="seeds"></div>
+      </section>
+      <section class="pane" data-pane="bags" hidden>
+        <div class="pane-tools"><button type="button" class="small primary" id="open-all-bags" hidden>Mở hết</button></div>
+        <div class="bags" id="bags"></div>
+      </section>
+      <section class="pane" data-pane="eggs" hidden>
+        <p class="muted">Trứng có phôi (cần gà trống trong trại) thì ấp được. Trứng nào cũng đổi được túi 2 hạt.</p>
+        <div class="eggs" id="eggs"></div>
+      </section>
     </form>
   </dialog>
 
@@ -252,22 +262,22 @@
        main.js mới với rules.js / field.js cũ còn trong bộ nhớ đệm và trang game không chạy. -->
   <script type="importmap">
   {"imports": {
-    "./js/genome.js": "./js/genome.js?v=41",
-    "./js/chicken-flat.js": "./js/chicken-flat.js?v=41",
-    "./js/chicken-svg.js": "./js/chicken-svg.js?v=41",
-    "./js/art/icons.js": "./js/art/icons.js?v=41",
-    "./js/art/decor.js": "./js/art/decor.js?v=41",
-    "./js/game/rules.js": "./js/game/rules.js?v=41",
-    "./js/game/field.js": "./js/game/field.js?v=41",
-    "./js/game/net.js": "./js/game/net.js?v=41",
-    "./js/game/fx.js": "./js/game/fx.js?v=41",
-    "./js/game/i18n.js": "./js/game/i18n.js?v=41",
-    "./js/game/i18n-en.js": "./js/game/i18n-en.js?v=41",
-    "./js/game/play.js": "./js/game/play.js?v=41",
-    "./js/game/intro.js": "./js/game/intro.js?v=41",
-    "./js/game/music.js": "./js/game/music.js?v=41"
+    "./js/genome.js": "./js/genome.js?v=42",
+    "./js/chicken-flat.js": "./js/chicken-flat.js?v=42",
+    "./js/chicken-svg.js": "./js/chicken-svg.js?v=42",
+    "./js/art/icons.js": "./js/art/icons.js?v=42",
+    "./js/art/decor.js": "./js/art/decor.js?v=42",
+    "./js/game/rules.js": "./js/game/rules.js?v=42",
+    "./js/game/field.js": "./js/game/field.js?v=42",
+    "./js/game/net.js": "./js/game/net.js?v=42",
+    "./js/game/fx.js": "./js/game/fx.js?v=42",
+    "./js/game/i18n.js": "./js/game/i18n.js?v=42",
+    "./js/game/i18n-en.js": "./js/game/i18n-en.js?v=42",
+    "./js/game/play.js": "./js/game/play.js?v=42",
+    "./js/game/intro.js": "./js/game/intro.js?v=42",
+    "./js/game/music.js": "./js/game/music.js?v=42"
   }}
   </script>
-  <script type="module" src="js/game/main.js?v=41"></script>
+  <script type="module" src="js/game/main.js?v=42"></script>
 </body>
 </html>

@@ -732,7 +732,8 @@ function seasonChip() {
 }
 $("#res").addEventListener("click", (ev) => {
   if (ev.target.closest("[data-res=season]")) toast(seasonText().text);
-  if (ev.target.closest("[data-open=store]")) openStore();
+  const rs = ev.target.closest("[data-open=store]");
+  if (rs) openStore({ eggs: "eggs", bags: "bags" }[rs.dataset.res] ?? "seeds"); // chip trứng / túi mở đúng thẻ
 });
 
 /* ---------- sân trại: các điểm thả ---------- */
@@ -1532,7 +1533,7 @@ function renderInfo() {
   host.querySelector(".m-sat i").style.setProperty("--v", v.satiety01.toFixed(3));
   host.querySelector(".m-grow i").style.setProperty("--v", v.growth01.toFixed(3));
   host.querySelector(".m-life i").style.setProperty("--v", Math.max(0, v.lifeLeftMs / ch.lifespanMs).toFixed(3));
-  host.querySelector(".m-life span").textContent = `${tr("Còn ~")}${fmtDur(Math.max(0, v.lifeLeftMs))}`;
+  host.querySelector(".m-life span").textContent = `${tr("Tuổi thọ")} ~${fmtDur(Math.max(0, v.lifeLeftMs))}`;
   host.querySelector(".m-speed i").style.setProperty("--v", v.speed01.toFixed(3));
   host.querySelector(".m-speed span").textContent = `${tr("Tốc độ")} ${Math.round(1 + v.speed01 * 9)}/10`;
   host.querySelector(".m-stam").hidden = !hasV7();
@@ -1703,29 +1704,47 @@ $("#trade-egg").addEventListener("click", async () => {
 
 /* ---------- kho, kỷ niệm (ngăn trượt) ---------- */
 
-function openStore() {
+let storeTab = "seeds";
+function showStoreTab(k) {
+  storeTab = k;
+  for (const b of document.querySelectorAll("#store-dialog [data-tab]")) b.setAttribute("aria-selected", String(b.dataset.tab === k));
+  for (const p of document.querySelectorAll("#store-dialog [data-pane]")) p.hidden = p.dataset.pane !== k;
+}
+function openStore(tab) {
   if (!state) return;
+  showStoreTab(typeof tab === "string" ? tab : storeTab);
   renderStore();
   $("#store-dialog").showModal();
 }
 function renderStore() {
   const seeds = Object.values(state.inventory).reduce((a, b) => a + b, 0);
-  $("#seed-cap").textContent = `(${seeds}/${R.CONFIG.storage.seeds})`;
-  setHTML($("#seeds"), Object.keys(R.SEEDS).map((k) => `<div class="seed-card"><span class="ico">${seedIcon(k, 28)}</span><span>${seedName(k)}<small>${seedSummary(k)}</small></span><b>${state.inventory[k]}</b>${hasV7() ? `<button type="button" class="small" data-feed-seed="${k}"${state.inventory[k] > 0 && state.chickens.length ? "" : " disabled"}>${tr("Cho ăn")}</button>` : ""}</div>`).join(""));
+  $("#seed-cap").textContent = `${seeds}/${R.CONFIG.storage.seeds}`;
+  $("#bag-cap").textContent = state.bags.length || "";
+  const bar = $("#seed-bar i");
+  bar.style.setProperty("--p", `${Math.round((seeds / R.CONFIG.storage.seeds) * 100)}%`);
+  $("#seed-bar").classList.toggle("full", seeds >= R.CONFIG.storage.seeds * 0.9);
+  // thẻ hạt: hình to, số lượng, 4 vạch chất dinh dưỡng (mô tả chữ nằm trong chú thích)
+  setHTML($("#seeds"), Object.keys(R.SEEDS).map((k) => {
+    const n = state.inventory[k], nut = R.SEEDS[k].n;
+    const bars = R.NUTRIENTS.map((x) => `<i style="--c:${NUT_COLOR[x]};--v:${Math.min(1, nut[x] / 26).toFixed(2)}" title="${esc(tr(R.NUTRIENT_INFO[x].name))} ${nut[x]}"></i>`).join("");
+    return `<div class="seed-tile${n ? "" : " none"}" title="${esc(seedName(k))}: ${esc(seedSummary(k))}"><span class="ico">${seedIcon(k, 40)}</span><b class="cnt">${n}</b><span class="nm">${seedName(k)}</span><span class="nbars" aria-hidden="true">${bars}</span>${hasV7() ? `<button type="button" class="small" data-feed-seed="${k}"${n > 0 && state.chickens.length ? "" : " disabled"}>${tr("Cho ăn")}</button>` : ""}</div>`;
+  }).join(""));
   setHTML($("#bags"), state.bags.length
     ? state.bags.map((b) => `<div class="item"><div class="art">${bagArt(72, b.size)}</div><div>${b.table === "gift" ? tr("Túi quà") : tr("Túi")} ${b.size} ${tr("hạt")}</div><button type="button" class="small primary" data-bag="${b.id}">${tr("Mở túi")}</button></div>`).join("")
     : `<p class="muted">${tr("Không có túi nào. Kéo gà hoặc trứng vào chợ để đổi lấy túi hạt.")}</p>`);
   $("#open-all-bags").hidden = state.bags.length < 2;
   const stored = state.eggs.filter((e) => e.hatchAt === null && !e.inYard);
   const all = state.eggs.filter((e) => e.hatchAt === null).length;
-  $("#egg-cap").textContent = `(${stored.length} trong kho · ${all}/${R.CONFIG.storage.eggs} ${tr("cả ngoài sân)")}`;
+  $("#egg-cap").textContent = stored.length || "";
+  $("#egg-cap").title = `${stored.length} ${tr("trong kho")} · ${all}/${R.CONFIG.storage.eggs} ${tr("cả ngoài sân")}`;
   const freeSlot = state.incubators.includes(null);
   setHTML($("#eggs"), stored.length
     ? stored.map((e) => `<div class="item"><div class="art">${eggArt(e)}</div><div>${e.fertile ? `<span class="badge ok">${tr("Có phôi")}</span>` : `<span class="badge">${tr("Không phôi")}</span>`}</div>${e.fertile ? `<div class="muted">${tr("Ấp")} ${Math.round((e.incubateMin ?? R.incubateMsOf(e.code) / MIN))} ${tr("phút")}</div>` : `<div class="muted">${tr("Chỉ để đổi hạt")}</div>`}<div class="row">${e.fertile ? `<button type="button" class="small primary" data-incubate="${e.id}" ${freeSlot ? "" : tr("disabled title=\"Ổ ấp đang bận\"")}>${tr("Ấp")}</button>` : ""}<button type="button" class="small" data-trade-egg="${e.id}">${tr("Đổi túi 2 hạt")}</button></div></div>`).join("")
     : `<p class="muted">${tr("Kho chưa có trứng. Trứng gà mái đẻ nằm ngoài sân — chạm để nhặt.")}</p>`);
 }
 $("#store-dialog").addEventListener("click", async (ev) => {
-  const t = ev.target;
+  const t = ev.target.closest("button") ?? ev.target;
+  if (t.dataset.tab) return showStoreTab(t.dataset.tab);
   if (t.dataset.bag) await openBags([t.dataset.bag]);
   if (t.dataset.feedSeed) return openFeedSeed(t.dataset.feedSeed);
   if (t.id === "open-all-bags") await openBags(state.bags.map((b) => b.id));
@@ -1733,7 +1752,7 @@ $("#store-dialog").addEventListener("click", async (ev) => {
   if (t.dataset.tradeEgg) await run(act("tradeToShop", { eggs: [t.dataset.tradeEgg] }), tr("Nhận túi 2 hạt"));
   if ($("#store-dialog").open) renderStore();
 });
-$("#open-store").addEventListener("click", openStore);
+$("#open-store").addEventListener("click", () => openStore());
 $("#open-log").addEventListener("click", () => $("#log-dialog").showModal());
 $("#open-help").addEventListener("click", () => $("#help-dialog").showModal());
 $("#replay-intro")?.addEventListener("click", () => { $("#help-dialog").close(); playIntro(true); });
@@ -2052,6 +2071,7 @@ function showField() {
   $("#view-yard").hidden = true;
   $("#view-field").hidden = false;
   requestAnimationFrame(() => centerPan($("#field-pan")));
+  setTimeout(() => centerPan($("#field-pan")), 120); // sau khi cánh đồng vẽ xong nền
   startObserving();
   scrollTo({ top: 0 });
 }

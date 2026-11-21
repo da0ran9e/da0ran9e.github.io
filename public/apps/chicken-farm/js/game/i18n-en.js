@@ -761,4 +761,7 @@ export default {
   "Chạm để sưởi": "Tap to warm",
   "đói": "hungry",
   "mới": "new",
+  "trong kho": "in storage",
+  "cả ngoài sân": "including the yard",
+  "Sức chứa kho hạt": "Seed storage capacity",
 };

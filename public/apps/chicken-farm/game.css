@@ -844,3 +844,26 @@ body.idle { cursor: none; }
 }
 /* dòng "trống" trong lưới kho / kỷ niệm: chiếm cả hàng, không bị ép thành cột hẹp */
 .bags > p, .eggs > p, .memorial > p { grid-column: 1 / -1; margin: 4px 0; }
+
+/* v10 — Kho: thẻ tab, ô hạt có vạch chất, thanh sức chứa */
+.tabs { display: flex; gap: 6px; margin: 4px 0 12px; position: sticky; top: 0; z-index: 2; background: var(--card); padding: 4px 0; }
+.tab { flex: 1; border-radius: 12px; padding: 8px 10px; font-weight: 700; font-size: 14px; background: var(--chip); border: 0; box-shadow: none; display: inline-flex; justify-content: center; align-items: center; gap: 6px; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--card); }
+.tab .tab-n { font-size: 12px; font-weight: 700; opacity: .75; font-variant-numeric: tabular-nums; }
+.tab .tab-n:empty { display: none; }
+.cap-bar { height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 20%, transparent); overflow: hidden; margin: 0 0 12px; }
+.cap-bar i { display: block; height: 100%; width: var(--p, 0%); background: var(--ok); border-radius: inherit; transition: width .3s; }
+.cap-bar.full i { background: var(--warn); }
+.seed-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; }
+.seed-tile { position: relative; display: grid; justify-items: center; gap: 3px; padding: 10px 8px 8px; border-radius: 16px; background: var(--chip); text-align: center; }
+.seed-tile .ico svg { width: 44px; height: 44px; display: block; }
+.seed-tile .cnt { position: absolute; right: 10px; top: 8px; font-size: 20px; font-variant-numeric: tabular-nums; }
+.seed-tile .nm { font-size: 13px; font-weight: 700; line-height: 1.2; }
+.seed-tile .nbars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; width: 82%; margin: 2px 0 4px; }
+.seed-tile .nbars i { height: 5px; border-radius: 999px; background: linear-gradient(90deg, var(--c) calc(var(--v) * 100%), color-mix(in srgb, var(--muted) 18%, transparent) 0); }
+.seed-tile button { width: 100%; }
+.seed-tile.none { opacity: .55; }
+.seed-tile.none .cnt { color: var(--muted); }
+.pane-tools { display: flex; justify-content: flex-end; margin: -4px 0 8px; }
+.pane-tools:has(> [hidden]:only-child) { display: none; }
+#store-dialog > form { min-height: min(72vh, 640px); } /* đổi thẻ không làm hộp co giãn */
