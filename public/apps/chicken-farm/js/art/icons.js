@@ -438,7 +438,7 @@ export function statIcon(key, size = 20, label) {
 export const YARD_SPOTS = Object.freeze({
   coop: Object.freeze({ x: 108, y: 82, r: 74 }), // cả ngôi chuồng (chạm → kho)
   coopDoor: Object.freeze({ x: 112, y: 146, r: 40 }), // trước chân cầu thang cửa chuồng
-  feeder: Object.freeze({ x: 300, y: 138, r: 52 }), // trước máng thóc
+  feeder: Object.freeze({ x: 344, y: 142, r: 48 }), // giữa máng thóc và tháp hạt (nhãn "Tháp hạt" nằm ngay dưới tháp)
   water: Object.freeze({ x: 452, y: 136, r: 40 }), // cạnh đĩa nước
   nest: Object.freeze({ x: 600, y: 104, r: 66 }), // giữa ổ rơm (trứng / ổ ấp đặt ở đây)
   gate: Object.freeze({ x: 680, y: 234, r: 48 }), // cổng ra đồng ở hàng rào phải (dời vào trong: ngoài rào là con đường + gian hàng)

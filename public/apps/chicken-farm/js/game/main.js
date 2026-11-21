@@ -799,10 +799,23 @@ function onKeyActivate(host, fn) {
 onKeyActivate($("#yard-zones"), (el) => zoneTap(el.dataset.zone));
 onKeyActivate($("#yard-eggs"), (el) => collectWithAnim(el.dataset.id));
 // hiệu ứng "trúng" ở điểm thả sau khi thả thành công
+// Điện thoại dọc: cảnh cuộn ngang — cuộn tới chỗ x (toạ độ cảnh 0..W) nếu nó đang khuất.
+function panTo(x, pan = $(view === "field" ? "#field-pan" : "#yard-pan"), smooth = true) {
+  if (!pan || pan.scrollWidth <= pan.clientWidth + 2) return;
+  const px = (x / W) * pan.scrollWidth, left = pan.scrollLeft, w = pan.clientWidth;
+  if (px > left + w * 0.15 && px < left + w * 0.85) return;
+  pan.scrollTo({ left: Math.max(0, px - w / 2), behavior: smooth && !reduceMotion() ? "smooth" : "auto" });
+}
+const centerPan = (pan) => { if (pan) pan.scrollLeft = (pan.scrollWidth - pan.clientWidth) / 2; };
+let panW = innerWidth; // chỉ canh lại khi đổi bề ngang (thanh địa chỉ điện thoại ẩn / hiện thì thôi)
+addEventListener("resize", () => { if (innerWidth === panW) return; panW = innerWidth; panTo(470, $("#yard-pan"), false); centerPan($("#field-pan")); });
+setTimeout(() => panTo(470, $("#yard-pan"), false), 0); // lúc mở game: giữa sân, thấy cả ổ ấp
 function flashZone(key) {
   sfx("drop");
   const el = key === "nest" ? $("#yard-nests .nest") : $(`#yard-zones [data-zone="${key}"]`);
   if (!el) return;
+  const sp = key === "nest" ? SPOTS.nest : SPOTS[key];
+  if (sp) panTo(sp.x);
   el.classList.remove("hit");
   void el.offsetWidth;
   el.classList.add("hit");
@@ -817,7 +830,7 @@ function nestSlots() {
 }
 /* ---------- vườn rau (v10) ---------- */
 
-const GARDEN = { x: 126, y: 236 }; // giữa khu vườn (bên trái, giữa chuồng và sân chơi)
+const GARDEN = { x: 128, y: 238 }; // giữa khu vườn (bên trái, giữa chuồng và sân chơi)
 const PLOT_POS = [[-56, 10], [0, 10], [56, 10], [-28, 50], [28, 50]]; // đáy luống so với GARDEN
 const plotXY = (i) => ({ x: GARDEN.x + PLOT_POS[i][0], y: GARDEN.y + PLOT_POS[i][1] });
 function plotTip(v) {
@@ -2018,6 +2031,7 @@ function showField() {
   setTimeout(wake, 0);
   $("#view-yard").hidden = true;
   $("#view-field").hidden = false;
+  requestAnimationFrame(() => centerPan($("#field-pan")));
   startObserving();
   scrollTo({ top: 0 });
 }
@@ -2028,6 +2042,7 @@ function showYard() {
   view = "yard";
   $("#view-field").hidden = true;
   $("#view-yard").hidden = false;
+  requestAnimationFrame(() => panTo(470, $("#yard-pan"), false));
   syncYard();
   renderAll();
 }
