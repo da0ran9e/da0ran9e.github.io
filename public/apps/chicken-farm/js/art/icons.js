@@ -440,7 +440,7 @@ export const YARD_SPOTS = Object.freeze({
   coopDoor: Object.freeze({ x: 112, y: 146, r: 40 }), // trước chân cầu thang cửa chuồng
   feeder: Object.freeze({ x: 300, y: 138, r: 52 }), // trước máng thóc
   water: Object.freeze({ x: 452, y: 136, r: 40 }), // cạnh đĩa nước
-  nest: Object.freeze({ x: 700, y: 104, r: 70 }), // giữa ổ rơm (trứng / ổ ấp đặt ở đây)
+  nest: Object.freeze({ x: 600, y: 104, r: 66 }), // giữa ổ rơm (trứng / ổ ấp đặt ở đây)
   gate: Object.freeze({ x: 680, y: 234, r: 48 }), // cổng ra đồng ở hàng rào phải (dời vào trong: ngoài rào là con đường + gian hàng)
   market: Object.freeze({ x: 748, y: 340, r: 50 }), // gian hàng bên đường (ngoài hàng rào): chợ + khách qua đường
 });
@@ -525,18 +525,20 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   // hàng rào gỗ thấp dọc mép trên
   o += path(blob(rng, P(400, 86), 420 * sx, 7 * sy, 0, 0.05, 12), "#000", ` opacity=".08"`);
   let posts = "", postsL = "";
-  for (let i = 0, x = 8 + rng() * 10; x < 800; i++, x += 62 + rng() * 10) {
+  for (let i = 0, x = 8 + rng() * 10; x < 690; i++, x += 62 + rng() * 10) {
     const w = 11 + rng() * 3, top = 26 + rng() * 6;
     posts += smoothPts([[x, 86], [x - w / 2, 84], [x - w / 2 - 0.4, top + 6], [x - w * 0.2, top + 0.5], [x + w * 0.2, top], [x + w / 2, top + 6], [x + w / 2 + 0.4, 84]].map((p) => P(...p)));
     postsL += brushStroke(rng, [P(x - w * 0.2, top + 8), P(x - w * 0.24, top + 26), P(x - w * 0.18, 78)], 1.2 * S);
   }
   for (const y of [42, 64]) {
     const pts = [];
-    for (let i = 0; i <= 8; i++) pts.push(P(i * 102 - 8, y + (rng() - 0.5) * 3));
+    for (let i = 0; i <= 7; i++) pts.push(P(i * 101.7 - 8, y + (rng() - 0.5) * 3)); // tới cột góc x≈704 (ngoài là con đường)
     const up = pts.map(([x, yy]) => [x, yy - 4.4 * sy]), dn = pts.map(([x, yy]) => [x, yy + 4.4 * sy]).reverse();
     o += path(smoothPts([...up, ...dn]), y === 42 ? wood : shade(wood, 0.08));
     o += path(brushStroke(rng, pts.map(([x, yy]) => [x, yy - 2 * sy]), 1 * S), woodL, ` opacity=".7"`);
   }
+  // cột góc nơi hàng rào gỗ gặp hàng rào cây
+  posts += smoothPts([[704, 88], [697, 86], [696.6, 30], [701, 22], [707, 22], [711.4, 30], [711, 86]].map((p) => P(...p)));
   o += path(posts, woodD) + path(postsL, wood, ` opacity=".8"`);
 
   // chuồng gà (góc trên trái): tường ván, mái đỏ, cửa tối hình vòm, cầu thang ván
@@ -630,7 +632,7 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
     sl += brushStroke(rng, [c, along(c, deg, len * 0.5, (rng() - 0.5) * 2), along(c, deg, len, 0)], 0.8);
   }
   ns += path(sd, strawD, ` opacity=".7"`) + path(sl, strawL, ` opacity=".9"`);
-  o += T(ns, 708, 104);
+  o += T(`<g transform="translate(600 104) scale(.88) translate(-708 -104)">${ns}</g>`, 600, 104);
 
   // bụi cỏ quanh mép và chân rào (giữa sân thưa)
   let tufts = "", tuftsD = "";
@@ -657,18 +659,18 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   // ---- BÊN PHẢI (v9 vẽ lại): ngoài rào là dải cỏ + con đường quê có dải cỏ giữa; ranh giới là hàng rào cây xanh
   //      điểm hoa, mở ra một cổng gỗ có vòm và biển "ra đồng". Vẽ ở toạ độ 800×480, neo về chỗ co giãn bằng T().
   const R2 = mulberry32((seed >>> 0) + 4242); // nguồn riêng: không xô lệch phần trên
-  let out = `<path d="M700,150 C730,146 770,140 806,136 V486 H700Z" fill="#9fcf6c"/>`;
-  out += `<path d="M708,486 C712,420 704,360 708,300 C710,250 712,190 722,150" fill="none" stroke="#8fc25e" stroke-width="12" stroke-linecap="round" opacity=".6"/>`;
+  let out = `<path d="M700,40 C730,36 770,34 806,32 V486 H700Z" fill="#9fcf6c"/>`;
+  out += `<path d="M708,486 C712,420 704,360 708,300 C710,250 712,150 716,60" fill="none" stroke="#8fc25e" stroke-width="12" stroke-linecap="round" opacity=".6"/>`;
   // con đường: vào từ mép phải dưới mái ổ, uốn xuống đáy; nhánh rẽ vào cổng
-  const road = "M812,160 C786,176 768,200 762,236 C756,280 774,320 768,366 C762,410 752,446 756,490";
+  const road = "M800,-6 C792,60 772,130 764,190 C758,240 774,320 768,366 C762,410 752,446 756,490";
   const spur = "M764,236 C748,236 730,235 712,235";
   const st = (d, c, w, extra = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round"${extra}/>`;
   out += st(road, "#000", 50, ` opacity=".06"`) + st(road, earthD, 46) + st(spur, earthD, 30) + st(road, earth, 40) + st(spur, earth, 23);
   // hai vệt bánh xe sáng + dải cỏ giữa đường
-  for (const dx of [-9, 9]) out += st(`M${812 + dx},${168 + dx * 0.3} C${786 + dx},${182} ${769 + dx},${204} ${763 + dx},${238} C${757 + dx},${280} ${775 + dx},${320} ${769 + dx},${366} C${763 + dx},${410} ${753 + dx},${446} ${757 + dx},${490}`, earthL, 6, ` opacity=".75"`);
+  for (const dx of [-9, 9]) out += `<path d="${road}" transform="translate(${dx} 0)" fill="none" stroke="${earthL}" stroke-width="6" stroke-linecap="round" opacity=".75"/>`;
   let med = "";
-  for (let y = 190; y < 480; y += 9) {
-    const t = (y - 160) / 330, x = 762 + Math.sin(t * 5.2) * 6 + (y > 380 ? -6 : 0) + (R2() - 0.5) * 2;
+  for (let y = 40; y < 480; y += 9) {
+    const x = y < 190 ? 797 - (y - 0) * 0.17 : 762 + Math.sin(((y - 160) / 330) * 5.2) * 6 + (y > 380 ? -6 : 0) + (R2() - 0.5) * 2;
     if (R2() < 0.45) for (let k = 0; k < 3; k++) med += tongue(R2, [x + (k - 1) * 2, y], -90 + (k - 1) * 25 + (R2() - 0.5) * 16, 4 + R2() * 4, 1.3, { tip: "point", base: 0.9 }).d;
   }
   out += path(med, "#86bb58");
@@ -683,9 +685,9 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
 
   // hàng rào cây: chuỗi bụi chồng nhau dọc x≈700, hở một khoảng cho cổng (y 218–282); bóng đổ vào sân
   const hx = 700, gapA = 206, gapB = 264;
-  let hedgeR = `<path d="M${hx - 16},150 V${gapA} M${hx - 16},${gapB} V486" stroke="#000" stroke-width="20" opacity=".07" stroke-linecap="round"/>`;
+  let hedgeR = `<path d="M${hx - 16},96 V${gapA} M${hx - 16},${gapB} V486" stroke="#000" stroke-width="20" opacity=".07" stroke-linecap="round"/>`;
   let hD = "", hM = "", hL = "", fl = "";
-  for (const [y0, y1] of [[140, gapA], [gapB, 498]]) {
+  for (const [y0, y1] of [[92, gapA], [gapB, 498]]) {
     hD += `M${hx},${y0} L${hx},${y1}`; // thân bụi liền (vẽ bằng nét dày bên dưới)
     for (let y = y0; y <= y1; y += 7 + R2() * 7) {
       const x = hx + (R2() - 0.5) * 10, r = 9 + R2() * 9;

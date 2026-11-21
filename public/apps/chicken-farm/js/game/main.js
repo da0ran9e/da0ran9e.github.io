@@ -737,7 +737,7 @@ const DEFAULT_SPOTS = {
   coopDoor: { x: 95, y: 95, r: 55 },
   feeder: { x: 330, y: 120, r: 42 },
   water: { x: 430, y: 118, r: 30 },
-  nest: { x: 610, y: 95, r: 60 },
+  nest: { x: 600, y: 104, r: 66 },
   gate: { x: 680, y: 234, r: 48 },
   market: { x: 748, y: 340, r: 50 }, // gian hàng bên đường: chợ + khách qua đường
   play: { x: 430, y: 404, r: 52 },
@@ -806,8 +806,9 @@ function flashZone(key) {
 
 function nestSlots() {
   const n = state.incubators.length, s = SPOTS.nest;
-  // ổ đầu tiên ở góc rơm, các ổ thêm xếp lùi sang trái (không lấn ra cổng)
-  return state.incubators.map((id, i) => ({ id, i, x: s.x - i * 74, y: s.y + (i % 2) * 8 }));
+  // ổ xếp trong lều rơm (trong hàng rào): hai ổ một hàng, hàng sau thấp xuống; quá 4 ổ thì lùi sang trái
+  const pos = n === 1 ? [[0, -2]] : [[-32, -4], [36, -4], [-32, 44], [36, 44]];
+  return state.incubators.map((id, i) => ({ id, i, x: s.x + (pos[i]?.[0] ?? -30 - (i - 3) * 70), y: s.y + (pos[i]?.[1] ?? 44) }));
 }
 function renderNests() {
   const host = $("#yard-nests");
