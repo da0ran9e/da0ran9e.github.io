@@ -483,6 +483,37 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
     + blob(rng, P(452, 138), 50 * S, 16 * S, 0, 0.14, 9) + blob(rng, P(700, 132), 86 * S, 20 * S, -3, 0.14, 10),
     earth, ` opacity=".75"`);
 
+  // v9: chi tiết nhỏ trên nền đất giữa sân — sỏi, cọng rơm, dấu chân gà, chiếc lông rơi (nguồn ngẫu nhiên riêng: không xô lệch phần còn lại)
+  {
+    const rd = mulberry32((seed >>> 0) + 9191);
+    const inYard = () => { for (;;) { const x = 120 + rd() * 520, y = 200 + rd() * 200; if (((x - 400) / 330) ** 2 + ((y - 290) / 130) ** 2 < 1) return [x, y]; } };
+    let peb = "", pebL = "", strawBits = "", prints = "";
+    for (let i = 0; i < 26; i++) {
+      const [x, y] = inYard(), r = 1.6 + rd() * 2.6;
+      peb += blob(rd, P(x, y), r * 1.2 * S, r * 0.8 * S, rd() * 180, 0.2, 7);
+      if (rd() < 0.6) pebL += blob(rd, P(x - r * 0.3, y - r * 0.25), r * 0.45 * S, r * 0.3 * S, 0, 0.2, 6);
+    }
+    for (let i = 0; i < 18; i++) {
+      const [x, y] = inYard(), a = rd() * Math.PI, l = 6 + rd() * 8;
+      strawBits += brushStroke(rd, [P(x, y), P(x + Math.cos(a) * l * 0.5, y + Math.sin(a) * l * 0.5 + 0.6), P(x + Math.cos(a) * l, y + Math.sin(a) * l)], 0.9 * S);
+    }
+    // hai vệt dấu chân gà đi chéo sân
+    for (const [x0, y0, dx, dy] of [[210, 330, 26, -9], [470, 380, 24, 6]]) {
+      for (let k = 0; k < 7; k++) {
+        const x = x0 + dx * k + (k % 2 ? 0 : 3), y = y0 + dy * k + (k % 2 ? 5 : -5), ang = Math.atan2(dy, dx);
+        for (const d of [-0.55, 0, 0.55]) {
+          const t = ang + d, l = d ? 4.4 : 5.4;
+          prints += brushStroke(rd, [P(x, y), P(x + Math.cos(t) * l, y + Math.sin(t) * l)], 0.7 * S);
+        }
+        prints += brushStroke(rd, [P(x, y), P(x - Math.cos(ang) * 2.4, y - Math.sin(ang) * 2.4)], 0.6 * S);
+      }
+    }
+    o += path(peb, earthD, ` opacity=".75"`) + path(pebL, "#fff", ` opacity=".35"`) + path(strawBits, straw, ` opacity=".85"`) + path(prints, earthD, ` opacity=".9"`);
+    // một chiếc lông trắng rơi
+    const [fx, fy] = inYard();
+    o += path(blob(rd, P(fx, fy), 7 * S, 2.2 * S, -24, 0.08, 8), "#fffaf0", ` opacity=".9"`) + path(brushStroke(rd, [P(fx - 7, fy + 3), P(fx + 6, fy - 2.6)], 0.5 * S), "#cdb57a");
+  }
+
   // dải cây bụi sau hàng rào
   let hedge = "", hedgeD = "";
   for (let x = -20; x < 830; x += 46 + rng() * 18) {

@@ -17,7 +17,7 @@ import { GAMES, GAME_NAMES } from "./play.js";
 import { playIntro as runIntro } from "./intro.js";
 import { music } from "./music.js";
 import { t as tr, name as tname, errText, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
-import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, ticketSvg, ownedDecor, roadSvg, relicSvg, fieldHorizon } from "../art/decor.js";
+import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, towerSvg, ticketSvg, ownedDecor, roadSvg, relicSvg, fieldHorizon } from "../art/decor.js";
 
 let ICONS = null;
 try {
@@ -1609,6 +1609,20 @@ $("#replay-intro")?.addEventListener("click", () => { $("#help-dialog").close();
 
 /* ---------- sổ sưu tầm (★ đã nở · ★★ nuôi đủ chất) + mốc mở chuồng (Q13) ---------- */
 
+// Hình minh hoạ cho từng mục sổ / kỳ vật — vẽ một lần rồi giữ lại
+const dexArtCache = new Map();
+function dexArt(key) {
+  if (!dexArtCache.has(key)) {
+    const g = R.traitGenome?.(key);
+    dexArtCache.set(key, g ? renderChickenFlat(express(g, { nutrition: 0.95, gloss: 0.6 }), { growth: 1, detail: "low", label: "" }) : "");
+  }
+  return dexArtCache.get(key);
+}
+function relicArt(key) {
+  const k = `relic:${key}`;
+  if (!dexArtCache.has(k)) dexArtCache.set(k, renderChickenFlat(express(randomGenome(mulberry32(31), { sex: "hen" }), { nutrition: 0.95, gloss: 0.6 }), { growth: 1, detail: "low", relic: key, label: "" }));
+  return dexArtCache.get(k);
+}
 function renderDex() {
   const dex = state.dex ?? {};
   const done = R.dexStars(state, 2);
@@ -1619,14 +1633,20 @@ function renderDex() {
   $("#dex-progress").innerHTML = next
     ? `<p><b>${done}</b> ${tr("mục ★★ · mốc tiếp theo ở")} <b>${next.at}</b>: ${reward}</p><div class="progress" role="progressbar" aria-valuemin="${prev}" aria-valuemax="${next.at}" aria-valuenow="${done}"><i style="--p:${Math.round(((done - prev) / (next.at - prev)) * 100)}%"></i></div>`
     : `<p><b>${done}</b> ${tr("mục ★★ — đã đạt mọi mốc (chuồng")} ${state.coopCap} ${tr("chỗ,")} ${state.incubators.length} ${tr("ổ ấp).")}</p>`;
-  $("#dex-list").innerHTML = R.DEX.map((d) => {
-    const st = dex[d.key] ?? 0;
-    const stars = `<span class="stars" aria-label="${st} ${tr("trên 3 sao")}">${[1, 2, 3].map((i) => `<span class="${i > st ? "off" : i === 3 ? "s3" : ""}">★</span>`).join("")}</span>`;
-    return `<li class="dex-item${st ? "" : " unknown"}"><span class="dot" style="background:var(--${d.group})" title="${esc(tr(R.NUTRIENT_INFO[d.group].name))}"></span><span class="nm">${st ? esc(tr(d.name)) : "???"}</span>${stars}</li>`;
+  // v9: thẻ có hình minh hoạ, xếp theo nhóm chất; mục chưa có hiện bóng đen (đoán được dáng, chưa biết tên)
+  const groups = [...new Set(R.DEX.map((d) => d.group))];
+  $("#dex-list").innerHTML = groups.map((g) => {
+    const items = R.DEX.filter((d) => d.group === g);
+    const have = items.filter((d) => dex[d.key]).length;
+    return `<li class="dex-group"><h3><span class="dot" style="background:var(--${g})"></span>${esc(tr(R.NUTRIENT_INFO[g].name))} <span class="muted">${have}/${items.length}</span><small class="muted">${esc(tr(R.NUTRIENT_INFO[g].grows))}</small></h3><ul class="dex-cards">${items.map((d) => {
+      const st = dex[d.key] ?? 0;
+      const stars = `<span class="stars" aria-label="${st} ${tr("trên 3 sao")}">${[1, 2, 3].map((i) => `<span class="${i > st ? "off" : i === 3 ? "s3" : ""}">★</span>`).join("")}</span>`;
+      return `<li class="dex-item${st ? ` st${st}` : " unknown"}" title="${st ? esc(tr(d.name)) : tr("Chưa nở được gà mang đặc điểm này")}"><div class="dex-art">${dexArt(d.key)}</div><span class="nm">${st ? esc(tr(d.name)) : "???"}</span>${stars}</li>`;
+    }).join("")}</ul></li>`;
   }).join("");
   const got = state.breeds ?? {};
   const relics = state.relics ?? {};
-  $("#relic-list").innerHTML = R.MYSTERY.map((m) => `<div class="breed${relics[m.key] != null ? " got" : ""}"><span class="tier">${tr("Kỳ vật")}</span>${relics[m.key] != null ? relicSvg(m.key, 36) : ""}<b>${relics[m.key] != null ? esc(relicName(m.key)) : "???"}</b></div>`).join("");
+  $("#relic-list").innerHTML = R.MYSTERY.map((m) => `<div class="breed relic-card${relics[m.key] != null ? " got" : " unknown"}"><div class="relic-art">${relicArt(m.key)}</div><b>${relics[m.key] != null ? esc(relicName(m.key)) : "???"}</b></div>`).join("");
   $("#breed-cap").textContent = `(${Object.keys(got).length}/${R.BREEDS.length})`;
   $("#breed-list").innerHTML = R.BREEDS.map((b) => `<div class="breed${got[b.key] != null ? " got" : ""}"><span class="tier">${BREED_TIER[b.tier]}</span><b>${esc(tr(b.name))}</b><ul>${b.traits.map((t) => `<li class="${dex[t] ? "has" : ""}">${dex[t] ? esc(tr(R.DEX.find((d) => d.key === t).name)) : "???"}</li>`).join("")}</ul></div>`).join("");
 }
@@ -2038,7 +2058,9 @@ function renderDecor() {
     const vis = R.visitorView(state, now());
     const here = vis?.who && !vis.gone;
     extra.push(...ownedDecor(state.decorOwned));
-    extra.push({ key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 30, w: 96, html: playgroundSvg() });
+    extra.push({ key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 34, w: 136, html: playgroundSvg() });
+    const inTower = Object.values(state.tower ?? {}).reduce((a, b) => a + b, 0);
+    extra.push({ key: "tower", x: 384, y: 156, w: 54, html: towerSvg(inTower / R.CONFIG.tower.cap) });
     if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.market.x - 30, y: SPOTS.market.y + 36, w: 56, html: visitorSvg(vis.who) });
     const z = $('#yard-zones [data-zone="market"]');
     if (z) {
@@ -2130,7 +2152,7 @@ function renderTower() {
   $("#tower-cap").textContent = `(${total}/${R.CONFIG.tower.cap})`;
   $("#tower-list").innerHTML = Object.keys(R.SEEDS).filter((k) => k !== "odd" && (state.inventory[k] > 0 || state.tower[k] > 0)).map((k) => {
     const inv = state.inventory[k], tw = state.tower[k];
-    return `<div class="tower-row">${seedIcon(k, 28)}<span>${seedName(k)}<small>kho ${inv} ${tr("· tháp")} <b>${tw}</b></small></span><span class="btns">
+    return `<div class="tower-row">${seedIcon(k, 28)}<span>${seedName(k)}<small>${tr("kho")} ${inv} ${tr("· tháp")} <b>${tw}</b></small></span><span class="btns">
       <button type="button" class="small" data-tw="${k}" data-n="1"${inv >= 1 && room >= 1 ? "" : " disabled"}>+1</button>
       <button type="button" class="small primary" data-tw="${k}" data-n="${Math.min(inv, room, 10)}"${inv >= 1 && room >= 1 ? "" : " disabled"}>+${Math.max(1, Math.min(inv, room, 10))}</button>
       <button type="button" class="small" data-tw="${k}" data-n="-${tw}"${tw ? "" : " disabled"} title="${tr("Lấy lại về kho")}">↩</button></span></div>`;

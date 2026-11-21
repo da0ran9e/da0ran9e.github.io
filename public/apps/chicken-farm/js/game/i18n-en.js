@@ -731,4 +731,7 @@ export default {
   "Lông kỷ niệm": "Keepsake feathers",
   "Gà được chăm no đủ, sống tới tuổi già sẽ để lại một chiếc lông mang màu của nó.": "A well-fed chicken that lives to old age leaves a feather in its own colours.",
   "Không rõ bố mẹ: gà nở từ trứng khởi đầu, trứng quà hoặc trứng mua. Gà nở từ trứng đẻ trong trại mới có gia phả.": "Parents unknown: this chicken hatched from a starter, gift or bought egg. Only chickens from eggs laid on your farm have a family tree.",
+  "Chưa nở được gà mang đặc điểm này": "You have not hatched a chicken with this trait yet",
+  "Xong": "Done",
+  "kho": "storage",
 };

@@ -1371,6 +1371,17 @@ function visiting(state, now, who) {
 }
 const pay = (state, price) => (state.tickets < price ? err("no_ticket", `Cần ${price} vé`) : null);
 
+// Bộ gen minh hoạ cho Sổ sưu tầm: gà mang đặc điểm `key` và càng ít đặc điểm khác càng tốt (dò vài seed, chọn con "sạch" nhất).
+export function traitGenome(key, sex = "rooster") {
+  let best = null, bestN = Infinity;
+  for (let seed = 1; seed <= 120 && bestN > 1; seed++) {
+    const g = randomGenome(mulberry32(seed * 7919), { sex });
+    for (const [gene, alleles] of Object.entries(TRAIT_GENES[key])) g.g[gene] = [...alleles];
+    const keys = dexKeysOf(encodeGenome(g));
+    if (keys.includes(key) && keys.length < bestN) { best = g; bestN = keys.length; }
+  }
+  return best;
+}
 // Trứng chắc chắn nở ra gà mang đặc điểm `key`.
 function traitEgg(state, key, now, rng) {
   const g = randomGenome(rng);

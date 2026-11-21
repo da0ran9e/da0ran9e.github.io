@@ -80,7 +80,7 @@ function translateStatic(root) {
   const walk = document.createTreeWalker(root.body ?? root, NodeFilter.SHOW_TEXT);
   for (let n = walk.nextNode(); n; n = walk.nextNode()) {
     const raw = n.nodeValue, k = raw.trim();
-    if (k && VI.test(k) && DICT[lang][k] != null && !n.parentElement?.closest("script, style, [data-i18n], [data-i18n-html]")) n.nodeValue = raw.replace(k, DICT[lang][k]);
+    if (k && DICT[lang][k] != null && !n.parentElement?.closest("script, style, [data-i18n], [data-i18n-html]")) n.nodeValue = raw.replace(k, DICT[lang][k]);
   }
   for (const el of root.querySelectorAll("[title], [aria-label], [placeholder]")) {
     for (const a of ["title", "aria-label", "placeholder"]) {
