@@ -120,12 +120,21 @@ export const nestCrackSvg = (level) => svg("0 0 96 96", `
 
 /* ---------- v7: gian hàng bên đường, khách qua đường, sân chơi ---------- */
 
-export const stallSvg = () => svg("0 0 90 70", `
-  <ellipse cx="45" cy="66" rx="38" ry="4" fill="#000" opacity=".12"/>
-  <rect x="12" y="34" width="62" height="26" rx="3" fill="#b98652"/><rect x="12" y="34" width="62" height="6" fill="#8d5f33"/>
-  <circle cx="24" cy="62" r="7" fill="#7d5a2e"/><circle cx="24" cy="62" r="2.4" fill="#d7a970"/><circle cx="62" cy="62" r="7" fill="#7d5a2e"/><circle cx="62" cy="62" r="2.4" fill="#d7a970"/>
-  <rect x="14" y="10" width="3" height="26" fill="#8d5f33"/><rect x="69" y="10" width="3" height="26" fill="#8d5f33"/>
-  <path d="M8,12 h70 l-6,10 h-58z" fill="#4a8f9c"/><path d="M20,12 h12 l-2,10 h-12z M44,12 h12 l-2,10 h-12z M66,12 h12 l-6,10 h-8z" fill="#fffdf6"/>`, "decor-stall", "Gian hàng bên đường");
+export const stallSvg = () => {
+  // quầy gỗ có mái bạt sọc mép lượn sóng, trên quầy: rổ trứng, bao hạt, biển "CHỢ"
+  const scallop = Array.from({ length: 7 }, (_, i) => `<path d="M${10 + i * 14},27 a7,7 0 0 0 14,0Z" fill="${i % 2 ? "#fffdf6" : "#e4572e"}"/>`).join("");
+  const stripes = Array.from({ length: 7 }, (_, i) => `<path d="M${14 + i * 14},10 L${10 + i * 14},27 h14 L${28 + i * 14},10Z" fill="${i % 2 ? "#fffdf6" : "#e4572e"}"/>`).join("");
+  return svg("0 0 120 96", `
+  <ellipse cx="60" cy="92" rx="50" ry="4.5" fill="#000" opacity=".14"/>
+  <rect x="16" y="22" width="5" height="68" rx="2" fill="#8d5f33"/><rect x="99" y="22" width="5" height="68" rx="2" fill="#8d5f33"/>
+  <path d="M6,12 Q60,2 114,12 L112,27 H8Z" fill="#c4643f"/>${stripes}${scallop}
+  <rect x="10" y="56" width="100" height="32" rx="3" fill="#b98652"/><rect x="10" y="56" width="100" height="6" rx="2" fill="#d7a970"/>
+  <path d="M14,70 h92 M14,80 h92" stroke="#a9743f" stroke-width="1.6"/>
+  <path d="M22,56 q12,-14 26,0z" fill="#c9a66b"/>${[26, 32, 38, 44, 29, 35, 41].map((x, i) => `<ellipse cx="${x}" cy="${i < 4 ? 52 : 47}" rx="3.4" ry="4.2" fill="${["#f6f0e4", "#e8c9a0", "#b5dccd", "#f6f0e4"][i % 4]}"/>`).join("")}
+  <path d="M62,56 q-2,-16 8,-18 q12,-2 12,10 q0,6 -2,8z" fill="#d4ac72"/><path d="M66,42 q6,-4 12,0" stroke="#7d5a2e" stroke-width="1.6" fill="none"/><circle cx="70" cy="40" r="2" fill="#e3b23c"/><circle cx="75" cy="39" r="2" fill="#4f8f97"/>
+  <rect x="86" y="44" width="18" height="12" rx="2" fill="#fffdf6"/><path d="M95,44 v-6" stroke="#8d5f33" stroke-width="1.6"/>
+  <text x="95" y="53" text-anchor="middle" font-size="7" font-weight="800" font-family="system-ui,sans-serif" fill="#8a3414">CHỢ</text>`, "decor-stall", "Gian hàng bên đường");
+};
 
 const LOOK = {
   seller: ["#b23a9b", "#f2b318", "cone"], trader: ["#4a8f9c", "#8d5f33", "flat"], collector: ["#3f7a2c", "#2c2620", "top"],

@@ -622,10 +622,20 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   for (let i = 0; i < 7; i++) peb += blob(rng, P(60 + rng() * 680, 170 + rng() * 290), (1.6 + rng() * 2) * S, (1.2 + rng() * 1.2) * S, rng() * 180, 0.15, 7);
   o += path(peb, "#c9bfa6", ` opacity=".8"`);
   // NGOÀI hàng rào phải: dải cỏ + con đường đất chạy dọc, rẽ vào cổng (gian hàng của khách đứng bên đường)
-  const road = "M800,236 C760,240 724,246 700,250 M756,166 C752,240 760,330 754,480";
-  let out = `<path d="M702,166 H800 V480 H702Z" fill="#b5dc86"/>`;
-  out += `<path d="${road}" fill="none" stroke="${earthD}" stroke-width="30" stroke-linecap="round"/><path d="${road}" fill="none" stroke="${earth}" stroke-width="22" stroke-linecap="round"/>`;
-  out += `<path d="M756,180 C753,240 760,330 755,470" fill="none" stroke="${earthL}" stroke-width="3" stroke-dasharray="3 14" stroke-linecap="round" opacity=".8"/>`;
+  // dải cỏ ngoài rào: mép trên lượn mềm, đậm hơn sân một chút
+  let out = `<path d="M702,214 C724,196 752,184 800,176 V480 H702Z" fill="#a9d577"/>`;
+  out += `<path d="M712,480 C716,420 708,360 714,300 C716,262 720,236 736,214" fill="none" stroke="#9cca6a" stroke-width="10" stroke-linecap="round" opacity=".7"/>`;
+  // con đường: vào từ mép phải, uốn xuống đáy, có nhánh rẽ vào cổng; mép sẫm, lòng sáng, vệt bánh xe, sỏi
+  const road = "M806,196 C782,206 764,222 758,256 C752,296 768,330 762,372 C756,412 748,446 752,486";
+  const spur = "M758,256 C740,252 722,250 700,250";
+  out += `<path d="${road}" fill="none" stroke="${earthD}" stroke-width="40" stroke-linecap="round"/><path d="${spur}" fill="none" stroke="${earthD}" stroke-width="26" stroke-linecap="round"/>`;
+  out += `<path d="${road}" fill="none" stroke="${earth}" stroke-width="33" stroke-linecap="round"/><path d="${spur}" fill="none" stroke="${earth}" stroke-width="20" stroke-linecap="round"/>`;
+  for (const dx of [-7, 7]) out += `<path d="M${800 + dx},204 C${778 + dx},214 ${764 + dx},228 ${759 + dx},258 C${753 + dx},296 ${769 + dx},330 ${763 + dx},372 C${757 + dx},412 ${749 + dx},446 ${753 + dx},486" fill="none" stroke="${earthD}" stroke-width="2.4" stroke-linecap="round" opacity=".45" stroke-dasharray="14 9"/>`;
+  out += `<path d="M770,214 C764,222 760,236 759,250" fill="none" stroke="${earthL}" stroke-width="5" stroke-linecap="round" opacity=".8"/><path d="M766,332 C768,350 766,364 762,378" fill="none" stroke="${earthL}" stroke-width="5" stroke-linecap="round" opacity=".7"/>`;
+  for (const [x, y, r] of [[748, 300, 2.2], [772, 284, 1.6], [754, 420, 2], [770, 450, 1.5], [744, 470, 1.8], [778, 240, 1.4], [728, 248, 1.6]]) out += `<ellipse cx="${x}" cy="${y}" rx="${r * 1.4}" ry="${r}" fill="#c9bfa6"/>`;
+  // bụi cỏ và hoa ven đường
+  for (const [x, y] of [[726, 330], [790, 300], [722, 420], [792, 410], [734, 470]]) out += `<path d="M${x - 6},${y} q2,-10 4,-12 M${x},${y} q0,-12 1,-15 M${x + 6},${y} q-1,-10 -4,-12" stroke="#5f9a3e" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
+  for (const [x, y, c] of [[786, 336, "#fff6f0"], [728, 392, "#ffd36b"], [794, 446, "#ff9db0"]]) out += `<circle cx="${x}" cy="${y}" r="3" fill="${c}"/><circle cx="${x}" cy="${y}" r="1.2" fill="#f2b318"/>`;
   o += T(out, 752, 320);
   // hàng rào bên phải (từ góc ổ xuống đáy) + cổng ra đồng — vẽ ở x 782 rồi dời cả khối vào trong (−82, +40)
   const fx = 782;
@@ -653,7 +663,7 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   gt += path(brushStroke(rng, [[741, 252], [758, 241], [776, 229]], 2), shade(wood, 0.1));
   gt += path(plank(rng, 734, 220, 742, 264, 0.3) + plank(rng, 773, 220, 781, 264, 0.3), woodD);
   // ngưỡng cổng sáng (đồng cỏ phía ngoài lộ qua khe)
-  gt += path(blob(rng, [794, 206], 12, 46, 0, 0.08, 9), "#cdeb98");
+  // (ngưỡng cổng sáng cũ bỏ: sau khi dời rào nó thành một mảng bầu dục thừa)
   // biển gỗ đóng trên cánh cổng: mầm cỏ = "ra đồng"
   gt += path(plank(rng, 749, 206, 769, 224, 0.4), woodL);
   gt += path(plank(rng, 757, 222, 761, 228, 0.2), woodD);

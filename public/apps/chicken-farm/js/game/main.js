@@ -1921,7 +1921,7 @@ function renderDecor() {
     if (tw && tw.textContent !== tx) tw.textContent = tx;
   }
   // gian hàng bên đường luôn có (chợ), kể cả với server luật cũ
-  extra.unshift({ key: "stall", x: SPOTS.market.x, y: SPOTS.market.y + 34, w: 96, html: stallSvg() });
+  extra.unshift({ key: "stall", x: SPOTS.market.x + 2, y: SPOTS.market.y + 40, w: 104, html: stallSvg() });
   setHTML($("#yard-decor"), [...decorItems(R.decorOf(state), sceneSeed()), ...extra].map((d) => `<div class="decor" data-decor="${d.key}" style="left:${(d.x / W) * 100}%;top:${(d.y / H) * 100}%;width:${(d.w / W) * 100}%">${d.html}</div>`).join(""));
 }
 function renderSky() {
