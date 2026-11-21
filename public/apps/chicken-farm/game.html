@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Trại Gà</title>
   <meta name="description" content="Nuôi gà, thả đồng, ấp trứng, sưu tầm — mỗi con gà được vẽ từ bộ gen riêng.">
-  <link rel="stylesheet" href="game.css?v=31">
+  <link rel="stylesheet" href="game.css?v=32">
 </head>
 <body>
   <header class="bar">
@@ -81,12 +81,12 @@
       <div class="howto">
         <p><button type="button" class="small" id="replay-intro">Xem lại đoạn mở đầu</button></p>
         <ul>
-          <li>Chạm <b>trứng trong ổ ấp</b> để sưởi ấm — trứng nở nhanh hơn (mỗi quả tối đa 10 lần).</li>
-          <li>Kéo <b>gà</b> ra <b>Cổng</b> để thả ra cánh đồng kiếm hạt (mỗi lần 1 con, chỉ khi bạn đang xem). Thấy <b>đốm sáng</b> thì chạm vào: gà chạy tới bới được hạt tốt.</li>
-          <li>Kéo <b>hạt</b> từ khay lên gà để cho ăn, hoặc kéo gà vào <b>Máng ăn</b> để tự chọn hạt.</li>
-          <li>Chạm <b>trứng</b> để nhặt vào kho; kéo trứng có phôi (chấm xanh) vào <b>ổ ấp</b> để ấp.</li>
-          <li>Kéo gà hoặc trứng vào <b>Chợ</b> để đổi lấy túi hạt (gà lớn đổi được 2 trứng có phôi).</li>
-          <li>Không kéo được? Chạm gà (hoặc chọn trong danh sách đàn gà) rồi dùng các nút trong bảng thông tin.</li>
+          <li data-i18n-html>Chạm <b>trứng trong ổ ấp</b> để sưởi ấm; khi trứng sẵn sàng thì chạm <b>Gõ!</b> cho nở ngay.</li>
+          <li data-i18n-html>Đổ hạt vào <b>Tháp hạt</b>: gà đói tự ra ăn khi bạn đang mở game. Muốn cho một con ăn riêng thì vào <b>Kho</b>.</li>
+          <li data-i18n-html>Kéo gà ra <b>Cổng</b> để kiếm hạt ngoài cánh đồng. Thấy <b>đốm sáng</b> thì chạm vào: gà chạy tới bới được hạt tốt.</li>
+          <li data-i18n-html>Kéo gà hoặc trứng vào <b>gian hàng bên đường</b> để đổi lấy hạt, trứng hoặc vé. Khách qua đường cũng ghé ở đây.</li>
+          <li data-i18n-html>Kéo gà vào <b>Sân chơi</b> để chơi: tốn 1 sức chơi (hồi 1 điểm mỗi 30 phút), hết thì dùng vé.</li>
+          <li data-i18n-html>Nhận thưởng ở <b>Nhiệm vụ</b> và rương theo giờ; sưu tầm đặc điểm, giống và kỳ vật trong <b>Sổ</b>.</li>
         </ul>
       </div>
     </form></dialog>
@@ -228,21 +228,22 @@
        main.js mới với rules.js / field.js cũ còn trong bộ nhớ đệm và trang game không chạy. -->
   <script type="importmap">
   {"imports": {
-    "./js/genome.js": "./js/genome.js?v=31",
-    "./js/chicken-flat.js": "./js/chicken-flat.js?v=31",
-    "./js/chicken-svg.js": "./js/chicken-svg.js?v=31",
-    "./js/art/icons.js": "./js/art/icons.js?v=31",
-    "./js/art/decor.js": "./js/art/decor.js?v=31",
-    "./js/game/rules.js": "./js/game/rules.js?v=31",
-    "./js/game/field.js": "./js/game/field.js?v=31",
-    "./js/game/net.js": "./js/game/net.js?v=31",
-    "./js/game/fx.js": "./js/game/fx.js?v=31",
-    "./js/game/i18n.js": "./js/game/i18n.js?v=31",
-    "./js/game/play.js": "./js/game/play.js?v=31",
-    "./js/game/intro.js": "./js/game/intro.js?v=31",
-    "./js/game/music.js": "./js/game/music.js?v=31"
+    "./js/genome.js": "./js/genome.js?v=32",
+    "./js/chicken-flat.js": "./js/chicken-flat.js?v=32",
+    "./js/chicken-svg.js": "./js/chicken-svg.js?v=32",
+    "./js/art/icons.js": "./js/art/icons.js?v=32",
+    "./js/art/decor.js": "./js/art/decor.js?v=32",
+    "./js/game/rules.js": "./js/game/rules.js?v=32",
+    "./js/game/field.js": "./js/game/field.js?v=32",
+    "./js/game/net.js": "./js/game/net.js?v=32",
+    "./js/game/fx.js": "./js/game/fx.js?v=32",
+    "./js/game/i18n.js": "./js/game/i18n.js?v=32",
+    "./js/game/i18n-en.js": "./js/game/i18n-en.js?v=32",
+    "./js/game/play.js": "./js/game/play.js?v=32",
+    "./js/game/intro.js": "./js/game/intro.js?v=32",
+    "./js/game/music.js": "./js/game/music.js?v=32"
   }}
   </script>
-  <script type="module" src="js/game/main.js?v=31"></script>
+  <script type="module" src="js/game/main.js?v=32"></script>
 </body>
 </html>

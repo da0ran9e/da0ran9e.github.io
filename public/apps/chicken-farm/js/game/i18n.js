@@ -11,8 +11,10 @@
 // rồi dịch sang các khối khác. READY liệt kê ngôn ngữ đã dịch đủ; ngôn ngữ chưa đủ chỉ bật được bằng ?lang=.
 // Việc còn lại (chuyển hết chuỗi trong main.js / game.html sang khoá): xem docs/chicken-farm/next-rounds.md §i18n.
 
+import EN from "./i18n-en.js"; // bản dịch tiếng Anh, khoá = chính câu tiếng Việt trong mã
+
 const KEY = "trai-ga-lang";
-export const READY = ["vi"]; // thêm "en" vào ĐẦU danh sách khi đã dịch đủ → tiếng Anh thành mặc định
+export const READY = ["en", "vi"]; // ngôn ngữ đầu tiên là mặc định (chủ dự án: tiếng Anh)
 export const LANG_NAMES = { en: "English", vi: "Tiếng Việt" };
 
 const DICT = {
@@ -40,6 +42,8 @@ const DICT = {
   },
 };
 
+Object.assign(DICT.en, EN);
+
 function pick() {
   let q = null, saved = null;
   try { q = new URLSearchParams(location.search).get("lang"); } catch {}
@@ -53,7 +57,8 @@ export const lang = pick();
 const fill = (s, vars) => (vars ? s.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : s);
 export const has = (key) => key in DICT[lang] || key in DICT.vi;
 export const t = (key, vars) => fill(DICT[lang][key] ?? DICT.vi[key] ?? key, vars);
-export const name = (group, id, fallback) => DICT[lang][`${group}.${id}`] ?? fallback ?? DICT.vi[`${group}.${id}`] ?? id;
+// Tên dữ liệu của luật (hạt, sổ, giống…): khoá nhóm.id nếu có, không thì dịch chính tên tiếng Việt của luật.
+export const name = (group, id, fallback) => DICT[lang][`${group}.${id}`] ?? (fallback != null ? t(fallback) : DICT.vi[`${group}.${id}`] ?? id);
 export const errText = (r) => DICT[lang][`err.${r.code}`] ?? r.message ?? r.code;
 
 export function setLang(code) {
@@ -63,8 +68,34 @@ export function setLang(code) {
   u.searchParams.delete("lang");
   location.replace(u);
 }
+// Chữ tĩnh trong game.html (viết bằng tiếng Việt): dịch một lần lúc tải trang. Phần tử có data-i18n-html được dịch
+// cả câu (giữ thẻ <b> bên trong, đúng thứ tự từ); còn lại dịch từng đoạn chữ và các thuộc tính title / aria-label.
+const VI = /[À-ÖØ-öø-ỹ]/;
+function translateStatic(root) {
+  if (lang === "vi") return;
+  for (const el of root.querySelectorAll("[data-i18n-html]")) {
+    const k = el.innerHTML.replace(/\s+/g, " ").trim();
+    if (DICT[lang][k]) el.innerHTML = DICT[lang][k];
+  }
+  const walk = document.createTreeWalker(root.body ?? root, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const raw = n.nodeValue, k = raw.trim();
+    if (k && VI.test(k) && DICT[lang][k] != null && !n.parentElement?.closest("script, style, [data-i18n], [data-i18n-html]")) n.nodeValue = raw.replace(k, DICT[lang][k]);
+  }
+  for (const el of root.querySelectorAll("[title], [aria-label], [placeholder]")) {
+    for (const a of ["title", "aria-label", "placeholder"]) {
+      const v = el.getAttribute(a);
+      if (v && VI.test(v) && DICT[lang][v] != null) el.setAttribute(a, DICT[lang][v]);
+    }
+  }
+  if (DICT[lang][document.title]) document.title = DICT[lang][document.title];
+  const meta = document.querySelector('meta[name="description"]');
+  if (meta && DICT[lang][meta.content]) meta.content = DICT[lang][meta.content];
+}
+
 export function applyI18n(root = document) {
   document.documentElement.lang = lang;
+  translateStatic(root);
   for (const el of root.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
   for (const el of root.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
   for (const el of root.querySelectorAll("[data-i18n-aria]")) el.setAttribute("aria-label", t(el.dataset.i18nAria));

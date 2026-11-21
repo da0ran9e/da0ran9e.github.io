@@ -1,3 +1,4 @@
+import { t as tr } from "./i18n.js";
 // Trại Gà — bốn trò ở sân chơi, mỗi tuổi một trò. Chỉ là trình diễn phía client: luật (rules.startPlay / endPlay)
 // không tin điểm ở đây, nó kẹp về 0..1 và giới hạn phần thưởng (docs/chicken-farm/design-hard-parts.md §H2).
 //
@@ -42,9 +43,9 @@ function stage(host, title, hint, inner) {
 function hop(host, ctx) {
   return new Promise((done) => {
     const total = 10, air = 0.55 + 0.25 * ctx.stats.jump;
-    const s = stage(host, "Nhảy vũng nước", "Bấm để nhảy qua vũng nước", `
+    const s = stage(host, tr("Nhảy vũng nước"), tr("Bấm để nhảy qua vũng nước"), `
       <div class="pg-field"><div class="pg-hero" style="left:18%">${ctx.art}</div><div class="pg-ground"></div></div>
-      <div class="pg-dots">${"<i></i>".repeat(total)}</div><div class="rv-actions"><button type="button" class="gold" data-pg>Nhảy!</button></div>`);
+      <div class="pg-dots">${"<i></i>".repeat(total)}</div><div class="rv-actions"><button type="button" class="gold" data-pg>${tr("Nhảy!")}</button></div>`);
     const field = s.root.querySelector(".pg-field"), hero = s.root.querySelector(".pg-hero"), dots = s.root.querySelectorAll(".pg-dots i");
     let jumpT = -1, spawned = 0, seen = 0, cleared = 0, nextAt = 1.2;
     const puddles = [];
@@ -89,9 +90,9 @@ function hop(host, ctx) {
 function dash(host, ctx) {
   return new Promise((done) => {
     const dur = 16, gain = 0.024 * (0.85 + 0.35 * ctx.stats.speed);
-    const s = stage(host, "Chạy đua", "Bấm thật nhanh khi đèn XANH — đèn ĐỎ thì đứng yên!", `
+    const s = stage(host, tr("Chạy đua"), tr("Bấm thật nhanh khi đèn XANH — đèn ĐỎ thì đứng yên!"), `
       <div class="pg-field track"><div class="pg-light go"></div><div class="pg-flag"></div><div class="pg-hero" style="left:6%">${ctx.art}</div><div class="pg-ground"></div></div>
-      <div class="rv-actions"><button type="button" class="gold" data-pg>Chạy!</button></div>`);
+      <div class="rv-actions"><button type="button" class="gold" data-pg>${tr("Chạy!")}</button></div>`);
     const hero = s.root.querySelector(".pg-hero"), light = s.root.querySelector(".pg-light");
     let p = 0, red = false, flip = rand(2.2, 3.4), stumble = 0;
     const tap = () => {
@@ -121,7 +122,7 @@ function dash(host, ctx) {
 function peck(host, ctx) {
   return new Promise((done) => {
     const dur = 18, life = 0.85 + 0.45 * ctx.stats.eye;
-    const s = stage(host, "Mổ hạt", "Chạm vào HẠT vàng — đừng mổ sỏi xám", `
+    const s = stage(host, tr("Mổ hạt"), tr("Chạm vào HẠT vàng — đừng mổ sỏi xám"), `
       <div class="pg-hero small">${ctx.art}</div><div class="pg-grid">${'<button type="button" class="pg-hole"></button>'.repeat(9)}</div>`);
     const holes = [...s.root.querySelectorAll(".pg-hole")], hero = s.root.querySelector(".pg-hero");
     const slot = holes.map(() => ({ kind: null, until: 0 }));
@@ -159,7 +160,7 @@ function peck(host, ctx) {
 function roll(host, ctx) {
   return new Promise((done) => {
     const dur = 18, safe = 0.42;
-    const s = stage(host, "Giữ trứng thăng bằng", "Giữ nút ◀ ▶ để quả trứng nằm trong vùng xanh", `
+    const s = stage(host, tr("Giữ trứng thăng bằng"), tr("Giữ nút ◀ ▶ để quả trứng nằm trong vùng xanh"), `
       <div class="pg-beam"><div class="pg-safe" style="left:${50 - safe * 50}%;width:${safe * 100}%"></div><div class="pg-hero egg">${ctx.art}</div></div>
       <div class="rv-actions pg-lr"><button type="button" class="gold" data-dir="-1">◀</button><button type="button" class="gold" data-dir="1">▶</button></div>`);
     const egg = s.root.querySelector(".pg-hero");
@@ -187,4 +188,4 @@ function roll(host, ctx) {
 }
 
 export const GAMES = { hop, dash, peck, roll };
-export const GAME_NAMES = { hop: "Nhảy vũng nước", dash: "Chạy đua", peck: "Mổ hạt", roll: "Giữ trứng thăng bằng" };
+export const GAME_NAMES = { hop: tr("Nhảy vũng nước"), dash: tr("Chạy đua"), peck: tr("Mổ hạt"), roll: tr("Giữ trứng thăng bằng") };

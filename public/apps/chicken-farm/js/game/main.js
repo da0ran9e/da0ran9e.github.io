@@ -16,7 +16,7 @@ import { sfx, sound, buzz, burst, confetti, flyTo, bump } from "./fx.js";
 import { GAMES, GAME_NAMES } from "./play.js";
 import { playIntro as runIntro } from "./intro.js";
 import { music } from "./music.js";
-import { t, name as tname, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
+import { t as tr, name as tname, errText, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
 import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, ticketSvg, ownedDecor, roadSvg, relicSvg, fieldHorizon } from "../art/decor.js";
 
 let ICONS = null;
@@ -139,38 +139,39 @@ function load() {
 /* ---------- định dạng, biểu tượng ---------- */
 
 function fmtDur(ms) {
-  if (ms < MIN) return "dưới 1 phút";
+  if (ms < MIN) return tr("dưới 1 phút");
   const m = Math.round(ms / MIN);
-  if (m < 60) return `${m} phút`;
+  if (m < 60) return `${m} ${tr("phút")}`;
   const h = Math.floor(m / 60), mm = m % 60;
-  if (h < 48) return mm ? `${h} giờ ${mm} phút` : `${h} giờ`;
+  if (h < 48) return mm ? `${h} ${tr("giờ")} ${mm} ${tr("phút")}` : `${h} ${tr("giờ")}`;
   const d = Math.floor(h / 24), hh = h % 24;
-  return hh ? `${d} ngày ${hh} giờ` : `${d} ngày`;
+  return hh ? `${d} ${tr("ngày")} ${hh} ${tr("giờ")}` : `${d} ${tr("ngày")}`;
 }
 // Thời gian chờ ngắn (trứng sắp nở) thì đếm ngược theo giây cho hồi hộp.
-const fmtEta = (ms) => (ms < 2 * MIN ? `${Math.max(1, Math.ceil(ms / 1000))} giây` : fmtDur(ms));
+const fmtEta = (ms) => (ms < 2 * MIN ? `${Math.max(1, Math.ceil(ms / 1000))} ${tr("giây")}` : fmtDur(ms));
+const LOCALE = lang === "vi" ? "vi-VN" : "en-GB";
 const seedName = (k) => tname("seed", k, R.SEEDS[k]?.name);
 // lời nhiệm vụ theo ngôn ngữ; thiếu bản dịch thì dùng lời của luật
-const questText = (q) => { const k = `quest.${q.key}`, s = t(k, { n: q.goal }); return s === k ? q.text : s; };
-const STAGE = { chick: "Gà con", juvenile: "Gà giò", adult: "Trưởng thành" };
+const questText = (q) => { const k = `quest.${q.key}`, s = tr(k, { n: q.goal }); return s === k ? tr(q.text) : s; };
+const STAGE = { chick: tr("Gà con"), juvenile: tr("Gà giò"), adult: tr("Trưởng thành") };
 const NUT_COLOR = { protein: "var(--protein)", energy: "var(--energy)", mineral: "var(--mineral)", pigment: "var(--pigment)" };
 const SEED_COLOR = { common: "#c9a66b", protein: "#e0603a", energy: "#e3b23c", mineral: "#4f8f97", pigment: "#b0479b", premium: "#e8c34a", odd: "#5fbf8f" };
-const SEED_SHORT = { common: "Thường", protein: "Đạm", energy: "Mẩy", mineral: "Khoáng", pigment: "Màu", premium: "Quý", odd: "Lạ" };
+const SEED_SHORT = { common: tr("Thường"), protein: tr("Đạm"), energy: tr("Mẩy"), mineral: tr("Khoáng"), pigment: tr("Màu"), premium: tr("Quý"), odd: tr("Lạ") };
 
 function seedIcon(kind, size = 24) {
   if (ICONS?.seedIcon) return ICONS.seedIcon(kind, size);
   return `<svg viewBox="0 0 24 24" role="img" aria-label="${seedName(kind)}"><ellipse cx="12" cy="13" rx="6" ry="8" transform="rotate(-20 12 13)" fill="${SEED_COLOR[kind]}"/></svg>`;
 }
 function seedSummary(kind) {
-  if (kind === "common") return "Ít chất, no bụng";
-  if (kind === "premium") return "Giàu cả 4 chất";
-  if (kind === "odd") return "Tăng biến dị lứa sau";
+  if (kind === "common") return tr("Ít chất, no bụng");
+  if (kind === "premium") return tr("Giàu cả 4 chất");
+  if (kind === "odd") return tr("Tăng biến dị lứa sau");
   const top = Object.entries(R.SEEDS[kind].n).sort((a, b) => b[1] - a[1])[0][0];
-  return `Giàu ${R.NUTRIENT_INFO[top].name.toLowerCase()} → ${R.NUTRIENT_INFO[top].grows.split(":")[0].toLowerCase()}`;
+  return `${tr("Giàu")} ${tr(R.NUTRIENT_INFO[top].name).toLowerCase()} → ${tr(R.NUTRIENT_INFO[top].grows).split(":")[0].toLowerCase()}`;
 }
 function eggArt(egg) {
   const ph = { egg: { shell: egg.shell || "#f3ead8", speckle: 0.15, seed: [...(egg.id || "e")].reduce((a, c) => a + c.charCodeAt(0), 0) } };
-  return renderEggFlat(ph, { label: egg.fertile ? "Trứng có phôi" : "Trứng không phôi" });
+  return renderEggFlat(ph, { label: egg.fertile ? tr("Trứng có phôi") : tr("Trứng không phôi") });
 }
 const yardEggArt = (egg) => (ICONS?.nestEggSvg ? ICONS.nestEggSvg(egg.shell || "#f3ead8", 40, "grass") : eggArt(egg));
 
@@ -215,7 +216,7 @@ function popIn(layer, x, y, text) {
 const logItems = [];
 const justHatched = new Set();
 function nameOf(id) {
-  return state.chickens.find((c) => c.id === id)?.name ?? state.memorial.find((m) => m.id === id)?.name ?? "Gà";
+  return state.chickens.find((c) => c.id === id)?.name ?? state.memorial.find((m) => m.id === id)?.name ?? tr("Gà");
 }
 const seenEvents = new Set();
 // quiet: lúc mở game sau khi vắng mặt — không bắn một tràng thông báo; gom lại cho màn "khi bạn vắng mặt".
@@ -228,54 +229,54 @@ function handleEvents(events, { quiet = false } = {}) {
     if (seenEvents.size > 2000) seenEvents.delete(seenEvents.values().next().value);
     let text = "", loud = false;
     if (e.type === "hatched") {
-      text = `<b>${esc(nameOf(e.chickenId))}</b> đã nở!`;
+      text = `<b>${esc(nameOf(e.chickenId))}</b> ${tr("đã nở!")}`;
       justHatched.add(e.chickenId);
       hiddenChicks.add(e.chickenId); // ra mắt trong màn nở trứng rồi mới chui ra sân
       queueReveal({ kind: "hatch", chickenId: e.chickenId, shell: eggShells.get(e.eggId), fresh: [] });
     } else if (e.type === "juvenile") {
-      text = `<b>${esc(nameOf(e.chickenId))}</b> thành gà giò`;
+      text = `<b>${esc(nameOf(e.chickenId))}</b> ${tr("thành gà giò")}`;
       if (recap) recap.juveniles++;
-      else stageFx(e.chickenId, "Thành gà giò!");
+      else stageFx(e.chickenId, tr("Thành gà giò!"));
     } else if (e.type === "adult") {
-      text = `<b>${esc(nameOf(e.chickenId))}</b> đã trưởng thành`;
+      text = `<b>${esc(nameOf(e.chickenId))}</b> ${tr("đã trưởng thành")}`;
       loud = true;
       if (recap) recap.adults.push(nameOf(e.chickenId));
       else {
-        stageFx(e.chickenId, "Trưởng thành!");
+        stageFx(e.chickenId, tr("Trưởng thành!"));
         if (state.chickens.find((c) => c.id === e.chickenId)?.sex === "rooster") sfx("crow", 0.9);
       }
     } else if (e.type === "laid") {
-      text = `<b>${esc(nameOf(e.chickenId))}</b> đẻ một trứng ${e.fertile ? "có phôi" : "không phôi"} ngoài sân`;
+      text = `<b>${esc(nameOf(e.chickenId))}</b> ${tr("đẻ một trứng")} ${e.fertile ? tr("có phôi") : tr("không phôi")} ${tr("ngoài sân")}`;
       loud = true;
       const a = yard?.chickens.get(e.chickenId);
       ui.eggPos[e.eggId] = a ? { x: clampN(a.x + (Math.random() - 0.5) * 30, 70, 730), y: clampN(a.y + 6, 150, 440) } : randomEggSpot(e.eggId);
       if (recap) recap.laid++;
       else {
         sfx("cluck");
-        if (a && view === "yard") popIn("#yard-pops", a.x, a.y - 70, "Cục tác!");
+        if (a && view === "yard") popIn("#yard-pops", a.x, a.y - 70, tr("Cục tác!"));
       }
     } else if (e.type === "died") {
-      text = `<b>${esc(nameOf(e.chickenId))}</b> đã mất${e.starved ? " (bị bỏ đói)" : " vì tuổi già"}`;
+      text = `<b>${esc(nameOf(e.chickenId))}</b> ${tr("đã mất")}${e.starved ? tr(" (bị bỏ đói)") : tr(" vì tuổi già")}`;
       loud = true;
       if (recap) recap.died.push({ name: nameOf(e.chickenId), starved: e.starved });
       else sfx("sad");
     } else if (e.type === "dex") {
       const d = R.DEX.find((x) => x.key === e.key);
-      const nm = `<b>${esc(d?.name ?? e.key)}</b>`;
+      const nm = `<b>${esc(tr(d?.name ?? e.key))}</b>`;
       if (e.star === 1) {
-        text = `Sổ sưu tầm: mục mới ${nm} ★`;
+        text = `${tr("Sổ sưu tầm: mục mới")} ${nm} ★`;
         for (let i = reveals.length - 1; i >= 0; i--) if (reveals[i].kind === "hatch" && reveals[i].chickenId === e.chickenId) { reveals[i].fresh.push(e.key); break; }
       } else {
-        text = e.star === 3 ? `Sổ sưu tầm ★★★ ${nm} — thuần chủng!` : `Sổ sưu tầm ★★ ${nm} — nuôi đủ chất tới trưởng thành`;
+        text = e.star === 3 ? `${tr("Sổ sưu tầm ★★★")} ${nm} ${tr("— thuần chủng!")}` : `${tr("Sổ sưu tầm ★★")} ${nm} ${tr("— nuôi đủ chất tới trưởng thành")}`;
         loud = true;
         if (!recap) sfx("good", 0.4);
       }
     } else if (e.type === "milestone") {
-      text = `Đạt mốc sổ ${e.n}: chuồng ${e.coopCap} chỗ · ${e.incubators} ổ ấp`;
+      text = `${tr("Đạt mốc sổ")} ${e.n}${tr(": chuồng")} ${e.coopCap} ${tr("chỗ ·")} ${e.incubators} ${tr("ổ ấp")}`;
       queueReveal({ kind: "milestone", n: e.n, coopCap: e.coopCap, incubators: e.incubators });
     } else if (e.type === "breed") {
       const b = R.BREEDS.find((x) => x.key === e.key);
-      text = `Đạt giống <b>${esc(b?.name ?? e.key)}</b>!`;
+      text = `${tr("Đạt giống")} <b>${esc(tr(b?.name ?? e.key))}</b>!`;
       queueReveal({ kind: "breed", key: e.key, chickenId: e.chickenId, bagId: e.bagId, n: e.n });
     }
     if (!text) continue;
@@ -289,12 +290,12 @@ function handleEvents(events, { quiet = false } = {}) {
 function queueRecap(recap, away = 0) {
   if (!recap) return;
   const lines = [];
-  if (recap.laid) lines.push(`🥚 Gà mái đẻ <b>${recap.laid}</b> quả trứng ngoài sân`);
-  if (recap.adults.length) lines.push(`🐔 <b>${recap.adults.map(esc).join(", ")}</b> đã trưởng thành`);
-  if (recap.juveniles) lines.push(`🐥 <b>${recap.juveniles}</b> gà con thành gà giò`);
-  for (const d of recap.died) lines.push(`🕊 <b>${esc(d.name)}</b> đã mất${d.starved ? " (bị bỏ đói)" : " vì tuổi già"}`);
+  if (recap.laid) lines.push(`${tr("🥚 Gà mái đẻ")} <b>${recap.laid}</b> ${tr("quả trứng ngoài sân")}`);
+  if (recap.adults.length) lines.push(`🐔 <b>${recap.adults.map(esc).join(", ")}</b> ${tr("đã trưởng thành")}`);
+  if (recap.juveniles) lines.push(`🐥 <b>${recap.juveniles}</b> ${tr("gà con thành gà giò")}`);
+  for (const d of recap.died) lines.push(`🕊 <b>${esc(d.name)}</b> ${tr("đã mất")}${d.starved ? tr(" (bị bỏ đói)") : tr(" vì tuổi già")}`);
   const waiting = reveals.filter((r) => r.kind === "hatch").length;
-  if (waiting) lines.push(`🐣 <b>${waiting}</b> gà con chờ bạn về mới chui ra`);
+  if (waiting) lines.push(`🐣 <b>${waiting}</b> ${tr("gà con chờ bạn về mới chui ra")}`);
   // chỉ có chuyện nhỏ (gà con thành gà giò) thì không cần chặn màn hình
   const major = recap.laid || recap.adults.length || recap.died.length || waiting;
   if (major) reveals.unshift({ kind: "recap", lines, away });
@@ -359,7 +360,7 @@ async function run(p, okText) {
   if (!result.ok) {
     if (result.code === "coop_full" && offerRoom()) return false;
     sfx("error");
-    toast(result.message);
+    toast(errText(result));
     renderAll();
     return false;
   }
@@ -447,17 +448,17 @@ $("#reveal").addEventListener("cancel", (e) => e.preventDefault()); // Esc khôn
 // Ngưỡng chỉnh theo 20.000 bộ gen ngẫu nhiên: thường ~60%, đẹp ~26%, quý ~11%, huyền thoại ~3%.
 const relicName = (k) => tname("relic", k, R.MYSTERY.find((m) => m.key === k)?.name ?? k);
 const RARE_W = { silkie: 5, splash: 5, fiveToes: 3, rumpless: 3, frizzle: 3, longTail: 3, mottled: 2, spangled: 2, laced: 2, barred: 2, darkSkin: 2, crest: 2, muff: 2, feetFeather: 2, blue: 1.5, rose: 0.5, pea: 0.5, walnut: 0.5 };
-const TIERS = [[12, 4, "Gà huyền thoại"], [9, 3, "Gà quý"], [6, 2, "Gà đẹp"], [0, 1, "Gà thường"]];
+const TIERS = [[12, 4, tr("Gà huyền thoại")], [9, 3, tr("Gà quý")], [6, 2, tr("Gà đẹp")], [0, 1, tr("Gà thường")]];
 const TIER_COLORS = { 1: ["#fff", "#ffe9a6", "#cfd8dc"], 2: ["#7fd0ff", "#fff", "#bfe6ff"], 3: ["#d0a8ff", "#fff", "#f0b3ff"], 4: ["#ffd95a", "#fff3b0", "#ff9d5c"] };
 function tierOf(code) {
   const score = R.dexKeysOf(code).reduce((a, k) => a + (RARE_W[k] ?? 1), 0);
   const [, n, name] = TIERS.find(([min]) => score >= min);
   return { n, name };
 }
-const BREED_TIER = ["", "Giống đẹp", "Giống quý", "Giống huyền thoại"];
+const BREED_TIER = ["", tr("Giống đẹp"), tr("Giống quý"), tr("Giống huyền thoại")];
 const dexChip = (k, fresh = false) => {
   const d = R.DEX.find((x) => x.key === k);
-  return `<li class="rv-chip${fresh ? " new" : ""}"><i style="--c:var(--${d.group})"></i>${esc(d.name)}</li>`;
+  return `<li class="rv-chip${fresh ? " new" : ""}"><i style="--c:var(--${d.group})"></i>${esc(tr(d.name))}</li>`;
 };
 const seedRank = (k) => (k === "premium" ? 3 : k === "odd" ? 2 : k === "common" ? 0 : 1);
 const bagArt = (size, n) => (ICONS?.bagIcon ? ICONS.bagIcon(size, n) : "👜");
@@ -468,13 +469,13 @@ const REVEAL = {
     const ch = state.chickens.find((c) => c.id === r.chickenId);
     if (!ch) return void hiddenChicks.delete(r.chickenId);
     const left = reveals.filter((x) => x.kind === "hatch").length;
-    const count = left ? `<span class="rv-count">còn ${left} quả nữa</span>` : "";
+    const count = left ? `<span class="rv-count">${tr("còn")} ${left} ${tr("quả nữa")}</span>` : "";
     const shell = r.shell || "#f3ead8";
-    const eggSvg = (crack) => renderEggFlat({ egg: { shell, speckle: 0.15, seed: 7 } }, { crack, label: "Trứng đang nở" });
-    rvShow(`${count}<p class="rv-kicker">Trứng đang nứt!</p>
-      <button type="button" class="rv-egg" data-go="tap" aria-label="Chạm để giúp gà con chui ra">${eggSvg(0.15)}</button>
-      <p class="rv-sub">Chạm vào trứng để giúp gà con chui ra</p>
-      <div class="rv-actions"><button type="button" class="plain" data-go="skip">Bỏ qua</button></div>`);
+    const eggSvg = (crack) => renderEggFlat({ egg: { shell, speckle: 0.15, seed: 7 } }, { crack, label: tr("Trứng đang nở") });
+    rvShow(`${count}<p class="rv-kicker">${tr("Trứng đang nứt!")}</p>
+      <button type="button" class="rv-egg" data-go="tap" aria-label="${tr("Chạm để giúp gà con chui ra")}">${eggSvg(0.15)}</button>
+      <p class="rv-sub">${tr("Chạm vào trứng để giúp gà con chui ra")}</p>
+      <div class="rv-actions"><button type="button" class="plain" data-go="skip">${tr("Bỏ qua")}</button></div>`);
     sfx("crack");
     for (let taps = 0; taps < 3;) {
       const go = await rvWait(6000, "tap");
@@ -493,24 +494,24 @@ const REVEAL = {
     const tier = tierOf(ch.code);
     const keys = R.dexKeysOf(ch.code);
     const st = ph.stats, perks = [];
-    if (st.growth >= 0.62) perks.push("Lớn nhanh");
-    if (st.hardiness >= 0.62) perks.push("Sống dai");
-    if (st.speed >= 0.62) perks.push("Chạy nhanh");
-    if (ph.sex === "hen" && st.eggRate >= 0.62) perks.push("Sai trứng");
-    const breeds = R.breedsOf(ch.code).map((k) => R.BREEDS.find((b) => b.key === k).name);
-    const relic = ch.relic ? `<div class="rv-relic">${relicSvg(ch.relic, 56)}<span><b>Kỳ vật: ${esc(relicName(ch.relic))}</b><br><small>Bộ phận độc nhất — không lai giống ra được, không truyền cho con</small></span></div>` : "";
+    if (st.growth >= 0.62) perks.push(tr("Lớn nhanh"));
+    if (st.hardiness >= 0.62) perks.push(tr("Sống dai"));
+    if (st.speed >= 0.62) perks.push(tr("Chạy nhanh"));
+    if (ph.sex === "hen" && st.eggRate >= 0.62) perks.push(tr("Sai trứng"));
+    const breeds = R.breedsOf(ch.code).map((k) => tr(R.BREEDS.find((b) => b.key === k).name));
+    const relic = ch.relic ? `<div class="rv-relic">${relicSvg(ch.relic, 56)}<span><b>${tr("Kỳ vật:")} ${esc(relicName(ch.relic))}</b><br><small>${tr("Bộ phận độc nhất — không lai giống ra được, không truyền cho con")}</small></span></div>` : "";
     const note = breeds.length
-      ? `Mang đủ gen của giống <b>${esc(breeds.join(", "))}</b> — nuôi đủ chất tới lớn là đạt giống!`
-      : keys.length ? "Các đặc điểm này hiện rõ dần khi gà lớn — nếu được ăn đủ chất." : "";
+      ? `${tr("Mang đủ gen của giống")} <b>${esc(breeds.join(", "))}</b> ${tr("— nuôi đủ chất tới lớn là đạt giống!")}`
+      : keys.length ? tr("Các đặc điểm này hiện rõ dần khi gà lớn — nếu được ăn đủ chất.") : "";
     rvShow(`<div class="rv-rays"></div>${count}
-      <p class="rv-kicker">${ph.sex === "rooster" ? "Một chú gà trống" : "Một cô gà mái"} chào đời</p>
+      <p class="rv-kicker">${ph.sex === "rooster" ? tr("Một chú gà trống") : tr("Một cô gà mái")} ${tr("chào đời")}</p>
       <div class="rv-art">${chickenSvg(ch, { detail: "high" }).svg}</div>
       <h2 class="rv-title">${ph.sex === "rooster" ? "♂" : "♀"} ${esc(ch.name)}</h2>
-      <span class="rv-tier tier-${ch.relic ? 4 : tier.n}">${ch.relic ? "Gà kỳ vật" : tier.name}</span>${relic}
-      ${keys.length ? `<ul class="rv-chips" aria-label="Đặc điểm mang trong gen">${keys.map((k) => dexChip(k, r.fresh.includes(k))).join("")}</ul>` : `<p class="rv-sub">Một bé gà mộc mạc — nuôi khéo vẫn đẹp.</p>`}
+      <span class="rv-tier tier-${ch.relic ? 4 : tier.n}">${ch.relic ? tr("Gà kỳ vật") : tier.name}</span>${relic}
+      ${keys.length ? `<ul class="rv-chips" aria-label="${tr("Đặc điểm mang trong gen")}">${keys.map((k) => dexChip(k, r.fresh.includes(k))).join("")}</ul>` : `<p class="rv-sub">${tr("Một bé gà mộc mạc — nuôi khéo vẫn đẹp.")}</p>`}
       ${perks.length ? `<p class="rv-sub">${perks.join(" · ")}</p>` : ""}
       ${note ? `<p class="rv-note">${note}</p>` : ""}
-      <div class="rv-actions"><button type="button" class="gold" data-go="ok">Chào ${esc(ch.name)}!</button></div>`);
+      <div class="rv-actions"><button type="button" class="gold" data-go="ok">${tr("Chào")} ${esc(ch.name)}!</button></div>`);
     sfx("hatch");
     sfx("cheep", 0.55);
     buzz(30);
@@ -525,11 +526,11 @@ const REVEAL = {
     const entries = Object.entries(r.got).sort((a, b) => seedRank(a[0]) - seedRank(b[0]));
     const total = entries.reduce((a, [, n]) => a + n, 0);
     const good = (k) => seedRank(k) >= 2;
-    rvShow(`${entries.some(([k]) => good(k)) ? '<div class="rv-rays"></div>' : ""}<p class="rv-kicker">${r.count > 1 ? `Mở ${r.count} túi hạt` : "Mở túi hạt"}</p>
+    rvShow(`${entries.some(([k]) => good(k)) ? '<div class="rv-rays"></div>' : ""}<p class="rv-kicker">${r.count > 1 ? `${tr("Mở")} ${r.count} ${tr("túi hạt")}` : tr("Mở túi hạt")}</p>
       <div class="rv-art small rv-bag">${bagArt(130)}</div>
-      <h2 class="rv-title">${total} hạt</h2>
+      <h2 class="rv-title">${total} ${tr("hạt")}</h2>
       <ul class="rv-seeds">${entries.map(([k, n], i) => `<li class="rv-seed${good(k) ? " good" : ""}" style="--i:${i}">${seedIcon(k, 34)}<b>×${n}</b><span>${seedName(k)}</span></li>`).join("")}</ul>
-      <div class="rv-actions"><button type="button" class="gold" data-go="ok">Cất vào kho</button></div>`);
+      <div class="rv-actions"><button type="button" class="gold" data-go="ok">${tr("Cất vào kho")}</button></div>`);
     sfx("whoosh");
     entries.forEach(([k], i) => sfx(good(k) ? "good" : "pop", 0.38 + i * 0.13));
     if (entries.some(([k]) => good(k))) buzz(20);
@@ -540,40 +541,40 @@ const REVEAL = {
   async reward(r) {
     const g = r.got ?? {};
     const parts = [];
-    if (g.bagId) parts.push(`<li class="rv-seed" style="--i:0">${bagArt(34)}<b>Túi ${g.bagSize} hạt</b><span>chưa mở</span></li>`);
+    if (g.bagId) parts.push(`<li class="rv-seed" style="--i:0">${bagArt(34)}<b>${tr("Túi")} ${g.bagSize} ${tr("hạt")}</b><span>${tr("chưa mở")}</span></li>`);
     Object.entries(g.seeds ?? {}).forEach(([k, n]) => parts.push(`<li class="rv-seed${seedRank(k) >= 2 ? " good" : ""}" style="--i:${parts.length}">${seedIcon(k, 34)}<b>×${n}</b><span>${seedName(k)}</span></li>`));
-    if (g.tickets) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${ticketSvg(34)}<b>×${g.tickets}</b><span>vé</span></li>`);
-    if (g.decor) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${chestSvg(true)}<b>Đồ trang trí</b></li>`);
+    if (g.tickets) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${ticketSvg(34)}<b>×${g.tickets}</b><span>${tr("vé")}</span></li>`);
+    if (g.decor) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${chestSvg(true)}<b>${tr("Đồ trang trí")}</b></li>`);
     const egg = g.eggId && state.eggs.find((e) => e.id === g.eggId);
-    if (egg) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${eggArt(egg)}<b>${egg.mysteryEgg ? "Trứng bí ẩn" : "Trứng quà"}</b><span>${egg.mysteryEgg ? "nở ra mới biết" : "có phôi"}</span></li>`);
+    if (egg) parts.push(`<li class="rv-seed good" style="--i:${parts.length}">${eggArt(egg)}<b>${egg.mysteryEgg ? tr("Trứng bí ẩn") : tr("Trứng quà")}</b><span>${egg.mysteryEgg ? tr("nở ra mới biết") : tr("có phôi")}</span></li>`);
     const canIncubate = !!egg && state.incubators.includes(null) && state.chickens.length + state.incubators.filter(Boolean).length < state.coopCap;
-    const title = r.title ?? (r.id === "chest" ? "Rương ngày!" : r.id === "timed" ? "Rương theo giờ!" : r.id === "tutorial" ? "Xong một bước!" : "Xong việc!");
+    const title = r.title ?? (r.id === "chest" ? tr("Rương ngày!") : r.id === "timed" ? tr("Rương theo giờ!") : r.id === "tutorial" ? tr("Xong một bước!") : tr("Xong việc!"));
     const act2 = g.bagId || canIncubate;
-    rvShow(`<div class="rv-rays"></div><p class="rv-kicker">Phần thưởng</p>
+    rvShow(`<div class="rv-rays"></div><p class="rv-kicker">${tr("Phần thưởng")}</p>
       <div class="rv-art small">${chestSvg(true)}</div>
       <h2 class="rv-title">${title}</h2>
-      ${r.streak > 1 && r.id !== "tutorial" ? `<p class="rv-sub">Chuỗi ${r.streak} ngày liên tiếp</p>` : ""}
+      ${r.streak > 1 && r.id !== "tutorial" ? `<p class="rv-sub">${tr("Chuỗi")} ${r.streak} ${tr("ngày liên tiếp")}</p>` : ""}
       <ul class="rv-seeds">${parts.join("")}</ul>
-      ${egg ? `<p class="rv-note">${egg.quick ? "Quả trứng này nở rất nhanh." : "Trứng quà mang một bộ gen ngẫu nhiên."}${canIncubate ? "" : " Trứng nằm trong Kho — ấp khi có ổ trống."}</p>` : ""}
+      ${egg ? `<p class="rv-note">${egg.quick ? tr("Quả trứng này nở rất nhanh.") : tr("Trứng quà mang một bộ gen ngẫu nhiên.")}${canIncubate ? "" : tr(" Trứng nằm trong Kho — ấp khi có ổ trống.")}</p>` : ""}
       <div class="rv-actions">
-        ${g.bagId ? `<button type="button" class="gold" data-go="open">Mở túi ngay</button>` : ""}
-        ${canIncubate ? `<button type="button" class="gold" data-go="incubate">Ấp ngay</button>` : ""}
-        <button type="button" class="${act2 ? "plain" : "gold"}" data-go="ok">${act2 ? "Để sau" : "Tuyệt!"}</button>
+        ${g.bagId ? `<button type="button" class="gold" data-go="open">${tr("Mở túi ngay")}</button>` : ""}
+        ${canIncubate ? `<button type="button" class="gold" data-go="incubate">${tr("Ấp ngay")}</button>` : ""}
+        <button type="button" class="${act2 ? "plain" : "gold"}" data-go="ok">${act2 ? tr("Để sau") : tr("Tuyệt!")}</button>
       </div>`);
     sfx("claim");
     buzz(20);
     confetti($("#reveal"), { n: 26 });
     const go = await rvWait();
     if (go === "open") await openBags([g.bagId], { direct: true });
-    if (go === "incubate" && await run(act("incubate", { eggId: g.eggId }), "Trứng quà đã nằm trong ổ ấp — chạm vào trứng để sưởi ấm")) flashZone("nest");
+    if (go === "incubate" && await run(act("incubate", { eggId: g.eggId }), tr("Trứng quà đã nằm trong ổ ấp — chạm vào trứng để sưởi ấm"))) flashZone("nest");
   },
 
   async milestone(r) {
-    rvShow(`<div class="rv-rays"></div><p class="rv-kicker">Sổ sưu tầm</p>
+    rvShow(`<div class="rv-rays"></div><p class="rv-kicker">${tr("Sổ sưu tầm")}</p>
       <div class="rv-art small">${chestSvg(true)}</div>
-      <h2 class="rv-title">Đạt mốc ${r.n}!</h2>
-      <ul class="rv-list"><li>🏠 Chuồng rộng thêm: <b>${r.coopCap} chỗ</b></li><li>🪺 Ổ ấp: <b>${r.incubators}</b></li><li>🎀 Sân trại có thêm đồ trang trí</li></ul>
-      <div class="rv-actions"><button type="button" class="gold" data-go="ok">Tuyệt!</button></div>`);
+      <h2 class="rv-title">${tr("Đạt mốc")} ${r.n}!</h2>
+      <ul class="rv-list"><li>${tr("🏠 Chuồng rộng thêm:")} <b>${r.coopCap} ${tr("chỗ")}</b></li><li>${tr("🪺 Ổ ấp:")} <b>${r.incubators}</b></li><li>${tr("🎀 Sân trại có thêm đồ trang trí")}</li></ul>
+      <div class="rv-actions"><button type="button" class="gold" data-go="ok">${tr("Tuyệt!")}</button></div>`);
     sfx("fanfare");
     confetti($("#reveal"));
     await rvWait();
@@ -584,13 +585,13 @@ const REVEAL = {
     if (!b) return;
     const ch = state.chickens.find((c) => c.id === r.chickenId);
     const bag = state.bags.find((x) => x.id === r.bagId);
-    rvShow(`<div class="rv-rays"></div><p class="rv-kicker">Giống mới · ${r.n}/${R.BREEDS.length}</p>
+    rvShow(`<div class="rv-rays"></div><p class="rv-kicker">${tr("Giống mới ·")} ${r.n}/${R.BREEDS.length}</p>
       <div class="rv-art">${ch ? chickenSvg(ch, { detail: "high" }).svg : chestSvg(true)}</div>
-      <h2 class="rv-title">${esc(b.name)}</h2>
+      <h2 class="rv-title">${esc(tr(b.name))}</h2>
       <span class="rv-tier tier-${b.tier + 1}">${BREED_TIER[b.tier]}</span>
       <ul class="rv-chips">${b.traits.map((k) => dexChip(k)).join("")}</ul>
-      <p class="rv-note">${ch ? `${esc(ch.name)} là con đầu tiên của trại đạt giống này. ` : ""}Tặng một túi quà ${R.CONFIG.breed.bag} hạt và một chiếc nơ treo ở chuồng${r.n === R.CONFIG.breed.incubatorAt ? ", thêm <b>1 ổ ấp</b>" : ""}.</p>
-      <div class="rv-actions">${bag ? `<button type="button" class="gold" data-go="open">Mở túi quà</button><button type="button" class="plain" data-go="ok">Để sau</button>` : `<button type="button" class="gold" data-go="ok">Tuyệt!</button>`}</div>`);
+      <p class="rv-note">${ch ? `${esc(ch.name)} ${tr("là con đầu tiên của trại đạt giống này.")} ` : ""}${tr("Tặng một túi quà")} ${R.CONFIG.breed.bag} ${tr("hạt và một chiếc nơ treo ở chuồng")}${r.n === R.CONFIG.breed.incubatorAt ? `${tr(", thêm")} <b>${tr("1 ổ ấp")}</b>` : ""}.</p>
+      <div class="rv-actions">${bag ? `<button type="button" class="gold" data-go="open">${tr("Mở túi quà")}</button><button type="button" class="plain" data-go="ok">${tr("Để sau")}</button>` : `<button type="button" class="gold" data-go="ok">${tr("Tuyệt!")}</button>`}</div>`);
     sfx("fanfare");
     buzz(40);
     confetti($("#reveal"), { n: 70 });
@@ -598,11 +599,11 @@ const REVEAL = {
   },
 
   async recap(r) {
-    rvShow(`<p class="rv-kicker">Chào mừng trở lại</p>
-      <h2 class="rv-title">Khi bạn vắng mặt…</h2>
-      ${r.away > 10 * MIN ? `<p class="rv-sub">Bạn rời trại ${fmtDur(r.away)}</p>` : ""}
+    rvShow(`<p class="rv-kicker">${tr("Chào mừng trở lại")}</p>
+      <h2 class="rv-title">${tr("Khi bạn vắng mặt…")}</h2>
+      ${r.away > 10 * MIN ? `<p class="rv-sub">${tr("Bạn rời trại")} ${fmtDur(r.away)}</p>` : ""}
       <ul class="rv-list">${r.lines.map((l) => `<li>${l}</li>`).join("")}</ul>
-      <div class="rv-actions"><button type="button" class="gold" data-go="ok">Vào trại</button></div>`);
+      <div class="rv-actions"><button type="button" class="gold" data-go="ok">${tr("Vào trại")}</button></div>`);
     sfx("pop");
     await rvWait();
   },
@@ -617,7 +618,7 @@ async function openBags(ids, { direct = false } = {}) {
     handleEvents(r.events ?? []);
     if (!r.ok) {
       sfx("error");
-      toast(r.message);
+      toast(errText(r));
       break;
     }
     n++;
@@ -639,7 +640,7 @@ async function openBags(ids, { direct = false } = {}) {
 // Sức chơi: 5 chấm; rê chuột xem khi nào có thêm điểm.
 function energyChip() {
   const n = R.energyOf(state, now()), max = R.CONFIG.energy.max, next = R.energyNextAt(state, now());
-  const tip = n >= max ? "Sức chơi đầy — chơi miễn phí ở sân chơi" : `Sức chơi ${n}/${max} — thêm 1 sau ${fmtEta(next - now())}`;
+  const tip = n >= max ? tr("Sức chơi đầy — chơi miễn phí ở sân chơi") : `${tr("Sức chơi")} ${n}/${max} ${tr("— thêm 1 sau")} ${fmtEta(next - now())}`;
   return `<span class="chip energy" data-res="energy" title="${tip}" aria-label="${tip}">${"<i class=on></i>".repeat(n)}${"<i></i>".repeat(max - n)}</span>`;
 }
 let resPrev = null;
@@ -648,13 +649,13 @@ function renderRes() {
   const eggs = state.eggs.filter((e) => e.hatchAt === null);
   const stored = eggs.filter((e) => !e.inYard).length;
   setHTML($("#res"), `
-    <button type="button" class="chip" data-res="seeds" data-open="store" title="Hạt trong kho" aria-label="${seeds} hạt trong kho">${seedIcon("common", 16)} ${seeds}</button>
-    <button type="button" class="chip" data-res="eggs" data-open="store" title="Trứng trong kho / tổng (sân + kho)" aria-label="${stored} trứng trong kho, tổng ${eggs.length}/${R.CONFIG.storage.eggs}">🥚 ${stored} · ${eggs.length}/${R.CONFIG.storage.eggs}</button>
-    <button type="button" class="chip" data-res="bags" data-open="store" title="Túi hạt chưa mở" aria-label="${state.bags.length} túi hạt chưa mở">${bagArt(16)} ${state.bags.length}</button>
+    <button type="button" class="chip" data-res="seeds" data-open="store" title="${tr("Hạt trong kho")}" aria-label="${seeds} ${tr("hạt trong kho")}">${seedIcon("common", 16)} ${seeds}</button>
+    <button type="button" class="chip" data-res="eggs" data-open="store" title="${tr("Trứng trong kho / tổng (sân + kho)")}" aria-label="${stored} ${tr("trứng trong kho, tổng")} ${eggs.length}/${R.CONFIG.storage.eggs}">🥚 ${stored} · ${eggs.length}/${R.CONFIG.storage.eggs}</button>
+    <button type="button" class="chip" data-res="bags" data-open="store" title="${tr("Túi hạt chưa mở")}" aria-label="${state.bags.length} ${tr("túi hạt chưa mở")}">${bagArt(16)} ${state.bags.length}</button>
     ${state.energy ? energyChip() : ""}
-    ${hasV7() ? `<span class="chip" data-res="tickets" title="Vé — vào sân chơi, mua ở gian hàng" aria-label="${state.tickets} vé">${ticketSvg(16)} ${state.tickets}</span>` : ""}
-    <span class="chip" data-res="chickens" title="Gà trong trại" aria-label="${state.chickens.length}/${state.coopCap} gà trong trại">🐔 ${state.chickens.length}/${state.coopCap}</span>`);
-  $("#clock").textContent = `Giờ trong game: ${new Date(now()).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`;
+    ${hasV7() ? `<span class="chip" data-res="tickets" title="${tr("Vé — vào sân chơi, mua ở gian hàng")}" aria-label="${state.tickets} ${tr("vé")}">${ticketSvg(16)} ${state.tickets}</span>` : ""}
+    <span class="chip" data-res="chickens" title="${tr("Gà trong trại")}" aria-label="${state.chickens.length}/${state.coopCap} ${tr("gà trong trại")}">🐔 ${state.chickens.length}/${state.coopCap}</span>`);
+  $("#clock").textContent = `${tr("Giờ trong game:")} ${new Date(now()).toLocaleString(LOCALE, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`;
   // số vừa tăng thì nảy lên một cái
   const cur = { seeds, eggs: eggs.length, bags: state.bags.length, chickens: state.chickens.length, tickets: state.tickets ?? 0 };
   if (resPrev) for (const k of Object.keys(cur)) if (cur[k] > resPrev[k]) bump($(`#res [data-res="${k}"]`));
@@ -681,11 +682,11 @@ const SPOTS = {};
 for (const [k, d] of Object.entries(DEFAULT_SPOTS)) SPOTS[k] = { ...d, ...(ICONS?.YARD_SPOTS?.[k] || {}) };
 for (const s of Object.values(SPOTS)) s.r ??= 50;
 const ZONES = [
-  { key: "gate", label: "Cổng · Cánh đồng", accepts: ["chicken"], aria: "Cổng: xem cánh đồng. Kéo gà vào đây để thả ra đồng" },
-  { key: "market", label: "Chợ", accepts: ["chicken", "egg"], aria: "Gian hàng bên đường: kéo gà hoặc trứng vào để đổi; chạm để gặp khách đang ghé" },
-  { key: "coop", label: "Chuồng · Kho", accepts: ["egg"], aria: "Chuồng: mở Kho. Kéo trứng vào để cất" },
-  { key: "feeder", label: "Tháp hạt", accepts: [], aria: "Tháp hạt: đổ hạt vào cho gà tự ăn" },
-  { key: "play", label: "Sân chơi", accepts: ["chicken"], aria: "Sân chơi: kéo gà vào để chơi (tốn 1 sức chơi, hết thì 1 vé)" },
+  { key: "gate", label: tr("Cổng · Cánh đồng"), accepts: ["chicken"], aria: tr("Cổng: xem cánh đồng. Kéo gà vào đây để thả ra đồng") },
+  { key: "market", label: tr("Chợ"), accepts: ["chicken", "egg"], aria: tr("Gian hàng bên đường: kéo gà hoặc trứng vào để đổi; chạm để gặp khách đang ghé") },
+  { key: "coop", label: tr("Chuồng · Kho"), accepts: ["egg"], aria: tr("Chuồng: mở Kho. Kéo trứng vào để cất") },
+  { key: "feeder", label: tr("Tháp hạt"), accepts: [], aria: tr("Tháp hạt: đổ hạt vào cho gà tự ăn") },
+  { key: "play", label: tr("Sân chơi"), accepts: ["chicken"], aria: tr("Sân chơi: kéo gà vào để chơi (tốn 1 sức chơi, hết thì 1 vé)") },
 ];
 
 function renderZones() {
@@ -699,20 +700,20 @@ function zoneTap(z) {
   if (z === "gate") {
     const out = state.chickens.find((c) => c.location === "field");
     if (out) showField();
-    else toast("Kéo một con gà ra cổng để thả ra cánh đồng");
+    else toast(tr("Kéo một con gà ra cổng để thả ra cánh đồng"));
   }
   if (z === "coop") openStore();
   if (z === "market") {
     const vis = hasV7() && R.visitorView(state, now());
     if (vis?.who && !vis.gone) openVisitor();
-    else toast("Kéo gà hoặc trứng vào gian hàng để đổi lấy hạt / trứng / vé");
+    else toast(tr("Kéo gà hoặc trứng vào gian hàng để đổi lấy hạt / trứng / vé"));
   }
-  if (z === "feeder") hasV7() ? openTower() : toast("Kéo gà vào máng: tự chọn hạt hợp với gà nhất");
+  if (z === "feeder") hasV7() ? openTower() : toast(tr("Kéo gà vào máng: tự chọn hạt hợp với gà nhất"));
   if (z === "play") {
     // trứng đang ấp không kéo được: chạm sân chơi để chơi với quả trứng trong ổ
     const egg = hasV7() && state.eggs.find((e) => e.hatchAt !== null && (e.played ?? 0) < R.CONFIG.play.eggMax);
     if (egg && canPlay()) playFlow(egg.id);
-    else toast(egg ? "Hết sức chơi và vé — sức chơi hồi 1 điểm mỗi 30 phút" : "Kéo một con gà vào sân chơi. Có trứng đang ấp thì chạm vào đây để chơi với trứng");
+    else toast(egg ? tr("Hết sức chơi và vé — sức chơi hồi 1 điểm mỗi 30 phút") : tr("Kéo một con gà vào sân chơi. Có trứng đang ấp thì chạm vào đây để chơi với trứng"));
   }
 }
 $("#yard-zones").addEventListener("click", (ev) => zoneTap(ev.target.closest("[data-zone]")?.dataset.zone));
@@ -774,9 +775,9 @@ function renderNests() {
       el._crack = crack;
       el.querySelector(".nest-crack").innerHTML = crack ? nestCrackSvg(crack) : "";
     }
-    const eta = egg ? `Nở sau ${fmtEta(Math.max(0, egg.hatchAt - t))}` : "Ổ ấp trống";
+    const eta = egg ? `${tr("Nở sau")} ${fmtEta(Math.max(0, egg.hatchAt - t))}` : tr("Ổ ấp trống");
     const warmed = egg?.warmed ?? 0, max = R.CONFIG.warm.max;
-    const tip = egg && hasV6() ? (warmed >= max ? `${eta} — đã sưởi đủ ấm` : `${eta} — chạm để sưởi ấm (${warmed}/${max})`) : eta;
+    const tip = egg && hasV6() ? (warmed >= max ? `${eta} ${tr("— đã sưởi đủ ấm")}` : `${eta} ${tr("— chạm để sưởi ấm (")}${warmed}/${max})`) : eta;
     if (el.title !== tip) {
       el.title = tip;
       el.setAttribute("aria-label", tip);
@@ -788,14 +789,14 @@ function renderNests() {
     el.classList.toggle("soon", p >= 0.8);
     el.classList.toggle("maxed", warmed >= max);
     el.classList.toggle("hint", !!egg && warmQuest && !el.classList.contains("cooling"));
-    const etaText = !egg ? "Ổ ấp" : egg.hatchAt <= t ? "đang nở…" : eta.replace("Nở sau ", "");
+    const etaText = !egg ? tr("Ổ ấp") : egg.hatchAt <= t ? tr("đang nở…") : eta.replace(tr("Nở sau "), "");
     const etaEl = el.querySelector(".eta");
     if (etaEl.textContent !== etaText) etaEl.textContent = etaText;
     const pips = el.querySelector(".pips");
     const canKnock = !!egg && hasV7() && p >= R.CONFIG.knock.fromPct;
     el.classList.toggle("knock", canKnock);
     pips.hidden = !egg || (!warmed && !canKnock && !egg.broodBy);
-    const pipText = canKnock ? "Gõ!" : egg?.broodBy ? "🐔 đang ấp giúp" : warmed >= max ? "♨ đủ ấm" : `♨ ${warmed}/${max}`;
+    const pipText = canKnock ? tr("Gõ!") : egg?.broodBy ? tr("🐔 đang ấp giúp") : warmed >= max ? tr("♨ đủ ấm") : `♨ ${warmed}/${max}`;
     if (pips.textContent !== pipText) pips.textContent = pipText;
     el.style.left = `${(x / W) * 100}%`;
     el.style.top = `${(y / H) * 100}%`;
@@ -817,7 +818,7 @@ async function warmTap(el) {
   }
   if ((egg.warmed ?? 0) >= R.CONFIG.warm.max) {
     bump(el, "nope");
-    if (!el._toldMax) toast("Trứng đã đủ ấm — chờ gà con chui ra nhé");
+    if (!el._toldMax) toast(tr("Trứng đã đủ ấm — chờ gà con chui ra nhé"));
     el._toldMax = true;
     return;
   }
@@ -832,7 +833,7 @@ async function warmTap(el) {
   warmBusy = false;
   handleEvents(r.events ?? []);
   if (!r.ok) {
-    if (r.code !== "too_fast" && r.code !== "no_egg") toast(r.message);
+    if (r.code !== "too_fast" && r.code !== "no_egg") toast(errText(r));
     return renderAll();
   }
   sfx("warm");
@@ -841,7 +842,7 @@ async function warmTap(el) {
   if (slot) {
     burst($("#yard-pops"), `${(slot.x / W) * 100}%`, `${((slot.y - 8) / H) * 100}%`, { kind: "heat", n: 7, colors: ["#ff9d5c", "#ffd95a", "#ff7a59"], spread: 26, rise: 40, life: 800 });
     const cut = Math.round((before - r.hatchAt) / 1000);
-    popIn("#yard-pops", slot.x, slot.y - 44, cut >= 60 ? `Ấm hơn! −${Math.round(cut / 60)} phút` : `Ấm hơn! −${cut} giây`);
+    popIn("#yard-pops", slot.x, slot.y - 44, cut >= 60 ? `${tr("Ấm hơn! −")}${Math.round(cut / 60)} ${tr("phút")}` : `${tr("Ấm hơn! −")}${cut} ${tr("giây")}`);
   }
   bump(el, "warmed");
   el.classList.remove("hint");
@@ -871,10 +872,10 @@ function renderYardEggs() {
       el.className = `yegg${e.fertile ? " fertile" : ""}`;
       el.dataset.id = e.id;
       el.dataset.drag = "egg";
-      el.title = e.fertile ? "Trứng có phôi — chạm để nhặt, kéo vào ổ để ấp" : "Trứng không phôi — chạm để nhặt (chỉ để đổi hạt)";
+      el.title = e.fertile ? tr("Trứng có phôi — chạm để nhặt, kéo vào ổ để ấp") : tr("Trứng không phôi — chạm để nhặt (chỉ để đổi hạt)");
       el.setAttribute("role", "button");
       el.tabIndex = 0;
-      el.setAttribute("aria-label", `${e.fertile ? "Trứng có phôi" : "Trứng không phôi"} ngoài sân — nhặt vào kho`);
+      el.setAttribute("aria-label", `${e.fertile ? tr("Trứng có phôi") : tr("Trứng không phôi")} ${tr("ngoài sân — nhặt vào kho")}`);
       el.innerHTML = yardEggArt(e);
       host.append(el);
     }
@@ -945,7 +946,7 @@ function syncYard() {
       pos = { x: s.x, y: s.y + 60 };
       justHatched.delete(ch.id);
       setTimeout(() => {
-        popIn("#yard-pops", pos.x, pos.y - 20, "Chiếp chiếp!");
+        popIn("#yard-pops", pos.x, pos.y - 20, tr("Chiếp chiếp!"));
         burst($("#yard-pops"), `${(pos.x / W) * 100}%`, `${((pos.y - 20) / H) * 100}%`, { kind: "star", n: 8, colors: ["#ffd95a", "#fff"] });
       }, 50);
     }
@@ -1039,24 +1040,24 @@ function dropPreview(d, z, cx, cy) {
   if (d.kind === "seed") {
     const id = chickenAtPoint(cx, cy);
     const ch = id && state.chickens.find((c) => c.id === id);
-    return ch ? { text: `Cho ${ch.name} ăn`, ok: true, chickenId: id } : null;
+    return ch ? { text: tr("Cho {n} ăn", { n: ch.name }), ok: true, chickenId: id } : null;
   }
   if (!z) return null;
   if (d.kind === "chicken") {
-    if (z.key === "gate") return { text: "Ra cánh đồng", ok: true };
-    if (z.key === "market") return { text: "Đổi ở chợ", ok: true };
-    if (z.key === "play") return canPlay() ? { text: canPlay() === "energy" ? "Vào sân chơi" : "Vào sân chơi · 1 vé", ok: true } : { text: "Hết sức chơi và vé", ok: false };
-    if (z.key === "feeder") return Object.values(state.inventory).some((n) => n > 0) ? { text: "Tự chọn hạt", ok: true } : { text: "Kho hết hạt", ok: false };
+    if (z.key === "gate") return { text: tr("Ra cánh đồng"), ok: true };
+    if (z.key === "market") return { text: tr("Đổi ở chợ"), ok: true };
+    if (z.key === "play") return canPlay() ? { text: canPlay() === "energy" ? tr("Vào sân chơi") : tr("Vào sân chơi · 1 vé"), ok: true } : { text: tr("Hết sức chơi và vé"), ok: false };
+    if (z.key === "feeder") return Object.values(state.inventory).some((n) => n > 0) ? { text: tr("Tự chọn hạt"), ok: true } : { text: tr("Kho hết hạt"), ok: false };
   }
   if (d.kind === "egg") {
     const egg = state.eggs.find((e) => e.id === d.id);
     if (z.key === "nest") {
-      if (z.slot.id) return { text: "Ổ đang ấp", ok: false };
-      if (!egg?.fertile) return { text: "Không phôi — không ấp được", ok: false };
-      return { text: "Ấp trứng", ok: true };
+      if (z.slot.id) return { text: tr("Ổ đang ấp"), ok: false };
+      if (!egg?.fertile) return { text: tr("Không phôi — không ấp được"), ok: false };
+      return { text: tr("Ấp trứng"), ok: true };
     }
-    if (z.key === "coop") return { text: "Cất vào kho", ok: true };
-    if (z.key === "market") return { text: "Đổi túi hạt", ok: true };
+    if (z.key === "coop") return { text: tr("Cất vào kho"), ok: true };
+    if (z.key === "market") return { text: tr("Đổi túi hạt"), ok: true };
   }
   return null;
 }
@@ -1162,17 +1163,17 @@ function onTap(d) {
     const r = $("#info").getBoundingClientRect();
     if (r.bottom > innerHeight) $("#info").scrollIntoView({ block: "nearest", behavior: reduceMotion() ? "auto" : "smooth" });
   } else if (d.kind === "egg") collectWithAnim(d.id);
-  else if (d.kind === "seed") toast(selectedId ? "Kéo hạt thả lên gà — hoặc bấm “Cho ăn” trong bảng của gà" : "Kéo hạt thả lên một con gà để cho ăn");
+  else if (d.kind === "seed") toast(selectedId ? tr("Kéo hạt thả lên gà — hoặc bấm “Cho ăn” trong bảng của gà") : tr("Kéo hạt thả lên một con gà để cho ăn"));
 }
 
 async function onDrop(d, cx, cy) {
   const p = toWorld(cx, cy);
   if (d.kind === "seed") {
     const id = chickenAtPoint(cx, cy) ?? d.hover;
-    if (!id) return toast("Thả hạt lên một con gà trong sân");
+    if (!id) return toast(tr("Thả hạt lên một con gà trong sân"));
     const ch = state.chickens.find((c) => c.id === id);
     if (await run(act("feed", { chickenId: id, seed: d.id }))) {
-      chickenFx(id, { text: `Ăn ${seedName(d.id).toLowerCase()}`, colors: [SEED_COLOR[d.id], "#ff9db0", "#fff"] });
+      chickenFx(id, { text: `${tr("Ăn")} ${seedName(d.id).toLowerCase()}`, colors: [SEED_COLOR[d.id], "#ff9db0", "#fff"] });
       sfx("peck");
       sfx("peck", 0.12);
       select(ch.id);
@@ -1210,7 +1211,7 @@ async function onDrop(d, cx, cy) {
     const egg = state.eggs.find((e) => e.id === d.id);
     if (!egg) return;
     if (z?.key === "nest") {
-      if (await run(act("incubate", { eggId: egg.id }), "Đã đặt trứng vào ổ ấp")) {
+      if (await run(act("incubate", { eggId: egg.id }), tr("Đã đặt trứng vào ổ ấp"))) {
         delete ui.eggPos[egg.id];
         flashZone("nest");
       }
@@ -1244,18 +1245,18 @@ async function autoFeed(id, announce = false) {
     const r = await act("feed", { chickenId: id, seed: kinds[0] });
     handleEvents(r.events ?? []);
     if (!r.ok) {
-      if (!fed) toast(r.message);
+      if (!fed) toast(errText(r));
       break;
     }
     fed++;
   }
   if (fed) {
-    chickenFx(id, { text: `Ăn ${fed} hạt` });
+    chickenFx(id, { text: `${tr("Ăn")} ${fed} ${tr("hạt")}` });
     for (let i = 0; i < Math.min(fed, 3); i++) sfx("peck", i * 0.12);
-    if (announce) toast(`${nameOf(id)} ăn ${fed} hạt`); // bấm nút: sân có thể đang khuất
+    if (announce) toast(`${nameOf(id)} ${tr("ăn")} ${fed} ${tr("hạt")}`); // bấm nút: sân có thể đang khuất
     save();
     renderAll();
-  } else if (!Object.values(state.inventory).some((n) => n > 0)) toast("Kho hết hạt — thả gà ra đồng để kiếm hạt");
+  } else if (!Object.values(state.inventory).some((n) => n > 0)) toast(tr("Kho hết hạt — thả gà ra đồng để kiếm hạt"));
 }
 
 /* ---------- khay hạt ---------- */
@@ -1267,7 +1268,7 @@ function renderTray() {
   setHTML($("#tray"), kinds.map((k) => {
     const n = state.inventory[k];
     return `<div class="seedbtn${n ? "" : " empty"}" data-drag="seed" data-id="${k}" title="${seedName(k)}: ${seedSummary(k)}"><span class="ico">${seedIcon(k, 28)}</span><span><b>${n}</b><small>${SEED_SHORT[k]}</small></span></div>`;
-  }).join("") + (empty ? '<span class="tray-empty muted">Hết hạt — thả gà ra <b>cổng</b> để kiếm hạt, hoặc đổi ở <b>chợ</b>.</span>' : ""));
+  }).join("") + (empty ? `<span class="tray-empty muted">${tr("Hết hạt — thả gà ra")} <b>${tr("cổng")}</b> ${tr("để kiếm hạt, hoặc đổi ở")} <b>${tr("chợ")}</b>.</span>` : ""));
 }
 
 /* ---------- chọn gà: bảng thông tin + đàn gà ---------- */
@@ -1295,21 +1296,21 @@ function renderInfo() {
         <div class="ck-top">
           <div class="ck-art"></div>
           <div><div class="ck-name"></div><div class="ck-sub"></div><div class="ck-badges"></div></div>
-          <button type="button" class="small" data-act="close" aria-label="Đóng">✕</button>
+          <button type="button" class="small" data-act="close" aria-label="${tr("Đóng")}">✕</button>
         </div>
         <div class="meters">
-          <div class="meter m-sat"><span>Độ no</span><div class="progress"><i></i></div></div>
-          <div class="meter m-grow"><span>Lớn</span><div class="progress"><i style="--c:var(--ok)"></i></div></div>
-          <div class="meter m-life"><span>Tuổi thọ</span><div class="progress"><i style="--c:var(--muted)"></i></div></div>
-          <div class="meter m-speed"><span>Tốc độ</span><div class="progress"><i style="--c:var(--accent)"></i></div></div>
-          <div class="meter m-stam"><span>Thể lực</span><div class="progress"><i style="--c:var(--energy)"></i></div></div>
-          <div class="nutr">${R.NUTRIENTS.map((k) => `<div class="n n-${k}" title="${R.NUTRIENT_INFO[k].name}: ${R.NUTRIENT_INFO[k].grows}"><span>${R.NUTRIENT_INFO[k].name}</span><div class="progress"><i style="--c:${NUT_COLOR[k]}"></i></div></div>`).join("")}</div>
+          <div class="meter m-sat"><span>${tr("Độ no")}</span><div class="progress"><i></i></div></div>
+          <div class="meter m-grow"><span>${tr("Lớn")}</span><div class="progress"><i style="--c:var(--ok)"></i></div></div>
+          <div class="meter m-life"><span>${tr("Tuổi thọ")}</span><div class="progress"><i style="--c:var(--muted)"></i></div></div>
+          <div class="meter m-speed"><span>${tr("Tốc độ")}</span><div class="progress"><i style="--c:var(--accent)"></i></div></div>
+          <div class="meter m-stam"><span>${tr("Thể lực")}</span><div class="progress"><i style="--c:var(--energy)"></i></div></div>
+          <div class="nutr">${R.NUTRIENTS.map((k) => `<div class="n n-${k}" title="${tr(R.NUTRIENT_INFO[k].name)}: ${tr(R.NUTRIENT_INFO[k].grows)}"><span>${tr(R.NUTRIENT_INFO[k].name)}</span><div class="progress"><i style="--c:${NUT_COLOR[k]}"></i></div></div>`).join("")}</div>
         </div>
         <div class="ck-actions">
-          <button type="button" class="small primary" data-act="feed">Cho ăn</button>
-          <button type="button" class="small" data-act="auto" title="Như kéo gà vào máng: tự chọn hạt hợp nhất">Máng ăn</button>
-          <button type="button" class="small" data-act="field">Ra cánh đồng</button>
-          <button type="button" class="small" data-act="trade">Đổi ở chợ</button>
+          <button type="button" class="small primary" data-act="feed">${tr("Cho ăn")}</button>
+          <button type="button" class="small" data-act="auto" title="${tr("Như kéo gà vào máng: tự chọn hạt hợp nhất")}">${tr("Máng ăn")}</button>
+          <button type="button" class="small" data-act="field">${tr("Ra cánh đồng")}</button>
+          <button type="button" class="small" data-act="trade">${tr("Đổi ở chợ")}</button>
         </div>
       </article>`;
   }
@@ -1318,37 +1319,37 @@ function renderInfo() {
   const artEl = host.querySelector(".ck-art");
   if (artEl.dataset.key !== art.key) { artEl.innerHTML = art.svg; artEl.dataset.key = art.key; }
   host.querySelector(".ck-name").textContent = `${ch.sex === "rooster" ? "♂" : "♀"} ${ch.name}`;
-  host.querySelector(".ck-sub").textContent = `${STAGE[v.stage]} · ${fmtDur(v.ageMs)} tuổi${v.stage === "adult" ? "" : ` · lớn sau ~${fmtDur(R.msToAdult(ch))}`}`;
+  host.querySelector(".ck-sub").textContent = `${STAGE[v.stage]} · ${fmtDur(v.ageMs)} ${tr("tuổi")}${v.stage === "adult" ? "" : ` ${tr("· lớn sau ~")}${fmtDur(R.msToAdult(ch))}`}`;
   const b = [];
-  if (ch.location === "field") b.push('<span class="badge ok">Đang ngoài đồng</span>');
-  if (v.hungry) b.push('<span class="badge bad">Đói — chóng già</span>');
-  else if (v.satiety01 < 0.3) b.push('<span class="badge warn">Sắp đói</span>');
-  if (ch.sex === "hen" && v.stage === "adult") b.push(v.canLay ? '<span class="badge ok">Có thể đẻ</span>' : '<span class="badge">Chưa đủ no để đẻ</span>');
-  if (ch.mutationBoost > 0) b.push('<span class="badge">Dễ biến dị</span>');
-  if (ch.relic) b.push(`<span class="badge gold">Kỳ vật: ${esc(relicName(ch.relic))}</span>`);
+  if (ch.location === "field") b.push(`<span class="badge ok">${tr("Đang ngoài đồng")}</span>`);
+  if (v.hungry) b.push(`<span class="badge bad">${tr("Đói — chóng già")}</span>`);
+  else if (v.satiety01 < 0.3) b.push(`<span class="badge warn">${tr("Sắp đói")}</span>`);
+  if (ch.sex === "hen" && v.stage === "adult") b.push(v.canLay ? `<span class="badge ok">${tr("Có thể đẻ")}</span>` : `<span class="badge">${tr("Chưa đủ no để đẻ")}</span>`);
+  if (ch.mutationBoost > 0) b.push(`<span class="badge">${tr("Dễ biến dị")}</span>`);
+  if (ch.relic) b.push(`<span class="badge gold">${tr("Kỳ vật:")} ${esc(relicName(ch.relic))}</span>`);
   for (const k of R.breedsOf(ch.code)) {
     const br = R.BREEDS.find((x) => x.key === k);
-    b.push(`<span class="badge gold" title="${br.traits.map((t) => R.DEX.find((d) => d.key === t).name).join(" + ")}">${v.stage === "adult" && state.breeds?.[k] != null ? "Giống" : "Mang gen giống"} ${esc(br.name)}</span>`);
+    b.push(`<span class="badge gold" title="${br.traits.map((k2) => tr(R.DEX.find((d) => d.key === k2).name)).join(" + ")}">${v.stage === "adult" && state.breeds?.[k] != null ? tr("Giống") : tr("Mang gen giống")} ${esc(tr(br.name))}</span>`);
   }
-  if (ch.line?.length) b.push(`<span class="badge" title="Bố mẹ đều mang: ${ch.line.map((t) => R.DEX.find((d) => d.key === t)?.name ?? t).join(", ")} — nuôi đủ chất sẽ đạt ★★★">Dòng thuần</span>`);
+  if (ch.line?.length) b.push(`<span class="badge" title="${tr("Bố mẹ đều mang:")} ${ch.line.map((k2) => tr(R.DEX.find((d) => d.key === k2)?.name ?? k2)).join(", ")} ${tr("— nuôi đủ chất sẽ đạt ★★★")}">${tr("Dòng thuần")}</span>`);
   host.querySelector(".ck-badges").innerHTML = b.join(" ");
   host.querySelector(".m-sat").classList.toggle("hungry", v.hungry);
   host.querySelector(".m-sat i").style.setProperty("--v", v.satiety01.toFixed(3));
   host.querySelector(".m-grow i").style.setProperty("--v", v.growth01.toFixed(3));
   host.querySelector(".m-life i").style.setProperty("--v", Math.max(0, v.lifeLeftMs / ch.lifespanMs).toFixed(3));
-  host.querySelector(".m-life span").textContent = `Còn ~${fmtDur(Math.max(0, v.lifeLeftMs))}`;
+  host.querySelector(".m-life span").textContent = `${tr("Còn ~")}${fmtDur(Math.max(0, v.lifeLeftMs))}`;
   host.querySelector(".m-speed i").style.setProperty("--v", v.speed01.toFixed(3));
-  host.querySelector(".m-speed span").textContent = `Tốc độ ${Math.round(1 + v.speed01 * 9)}/10`;
+  host.querySelector(".m-speed span").textContent = `${tr("Tốc độ")} ${Math.round(1 + v.speed01 * 9)}/10`;
   host.querySelector(".m-stam").hidden = !hasV7();
   if (hasV7()) {
     const sm = R.staminaMaxOf(ch), sn = Math.round(R.staminaOf(ch));
     host.querySelector(".m-stam i").style.setProperty("--v", (sn / sm).toFixed(3));
-    host.querySelector(".m-stam span").textContent = `Thể lực ${sn}/${sm}`;
+    host.querySelector(".m-stam span").textContent = `${tr("Thể lực")} ${sn}/${sm}`;
   }
   for (const k of R.NUTRIENTS) host.querySelector(`.n-${k} i`).style.setProperty("--v", v.nutrients01[k].toFixed(3));
   host.querySelector('[data-act="feed"]').disabled = ch.location !== "coop";
   host.querySelector('[data-act="auto"]').disabled = ch.location !== "coop";
-  host.querySelector('[data-act="field"]').textContent = ch.location === "field" ? "Xem cánh đồng" : "Ra cánh đồng";
+  host.querySelector('[data-act="field"]').textContent = ch.location === "field" ? tr("Xem cánh đồng") : tr("Ra cánh đồng");
   host.querySelector('[data-act="trade"]').disabled = ch.location !== "coop";
 }
 $("#info").addEventListener("click", (ev) => {
@@ -1368,9 +1369,9 @@ $("#info").addEventListener("click", (ev) => {
 function renderFlock() {
   setHTML($("#flock"), state.chickens.map((c) => {
     const v = R.chickenView(c, now());
-    const label = `${c.sex === "rooster" ? "♂" : "♀"} ${esc(c.name)}${c.location === "field" ? " · ngoài đồng" : v.hungry ? " · đói" : ""}`;
+    const label = `${c.sex === "rooster" ? "♂" : "♀"} ${esc(c.name)}${c.location === "field" ? tr(" · ngoài đồng") : v.hungry ? tr(" · đói") : ""}`;
     return `<button type="button" data-pick="${c.id}" class="${v.hungry ? "is-hungry" : ""}" title="${label}" aria-label="${label}" aria-pressed="${c.id === selectedId}"><span class="mini">${chickenSvg(c).svg}</span></button>`;
-  }).join("") || '<span class="muted">Đàn gà: chưa có con nào.</span>');
+  }).join("") || `<span class="muted">${tr("Đàn gà: chưa có con nào.")}</span>`);
 }
 $("#flock").addEventListener("click", (ev) => {
   const id = ev.target.closest("[data-pick]")?.dataset.pick;
@@ -1389,11 +1390,11 @@ function renderFeed() {
   const ch = state.chickens.find((c) => c.id === feedTarget);
   if (!ch) return $("#feed-dialog").close();
   const v = R.chickenView(ch, now());
-  $("#feed-title").textContent = `Cho ${ch.name} ăn · độ no ${Math.round(v.satiety01 * 100)}%`;
+  $("#feed-title").textContent = `${tr("Cho {n} ăn · độ no", { n: ch.name })} ${Math.round(v.satiety01 * 100)}%`;
   const kinds = Object.keys(R.SEEDS).filter((k) => state.inventory[k] > 0);
   $("#feed-list").innerHTML = kinds.length
     ? kinds.map((k) => `<button type="button" data-seed="${k}"><span class="ico">${seedIcon(k, 26)}</span><span><b>${seedName(k)}</b><br><small class="muted">${seedSummary(k)}</small></span><b>×${state.inventory[k]}</b></button>`).join("")
-    : '<p class="muted">Kho hết hạt. Thả gà ra đồng để kiếm hạt, hoặc đổi trứng lấy túi hạt.</p>';
+    : `<p class="muted">${tr("Kho hết hạt. Thả gà ra đồng để kiếm hạt, hoặc đổi trứng lấy túi hạt.")}</p>`;
 }
 $("#feed-list").addEventListener("click", async (ev) => {
   const pickCh = ev.target.closest("[data-chick]")?.dataset.chick;
@@ -1425,26 +1426,26 @@ function openTrade(t) {
     const ch = state.chickens.find((c) => c.id === t.chickenId);
     if (!ch) return;
     const n = R.CONFIG.trade.eggsPerChicken, adult = R.stageOf(ch) === "adult";
-    $("#trade-title").textContent = `Đổi ${ch.name} ở chợ`;
-    $("#trade-note").textContent = "Gà sẽ rời trại. Chọn thứ muốn nhận:";
+    $("#trade-title").textContent = `${tr("Đổi")} ${ch.name} ${tr("ở chợ")}`;
+    $("#trade-note").textContent = tr("Gà sẽ rời trại. Chọn thứ muốn nhận:");
     $("#trade-give").innerHTML = `<div class="art">${chickenSvg(ch).svg}</div>${ch.sex === "rooster" ? "♂" : "♀"} ${esc(ch.name)}`;
-    $("#trade-bag").innerHTML = card(bagArt(72, R.chickenTradeValue(ch)), `Túi ${R.chickenTradeValue(ch)} hạt`, "mở ra ngẫu nhiên");
+    $("#trade-bag").innerHTML = card(bagArt(72, R.chickenTradeValue(ch)), `${tr("Túi")} ${R.chickenTradeValue(ch)} ${tr("hạt")}`, tr("mở ra ngẫu nhiên"));
     const egg = eggArt({ id: "shop", shell: "#f3ead8", fertile: true });
     $("#trade-egg").hidden = false;
     $("#trade-egg").disabled = !adult;
     $("#trade-ticket").hidden = !(hasV7() && adult);
-    $("#trade-ticket").innerHTML = card(ticketSvg(60), `${R.CONFIG.tickets.perChicken} vé`, "tối đa 2 con mỗi ngày");
-    $("#trade-egg").innerHTML = card(egg + egg, `${n} trứng có phôi`, adult ? "gen ngẫu nhiên, trống/mái tuỳ may" : "cần gà đã trưởng thành", true);
+    $("#trade-ticket").innerHTML = card(ticketSvg(60), `${R.CONFIG.tickets.perChicken} ${tr("vé")}`, tr("tối đa 2 con mỗi ngày"));
+    $("#trade-egg").innerHTML = card(egg + egg, `${n} ${tr("trứng có phôi")}`, adult ? tr("gen ngẫu nhiên, trống/mái tuỳ may") : tr("cần gà đã trưởng thành"), true);
   } else {
     const egg = state.eggs.find((e) => e.id === t.eggId);
     if (!egg) return;
-    $("#trade-title").textContent = `Đổi trứng ${egg.fertile ? "có phôi" : "không phôi"}`;
-    $("#trade-note").textContent = egg.fertile ? "Trứng có phôi ấp được ra gà mới — chắc chắn muốn đổi?" : "Trứng không phôi không ấp được, đổi lấy hạt là hợp lý.";
-    $("#trade-give").innerHTML = `<div class="art">${eggArt(egg)}</div>${egg.fertile ? "Có phôi" : "Không phôi"}`;
-    $("#trade-bag").innerHTML = card(bagArt(72, R.eggTradeValue()), `Túi ${R.eggTradeValue()} hạt`, "mở ra ngẫu nhiên");
+    $("#trade-title").textContent = `${tr("Đổi trứng")} ${egg.fertile ? tr("có phôi") : tr("không phôi")}`;
+    $("#trade-note").textContent = egg.fertile ? tr("Trứng có phôi ấp được ra gà mới — chắc chắn muốn đổi?") : tr("Trứng không phôi không ấp được, đổi lấy hạt là hợp lý.");
+    $("#trade-give").innerHTML = `<div class="art">${eggArt(egg)}</div>${egg.fertile ? tr("Có phôi") : tr("Không phôi")}`;
+    $("#trade-bag").innerHTML = card(bagArt(72, R.eggTradeValue()), `${tr("Túi")} ${R.eggTradeValue()} ${tr("hạt")}`, tr("mở ra ngẫu nhiên"));
     $("#trade-egg").hidden = true;
     $("#trade-ticket").hidden = !(hasV7() && egg.fertile);
-    $("#trade-ticket").innerHTML = card(ticketSvg(60), `${R.CONFIG.tickets.perEgg} vé`, "tối đa 3 quả mỗi ngày");
+    $("#trade-ticket").innerHTML = card(ticketSvg(60), `${R.CONFIG.tickets.perEgg} ${tr("vé")}`, tr("tối đa 3 quả mỗi ngày"));
   }
   $("#trade-dialog").showModal();
   for (const el of document.querySelectorAll("#trade-dialog .egg")) zoomArt(el);
@@ -1452,8 +1453,8 @@ function openTrade(t) {
 $("#trade-bag").addEventListener("click", async () => {
   const t = tradeTarget;
   $("#trade-dialog").close();
-  if (t?.chickenId) await run(act("tradeToShop", { chickens: [t.chickenId] }), "Nhận một túi hạt — mở trong Kho");
-  else if (t?.eggId) await run(act("tradeToShop", { eggs: [t.eggId] }), "Nhận túi 2 hạt — mở trong Kho");
+  if (t?.chickenId) await run(act("tradeToShop", { chickens: [t.chickenId] }), tr("Nhận một túi hạt — mở trong Kho"));
+  else if (t?.eggId) await run(act("tradeToShop", { eggs: [t.eggId] }), tr("Nhận túi 2 hạt — mở trong Kho"));
   if (t?.chickenId === selectedId) select(null);
   syncYard();
 });
@@ -1461,7 +1462,7 @@ $("#trade-ticket").addEventListener("click", async () => {
   const t = tradeTarget;
   $("#trade-dialog").close();
   const give = t?.chickenId ? { chickens: [t.chickenId] } : { eggs: [t.eggId] };
-  if (await run(act("tradeToShop", { ...give, want: "tickets" }), "Đã nhận vé")) {
+  if (await run(act("tradeToShop", { ...give, want: "tickets" }), tr("Đã nhận vé"))) {
     sfx("coin");
     if (t.chickenId === selectedId) select(null);
     syncYard();
@@ -1470,7 +1471,7 @@ $("#trade-ticket").addEventListener("click", async () => {
 $("#trade-egg").addEventListener("click", async () => {
   const t = tradeTarget;
   $("#trade-dialog").close();
-  if (t?.chickenId && await run(act("tradeForEgg", { chickenId: t.chickenId }), `Nhận ${R.CONFIG.trade.eggsPerChicken} trứng có phôi — trong Kho, kéo vào ổ để ấp`)) {
+  if (t?.chickenId && await run(act("tradeForEgg", { chickenId: t.chickenId }), `${tr("Nhận")} ${R.CONFIG.trade.eggsPerChicken} ${tr("trứng có phôi — trong Kho, kéo vào ổ để ấp")}`)) {
     if (t.chickenId === selectedId) select(null);
     syncYard();
   }
@@ -1486,26 +1487,26 @@ function openStore() {
 function renderStore() {
   const seeds = Object.values(state.inventory).reduce((a, b) => a + b, 0);
   $("#seed-cap").textContent = `(${seeds}/${R.CONFIG.storage.seeds})`;
-  setHTML($("#seeds"), Object.keys(R.SEEDS).map((k) => `<div class="seed-card"><span class="ico">${seedIcon(k, 28)}</span><span>${seedName(k)}<small>${seedSummary(k)}</small></span><b>${state.inventory[k]}</b>${hasV7() ? `<button type="button" class="small" data-feed-seed="${k}"${state.inventory[k] > 0 && state.chickens.length ? "" : " disabled"}>Cho ăn</button>` : ""}</div>`).join(""));
+  setHTML($("#seeds"), Object.keys(R.SEEDS).map((k) => `<div class="seed-card"><span class="ico">${seedIcon(k, 28)}</span><span>${seedName(k)}<small>${seedSummary(k)}</small></span><b>${state.inventory[k]}</b>${hasV7() ? `<button type="button" class="small" data-feed-seed="${k}"${state.inventory[k] > 0 && state.chickens.length ? "" : " disabled"}>${tr("Cho ăn")}</button>` : ""}</div>`).join(""));
   setHTML($("#bags"), state.bags.length
-    ? state.bags.map((b) => `<div class="item"><div class="art">${bagArt(72, b.size)}</div><div>${b.table === "gift" ? "Túi quà" : "Túi"} ${b.size} hạt</div><button type="button" class="small primary" data-bag="${b.id}">Mở túi</button></div>`).join("")
-    : '<p class="muted">Không có túi nào. Kéo gà hoặc trứng vào chợ để đổi lấy túi hạt.</p>');
+    ? state.bags.map((b) => `<div class="item"><div class="art">${bagArt(72, b.size)}</div><div>${b.table === "gift" ? tr("Túi quà") : tr("Túi")} ${b.size} ${tr("hạt")}</div><button type="button" class="small primary" data-bag="${b.id}">${tr("Mở túi")}</button></div>`).join("")
+    : `<p class="muted">${tr("Không có túi nào. Kéo gà hoặc trứng vào chợ để đổi lấy túi hạt.")}</p>`);
   $("#open-all-bags").hidden = state.bags.length < 2;
   const stored = state.eggs.filter((e) => e.hatchAt === null && !e.inYard);
   const all = state.eggs.filter((e) => e.hatchAt === null).length;
-  $("#egg-cap").textContent = `(${stored.length} trong kho · ${all}/${R.CONFIG.storage.eggs} cả ngoài sân)`;
+  $("#egg-cap").textContent = `(${stored.length} trong kho · ${all}/${R.CONFIG.storage.eggs} ${tr("cả ngoài sân)")}`;
   const freeSlot = state.incubators.includes(null);
   setHTML($("#eggs"), stored.length
-    ? stored.map((e) => `<div class="item"><div class="art">${eggArt(e)}</div><div>${e.fertile ? '<span class="badge ok">Có phôi</span>' : '<span class="badge">Không phôi</span>'}</div>${e.fertile ? `<div class="muted">Ấp ${Math.round((e.incubateMin ?? R.incubateMsOf(e.code) / MIN))} phút</div>` : '<div class="muted">Chỉ để đổi hạt</div>'}<div class="row">${e.fertile ? `<button type="button" class="small primary" data-incubate="${e.id}" ${freeSlot ? "" : 'disabled title="Ổ ấp đang bận"'}>Ấp</button>` : ""}<button type="button" class="small" data-trade-egg="${e.id}">Đổi túi 2 hạt</button></div></div>`).join("")
-    : '<p class="muted">Kho chưa có trứng. Trứng gà mái đẻ nằm ngoài sân — chạm để nhặt.</p>');
+    ? stored.map((e) => `<div class="item"><div class="art">${eggArt(e)}</div><div>${e.fertile ? `<span class="badge ok">${tr("Có phôi")}</span>` : `<span class="badge">${tr("Không phôi")}</span>`}</div>${e.fertile ? `<div class="muted">${tr("Ấp")} ${Math.round((e.incubateMin ?? R.incubateMsOf(e.code) / MIN))} ${tr("phút")}</div>` : `<div class="muted">${tr("Chỉ để đổi hạt")}</div>`}<div class="row">${e.fertile ? `<button type="button" class="small primary" data-incubate="${e.id}" ${freeSlot ? "" : tr("disabled title=\"Ổ ấp đang bận\"")}>${tr("Ấp")}</button>` : ""}<button type="button" class="small" data-trade-egg="${e.id}">${tr("Đổi túi 2 hạt")}</button></div></div>`).join("")
+    : `<p class="muted">${tr("Kho chưa có trứng. Trứng gà mái đẻ nằm ngoài sân — chạm để nhặt.")}</p>`);
 }
 $("#store-dialog").addEventListener("click", async (ev) => {
   const t = ev.target;
   if (t.dataset.bag) await openBags([t.dataset.bag]);
   if (t.dataset.feedSeed) return openFeedSeed(t.dataset.feedSeed);
   if (t.id === "open-all-bags") await openBags(state.bags.map((b) => b.id));
-  if (t.dataset.incubate) await run(act("incubate", { eggId: t.dataset.incubate }), "Đã đặt trứng vào ổ ấp");
-  if (t.dataset.tradeEgg) await run(act("tradeToShop", { eggs: [t.dataset.tradeEgg] }), "Nhận túi 2 hạt");
+  if (t.dataset.incubate) await run(act("incubate", { eggId: t.dataset.incubate }), tr("Đã đặt trứng vào ổ ấp"));
+  if (t.dataset.tradeEgg) await run(act("tradeToShop", { eggs: [t.dataset.tradeEgg] }), tr("Nhận túi 2 hạt"));
   if ($("#store-dialog").open) renderStore();
 });
 $("#open-store").addEventListener("click", openStore);
@@ -1521,20 +1522,20 @@ function renderDex() {
   const ms = R.CONFIG.dex.milestones;
   const next = ms[state.milestones ?? 0];
   const prev = (state.milestones ?? 0) > 0 ? ms[state.milestones - 1].at : 0;
-  const reward = next ? [next.coop ? `+${next.coop} chỗ chuồng` : "", next.incubators ? `+${next.incubators} ổ ấp` : ""].filter(Boolean).join(", ") : "";
+  const reward = next ? [next.coop ? `+${next.coop} ${tr("chỗ chuồng")}` : "", next.incubators ? `+${next.incubators} ${tr("ổ ấp")}` : ""].filter(Boolean).join(", ") : "";
   $("#dex-progress").innerHTML = next
-    ? `<p><b>${done}</b> mục ★★ · mốc tiếp theo ở <b>${next.at}</b>: ${reward}</p><div class="progress" role="progressbar" aria-valuemin="${prev}" aria-valuemax="${next.at}" aria-valuenow="${done}"><i style="--p:${Math.round(((done - prev) / (next.at - prev)) * 100)}%"></i></div>`
-    : `<p><b>${done}</b> mục ★★ — đã đạt mọi mốc (chuồng ${state.coopCap} chỗ, ${state.incubators.length} ổ ấp).</p>`;
+    ? `<p><b>${done}</b> ${tr("mục ★★ · mốc tiếp theo ở")} <b>${next.at}</b>: ${reward}</p><div class="progress" role="progressbar" aria-valuemin="${prev}" aria-valuemax="${next.at}" aria-valuenow="${done}"><i style="--p:${Math.round(((done - prev) / (next.at - prev)) * 100)}%"></i></div>`
+    : `<p><b>${done}</b> ${tr("mục ★★ — đã đạt mọi mốc (chuồng")} ${state.coopCap} ${tr("chỗ,")} ${state.incubators.length} ${tr("ổ ấp).")}</p>`;
   $("#dex-list").innerHTML = R.DEX.map((d) => {
     const st = dex[d.key] ?? 0;
-    const stars = `<span class="stars" aria-label="${st} trên 3 sao">${[1, 2, 3].map((i) => `<span class="${i > st ? "off" : i === 3 ? "s3" : ""}">★</span>`).join("")}</span>`;
-    return `<li class="dex-item${st ? "" : " unknown"}"><span class="dot" style="background:var(--${d.group})" title="${esc(R.NUTRIENT_INFO[d.group].name)}"></span><span class="nm">${st ? esc(d.name) : "???"}</span>${stars}</li>`;
+    const stars = `<span class="stars" aria-label="${st} ${tr("trên 3 sao")}">${[1, 2, 3].map((i) => `<span class="${i > st ? "off" : i === 3 ? "s3" : ""}">★</span>`).join("")}</span>`;
+    return `<li class="dex-item${st ? "" : " unknown"}"><span class="dot" style="background:var(--${d.group})" title="${esc(tr(R.NUTRIENT_INFO[d.group].name))}"></span><span class="nm">${st ? esc(tr(d.name)) : "???"}</span>${stars}</li>`;
   }).join("");
   const got = state.breeds ?? {};
   const relics = state.relics ?? {};
-  $("#relic-list").innerHTML = R.MYSTERY.map((m) => `<div class="breed${relics[m.key] != null ? " got" : ""}"><span class="tier">Kỳ vật</span>${relics[m.key] != null ? relicSvg(m.key, 36) : ""}<b>${relics[m.key] != null ? esc(relicName(m.key)) : "???"}</b></div>`).join("");
+  $("#relic-list").innerHTML = R.MYSTERY.map((m) => `<div class="breed${relics[m.key] != null ? " got" : ""}"><span class="tier">${tr("Kỳ vật")}</span>${relics[m.key] != null ? relicSvg(m.key, 36) : ""}<b>${relics[m.key] != null ? esc(relicName(m.key)) : "???"}</b></div>`).join("");
   $("#breed-cap").textContent = `(${Object.keys(got).length}/${R.BREEDS.length})`;
-  $("#breed-list").innerHTML = R.BREEDS.map((b) => `<div class="breed${got[b.key] != null ? " got" : ""}"><span class="tier">${BREED_TIER[b.tier]}</span><b>${esc(b.name)}</b><ul>${b.traits.map((t) => `<li class="${dex[t] ? "has" : ""}">${dex[t] ? esc(R.DEX.find((d) => d.key === t).name) : "???"}</li>`).join("")}</ul></div>`).join("");
+  $("#breed-list").innerHTML = R.BREEDS.map((b) => `<div class="breed${got[b.key] != null ? " got" : ""}"><span class="tier">${BREED_TIER[b.tier]}</span><b>${esc(tr(b.name))}</b><ul>${b.traits.map((t) => `<li class="${dex[t] ? "has" : ""}">${dex[t] ? esc(tr(R.DEX.find((d) => d.key === t).name)) : "???"}</li>`).join("")}</ul></div>`).join("");
 }
 $("#open-dex").addEventListener("click", () => {
   if (!state) return;
@@ -1548,11 +1549,11 @@ function offerRoom() {
   if (!cands.length) return false;
   const old = cands.reduce((a, b) => (b.lifespanMs - b.lifeUsed < a.lifespanMs - a.lifeUsed ? b : a));
   const bag = R.chickenTradeValue(old);
-  $("#room-text").innerHTML = `Chuồng đã đủ ${state.coopCap} chỗ. Đổi <b>${esc(old.name)}</b> (${R.stageOf(old) === "adult" ? "trưởng thành" : "đang lớn"}, còn ~${fmtDur(old.lifespanMs - old.lifeUsed)} tuổi) lấy túi ${bag} hạt để có chỗ cho gà mới? Mở thêm chỗ chuồng bằng cách hoàn thiện <b>Sổ sưu tầm</b>.`;
-  $("#room-yes").textContent = `Đổi ${old.name} lấy túi ${bag} hạt`;
+  $("#room-text").innerHTML = `${tr("Chuồng đã đủ")} ${state.coopCap} ${tr("chỗ. Đổi")} <b>${esc(old.name)}</b> (${R.stageOf(old) === "adult" ? tr("trưởng thành") : tr("đang lớn")}${tr(", còn ~")}${fmtDur(old.lifespanMs - old.lifeUsed)} ${tr("tuổi) lấy túi")} ${bag} ${tr("hạt để có chỗ cho gà mới? Mở thêm chỗ chuồng bằng cách hoàn thiện")} <b>${tr("Sổ sưu tầm")}</b>.`;
+  $("#room-yes").textContent = `${tr("Đổi")} ${old.name} ${tr("lấy túi")} ${bag} ${tr("hạt")}`;
   $("#room-yes").onclick = async () => {
     $("#room-dialog").close();
-    await run(act("tradeToShop", { chickens: [old.id] }), `Đã đổi ${old.name} — chuồng có chỗ, đặt trứng vào ổ lại nhé`);
+    await run(act("tradeToShop", { chickens: [old.id] }), `${tr("Đã đổi")} ${old.name} ${tr("— chuồng có chỗ, đặt trứng vào ổ lại nhé")}`);
   };
   $("#room-dialog").showModal();
   renderAll();
@@ -1561,8 +1562,8 @@ function offerRoom() {
 $("#open-memorial").addEventListener("click", () => {
   if (!state) return;
   $("#memorial").innerHTML = state.memorial.length
-    ? [...state.memorial].reverse().map((m) => `<div class="item"><div class="art">${memorialSvg(m)}</div><b>${esc(m.name)}</b><div class="muted">Sống ${fmtDur(m.diedAt - m.hatchedAt)}${m.starvedMs > HOUR ? ` · từng đói ${fmtDur(m.starvedMs)}` : ""}</div></div>`).join("")
-    : '<p class="muted">Chưa có con gà nào rời trại.</p>';
+    ? [...state.memorial].reverse().map((m) => `<div class="item"><div class="art">${memorialSvg(m)}</div><b>${esc(m.name)}</b><div class="muted">${tr("Sống")} ${fmtDur(m.diedAt - m.hatchedAt)}${m.starvedMs > HOUR ? ` ${tr("· từng đói")} ${fmtDur(m.starvedMs)}` : ""}</div></div>`).join("")
+    : `<p class="muted">${tr("Chưa có con gà nào rời trại.")}</p>`;
   $("#memorial-dialog").showModal();
 });
 
@@ -1579,7 +1580,7 @@ async function sendToField(id) {
   const out = state.chickens.find((c) => c.location === "field" && c.id !== id);
   if (out) await act("recall", { chickenId: out.id });
   const ok = await run(act("release", { chickenId: id }));
-  if (ok && out) toast(`${out.name} về chuồng, ${nameOf(id)} ra đồng`);
+  if (ok && out) toast(`${out.name} ${tr("về chuồng,")} ${nameOf(id)} ${tr("ra đồng")}`);
   syncYard();
   return ok;
 }
@@ -1629,7 +1630,7 @@ function stepLucky() {
   const el = document.createElement("button");
   el.type = "button";
   el.className = "lucky";
-  el.setAttribute("aria-label", "Đốm sáng — chạm để chỉ cho gà");
+  el.setAttribute("aria-label", tr("Đốm sáng — chạm để chỉ cho gà"));
   el.innerHTML = sparkleSvg();
   el.style.left = `${(x / W) * 100}%`;
   el.style.top = `${(y / H) * 100}%`;
@@ -1640,7 +1641,7 @@ function stepLucky() {
 function takeLucky(ev) {
   const out = state?.chickens.find((c) => c.location === "field");
   if (!lucky || lucky.taken || !out || ev.target.closest(".lucky") !== lucky.el) return;
-  if (hasV7() && R.staminaOf(out) < 1) return toast(`${out.name} mệt quá, chạy không nổi — về chuồng nghỉ đã`);
+  if (hasV7() && R.staminaOf(out) < 1) return toast(`${out.name} ${tr("mệt quá, chạy không nổi — về chuồng nghỉ đã")}`);
   if (!setLure(field, out.id, lucky.x, lucky.y)) return;
   lucky.taken = true;
   lucky.el.classList.add("taken");
@@ -1657,13 +1658,13 @@ async function resolveLucky(e) {
   if (spot && lucky === spot) clearLucky();
   const at = `${(e.x / W) * 100}%`, top = `${(e.y / H) * 100}%`;
   if (!r.ok) {
-    if (r.code === "seeds_full") popIn("#field-pops", e.x, e.y, "Kho đầy");
+    if (r.code === "seeds_full") popIn("#field-pops", e.x, e.y, tr("Kho đầy"));
     else if (r.code === "not_watching" || r.code === "not_in_field") syncField();
     return scheduleLucky(R.CONFIG.lucky.cooldownMs);
   }
   buzz(16);
   if (r.bagId) {
-    popIn("#field-pops", e.x, e.y, `Bới được túi ${r.bagSize} hạt!`);
+    popIn("#field-pops", e.x, e.y, `${tr("Bới được túi")} ${r.bagSize} ${tr("hạt!")}`);
     burst($("#field-pops"), at, top, { kind: "star", n: 14, colors: ["#ffd95a", "#fff", "#ff9d5c"], spread: 60 });
     sfx("claim");
   } else {
@@ -1685,7 +1686,7 @@ async function stopObserving({ leaving = false } = {}) {
   // rời trang: gửi kiểu keepalive (server cũng tự gọi gà về khi hết nhịp tim)
   const r = await act("recallAll", {}, leaving ? { keepalive: true } : undefined);
   handleEvents(r.events ?? []);
-  if (r.ok && r.recalled?.length) toast(`${r.recalled.map(nameOf).join(", ")} đã về chuồng`);
+  if (r.ok && r.recalled?.length) toast(`${r.recalled.map(nameOf).join(", ")} ${tr("đã về chuồng")}`);
   syncField();
   save();
 }
@@ -1705,10 +1706,10 @@ function renderRoster() {
   const out = state.chickens.find((c) => c.location === "field");
   setHTML($("#field-who"), out
     ? fieldFull
-      ? `<b>${esc(out.name)}</b> đã no và <b>kho hạt đầy</b> — gà nằm nghỉ. Về trại cho đàn ăn bớt hạt rồi thả lại nhé.`
-      : `<b>${esc(out.name)}</b> đang kiếm ăn (tốc độ ${Math.round(1 + R.chickenView(out, now()).speed01 * 9)}/10)${hasV6() ? ". Thấy <b>đốm sáng</b> thì chạm vào: gà chạy tới bới được hạt tốt" : ""}. Rời màn hình là gà tự về chuồng; no rồi thì hạt nhặt được mang về kho.`
-    : "Chưa có gà ngoài đồng — chọn một con bên dưới (mỗi lần chỉ 1 con).");
-  setHTML($("#field-roster"), state.chickens.map((c) => `<button type="button" class="small" data-roster="${c.id}" aria-pressed="${c.location === "field"}">${c.sex === "rooster" ? "♂" : "♀"} ${esc(c.name)}</button>`).join("") || '<span class="muted">Chưa có gà để thả.</span>');
+      ? `<b>${esc(out.name)}</b> ${tr("đã no và")} <b>${tr("kho hạt đầy")}</b> ${tr("— gà nằm nghỉ. Về trại cho đàn ăn bớt hạt rồi thả lại nhé.")}`
+      : `<b>${esc(out.name)}</b> ${tr("đang kiếm ăn (tốc độ")} ${Math.round(1 + R.chickenView(out, now()).speed01 * 9)}/10)${hasV6() ? `${tr(". Thấy")} <b>${tr("đốm sáng")}</b> ${tr("thì chạm vào: gà chạy tới bới được hạt tốt")}` : ""}${tr(". Rời màn hình là gà tự về chuồng; no rồi thì hạt nhặt được mang về kho.")}`
+    : tr("Chưa có gà ngoài đồng — chọn một con bên dưới (mỗi lần chỉ 1 con)."));
+  setHTML($("#field-roster"), state.chickens.map((c) => `<button type="button" class="small" data-roster="${c.id}" aria-pressed="${c.location === "field"}">${c.sex === "rooster" ? "♂" : "♀"} ${esc(c.name)}</button>`).join("") || `<span class="muted">${tr("Chưa có gà để thả.")}</span>`);
 }
 $("#field-roster").addEventListener("click", async (ev) => {
   const id = ev.target.closest("[data-roster]")?.dataset.roster;
@@ -1740,9 +1741,9 @@ function stepField() {
       setReadyAt(field, e.chickenId, tick + R.CONFIG.fieldEatCooldownMs);
       act("fieldFind", { chickenId: e.chickenId, seed: e.seed, at }).then((r) => {
         const kind = r.seed ?? e.seed; // online: loại hạt do server tung
-        const name = R.SEEDS[kind]?.name.toLowerCase() ?? "hạt";
+        const name = R.SEEDS[kind]?.name.toLowerCase() ?? tr("hạt");
         if (r.ok) {
-          popIn("#field-pops", e.x, e.y, r.action === "ate" ? `Ăn ${name}` : `+${name} về kho`);
+          popIn("#field-pops", e.x, e.y, r.action === "ate" ? `${tr("Ăn")} ${name}` : `+${name} ${tr("về kho")}`);
           sfx("peck");
           if (kind !== "common") {
             sfx("good", 0.08);
@@ -1751,7 +1752,7 @@ function stepField() {
           if (fieldFull) { fieldFull = false; renderRoster(); }
         } else if (r.code === "seeds_full") {
           // gà no + kho đầy: nằm nghỉ một lúc lâu thay vì mổ rồi bị từ chối liên tục (design-review H1)
-          popIn("#field-pops", e.x, e.y, "Kho đầy");
+          popIn("#field-pops", e.x, e.y, tr("Kho đầy"));
           const a = field.chickens.get(e.chickenId);
           if (a) { a.mode = "rest"; a.timer = 45000; a.target = null; a.wander = null; }
           setReadyAt(field, e.chickenId, field.t + 45000);
@@ -1825,7 +1826,7 @@ function wake() {
 for (const ev of ["pointerdown", "pointermove", "keydown"]) addEventListener(ev, wake, { passive: true });
 $("#fullscreen").addEventListener("click", () => {
   if (document.fullscreenElement) document.exitFullscreen?.();
-  else document.documentElement.requestFullscreen?.().catch(() => toast("Trình duyệt không cho toàn màn hình"));
+  else document.documentElement.requestFullscreen?.().catch(() => toast(tr("Trình duyệt không cho toàn màn hình")));
 });
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
@@ -1842,22 +1843,22 @@ addEventListener("pagehide", () => {
 
 function rewardText(rw) {
   const parts = [];
-  if (rw.bag) parts.push(`${rw.table === "gift" ? "túi quà" : "túi"} ${rw.bag} hạt`);
+  if (rw.bag) parts.push(`${rw.table === "gift" ? tr("túi quà") : tr("túi")} ${rw.bag} ${tr("hạt")}`);
   const seeds = Object.entries(rw.seeds ?? {});
-  if (seeds.length > 2) parts.push(`${seeds.reduce((a, [, n]) => a + n, 0)} hạt giàu chất`);
+  if (seeds.length > 2) parts.push(`${seeds.reduce((a, [, n]) => a + n, 0)} ${tr("hạt giàu chất")}`);
   else for (const [k, n] of seeds) parts.push(`${n} ${seedName(k).toLowerCase()}`);
-  if (rw.egg) parts.push("trứng quà");
+  if (rw.egg) parts.push(tr("trứng quà"));
   return parts.join(" + ");
 }
 // Việc đáng chú ý nhất lúc này: thứ nhận thưởng được → bước mở đầu → việc trong ngày.
 function questFocus(q) {
-  if (q.tutorial?.done) return { ...q.tutorial, kicker: `Bước ${q.tutorial.step + 1}/${q.tutorial.total} · xong!`, ready: true };
+  if (q.tutorial?.done) return { ...q.tutorial, kicker: `${tr("Bước")} ${q.tutorial.step + 1}/${q.tutorial.total} · ${tr("xong!")}`, ready: true };
   const d = q.daily.find((x) => x.done && !x.claimed);
-  if (d) return { ...d, kicker: "Việc hôm nay · xong!", ready: true };
-  if (q.chest.done && !q.chest.claimed) return { id: "chest", text: "Mở rương ngày", have: q.daily.length, goal: q.daily.length, reward: q.chest.reward, kicker: "Xong cả việc hôm nay!", ready: true };
-  if (q.tutorial) return { ...q.tutorial, kicker: `Bước ${q.tutorial.step + 1}/${q.tutorial.total}` };
+  if (d) return { ...d, kicker: tr("Việc hôm nay · xong!"), ready: true };
+  if (q.chest.done && !q.chest.claimed) return { id: "chest", text: tr("Mở rương ngày"), have: q.daily.length, goal: q.daily.length, reward: q.chest.reward, kicker: tr("Xong cả việc hôm nay!"), ready: true };
+  if (q.tutorial) return { ...q.tutorial, kicker: `${tr("Bước")} ${q.tutorial.step + 1}/${q.tutorial.total}` };
   const n = q.daily.find((x) => !x.claimed);
-  if (n) return { ...n, kicker: `Việc hôm nay ${q.daily.filter((x) => x.claimed).length + 1}/${q.daily.length}` };
+  if (n) return { ...n, kicker: `${tr("Việc hôm nay")} ${q.daily.filter((x) => x.claimed).length + 1}/${q.daily.length}` };
   return null;
 }
 const questSeen = new Set();
@@ -1876,9 +1877,9 @@ function renderQuest() {
   $("#quest-dot").hidden = !ready.length;
   host.classList.toggle("ready", !!f?.ready);
   if (!f) {
-    setHTML(host, `<button type="button" class="q-main" data-open-quests><span class="q-ico">${flameSvg()}</span><span><span class="q-kicker">Việc hôm nay</span><span class="q-text">Xong hết rồi! Chuỗi ${q.streak} ngày — mai có việc mới.</span></span></button>`);
+    setHTML(host, `<button type="button" class="q-main" data-open-quests><span class="q-ico">${flameSvg()}</span><span><span class="q-kicker">${tr("Việc hôm nay")}</span><span class="q-text">${tr("Xong hết rồi! Chuỗi")} ${q.streak} ${tr("ngày — mai có việc mới.")}</span></span></button>`);
   } else {
-    setHTML(host, `<button type="button" class="q-main" data-open-quests aria-label="${esc(f.kicker)}: ${esc(f.key ? questText(f) : f.text)} — ${f.have}/${f.goal}"><span class="q-ico">${chestSvg(!!f.ready)}</span><span><span class="q-kicker">${esc(f.kicker)}</span><span class="q-text">${esc(f.key ? questText(f) : f.text)}</span><span class="q-sub"><span class="q-bar"><i style="--p:${Math.round((f.have / f.goal) * 100)}%"></i></span><span>${f.have}/${f.goal}</span><span class="q-rw">🎁 ${esc(rewardText(f.reward))}</span></span></span></button>${f.ready ? `<button type="button" class="q-claim gold" data-claim="${f.id}">Nhận</button>` : ""}`);
+    setHTML(host, `<button type="button" class="q-main" data-open-quests aria-label="${esc(f.kicker)}: ${esc(f.key ? questText(f) : f.text)} — ${f.have}/${f.goal}"><span class="q-ico">${chestSvg(!!f.ready)}</span><span><span class="q-kicker">${esc(f.kicker)}</span><span class="q-text">${esc(f.key ? questText(f) : f.text)}</span><span class="q-sub"><span class="q-bar"><i style="--p:${Math.round((f.have / f.goal) * 100)}%"></i></span><span>${f.have}/${f.goal}</span><span class="q-rw">🎁 ${esc(rewardText(f.reward))}</span></span></span></button>${f.ready ? `<button type="button" class="q-claim gold" data-claim="${f.id}">${tr("Nhận")}</button>` : ""}`);
   }
   if (fresh && questPrimed) {
     sfx("coin");
@@ -1889,24 +1890,24 @@ function renderQuest() {
 function renderQuests() {
   const q = R.questView(state);
   const sub = (x) => `<div class="q-sub"><span class="q-bar"><i style="--p:${Math.round((x.have / x.goal) * 100)}%"></i></span><span>${x.have}/${x.goal}</span><span class="q-rw">🎁 ${esc(rewardText(x.reward))}</span></div>`;
-  const row = (x) => `<div class="qrow${x.done && !x.claimed ? " done" : ""}${x.claimed ? " claimed" : ""}"><div><b>${esc(questText(x))}</b>${sub(x)}</div>${x.claimed ? '<span class="tick">✓ Đã nhận</span>' : `<button type="button" class="small${x.done ? " gold" : ""}" data-claim="${x.id}"${x.done ? "" : " disabled"}>Nhận</button>`}</div>`;
+  const row = (x) => `<div class="qrow${x.done && !x.claimed ? " done" : ""}${x.claimed ? " claimed" : ""}"><div><b>${esc(questText(x))}</b>${sub(x)}</div>${x.claimed ? `<span class="tick">${tr("✓ Đã nhận")}</span>` : `<button type="button" class="small${x.done ? " gold" : ""}" data-claim="${x.id}"${x.done ? "" : " disabled"}>${tr("Nhận")}</button>`}</div>`;
   const t = q.tutorial, c = q.chest;
   const reset = (R.dayIndex(now()) + 1) * DAY - R.CONFIG.daily.tzOffsetMs - now();
   $("#quests-body").innerHTML = `
-    <h3 class="section-title">Bước đầu làm trại <span class="muted">${t ? `(${t.step}/${t.total})` : `— đã xong cả ${R.TUTORIAL.length} bước`}</span></h3>
+    <h3 class="section-title">${tr("Bước đầu làm trại")} <span class="muted">${t ? `(${t.step}/${t.total})` : `${tr("— đã xong cả")} ${R.TUTORIAL.length} ${tr("bước")}`}</span></h3>
     ${t ? `<div class="qlist">${row(t)}</div>` : ""}
-    <h3 class="section-title">Việc hôm nay <span class="muted">(đổi việc sau ${fmtDur(reset)})</span></h3>
+    <h3 class="section-title">${tr("Việc hôm nay")} <span class="muted">${tr("(đổi việc sau")} ${fmtDur(reset)})</span></h3>
     <div class="qlist">${q.daily.map(row).join("")}
-      <div class="qrow chest-row${c.done && !c.claimed ? " done" : ""}${c.claimed ? " claimed" : ""}">${chestSvg(c.claimed)}<div><b>Rương ngày</b><div class="q-sub"><span>Xong cả ${q.daily.length} việc để mở · 🎁 ${esc(rewardText(c.reward))}</span></div></div>${c.claimed ? '<span class="tick">✓ Đã mở</span>' : `<button type="button" class="small${c.done ? " gold" : ""}" data-claim="chest"${c.done ? "" : " disabled"}>Mở</button>`}</div>
+      <div class="qrow chest-row${c.done && !c.claimed ? " done" : ""}${c.claimed ? " claimed" : ""}">${chestSvg(c.claimed)}<div><b>${tr("Rương ngày")}</b><div class="q-sub"><span>${tr("Xong cả")} ${q.daily.length} ${tr("việc để mở · 🎁")} ${esc(rewardText(c.reward))}</span></div></div>${c.claimed ? `<span class="tick">${tr("✓ Đã mở")}</span>` : `<button type="button" class="small${c.done ? " gold" : ""}" data-claim="chest"${c.done ? "" : " disabled"}>${tr("Mở")}</button>`}</div>
     </div>
-    <div class="streak">${flameSvg()}<span class="n">${q.streak}</span><span>ngày liên tiếp${q.best > q.streak ? ` (kỷ lục ${q.best})` : ""}. Mỗi ngày nhận thưởng ít nhất một việc để giữ chuỗi: rương to dần, cứ ${R.CONFIG.daily.streakEgg} ngày thêm một quả trứng quà.</span></div>`;
+    <div class="streak">${flameSvg()}<span class="n">${q.streak}</span><span>${tr("ngày liên tiếp")}${q.best > q.streak ? ` ${tr("(kỷ lục")} ${q.best})` : ""}${tr(". Mỗi ngày nhận thưởng ít nhất một việc để giữ chuỗi: rương to dần, cứ")} ${R.CONFIG.daily.streakEgg} ${tr("ngày thêm một quả trứng quà.")}</span></div>`;
 }
 async function claimQuest(id) {
   const r = await act("claim", { id });
   handleEvents(r.events ?? []);
   if (!r.ok) {
     sfx("error");
-    toast(r.message);
+    toast(errText(r));
     return renderAll();
   }
   save();
@@ -1944,15 +1945,15 @@ function renderDecor() {
     const z = $('#yard-zones [data-zone="market"]');
     if (z) {
       z.classList.toggle("has-visitor", !!here);
-      const lb = z.querySelector(".label"), txt = here ? vis.name : "Chợ";
+      const lb = z.querySelector(".label"), txt = here ? tr(vis.name) : tr("Chợ");
       if (lb.textContent !== txt) lb.textContent = txt;
       if (here && z.dataset.seen !== String(vis.from)) { z.dataset.seen = String(vis.from); sfx("merchant"); }
     }
-    const tw = $('#yard-zones [data-zone="feeder"] .label'), n = Object.values(state.tower).reduce((a, b) => a + b, 0), tx = `Tháp hạt ${n}/${R.CONFIG.tower.cap}`;
+    const tw = $('#yard-zones [data-zone="feeder"] .label'), n = Object.values(state.tower).reduce((a, b) => a + b, 0), tx = `${tr("Tháp hạt")} ${n}/${R.CONFIG.tower.cap}`;
     if (tw && tw.textContent !== tx) tw.textContent = tx;
   }
   // gian hàng bên đường luôn có (chợ), kể cả với server luật cũ
-  extra.unshift({ key: "stall", x: SPOTS.market.x + 2, y: SPOTS.market.y + 40, w: 104, html: stallSvg() });
+  extra.unshift({ key: "stall", x: SPOTS.market.x + 2, y: SPOTS.market.y + 40, w: 104, html: stallSvg(tr("CHỢ")) });
   setHTML($("#yard-decor"), [...decorItems(R.decorOf(state), sceneSeed()), ...extra].map((d) => `<div class="decor" data-decor="${d.key}" style="left:${(d.x / W) * 100}%;top:${(d.y / H) * 100}%;width:${(d.w / W) * 100}%">${d.html}</div>`).join(""));
 }
 function renderSky() {
@@ -1975,7 +1976,7 @@ function renderSound() {
   const b = $("#sound");
   b.innerHTML = SPEAKER(!sound.muted);
   b.setAttribute("aria-pressed", String(!sound.muted));
-  b.title = sound.muted ? "Đang tắt tiếng — bấm để bật" : "Đang bật tiếng — bấm để tắt";
+  b.title = sound.muted ? tr("Đang tắt tiếng — bấm để bật") : tr("Đang bật tiếng — bấm để tắt");
 }
 $("#sound").addEventListener("click", () => {
   sound.toggle();
@@ -1986,7 +1987,7 @@ function renderMusic() {
   const b = $("#music");
   b.setAttribute("aria-pressed", String(music.enabled));
   b.classList.toggle("off", !music.enabled);
-  b.title = music.enabled ? "Đang bật nhạc nền — bấm để tắt" : "Đang tắt nhạc nền — bấm để bật";
+  b.title = music.enabled ? tr("Đang bật nhạc nền — bấm để tắt") : tr("Đang tắt nhạc nền — bấm để bật");
 }
 $("#music").addEventListener("click", () => { music.toggle(); renderMusic(); });
 renderMusic();
@@ -2004,14 +2005,14 @@ function renderTimed() {
   if (!tm) return;
   const left = tm.readyAt - now(), ready = left <= 0;
   b.classList.toggle("ready", ready);
-  setHTML(b, `${chestSvg(ready)}<span>${ready ? "Mở!" : fmtEta(left).replace(" phút", "′").replace(" giây", "″").replace(" giờ", "h")}</span>`);
-  b.title = ready ? `Rương theo giờ: ${rewardText(tm.reward)}` : `Rương theo giờ mở sau ${fmtEta(left)} — ${rewardText(tm.reward)}`;
+  setHTML(b, `${chestSvg(ready)}<span>${ready ? tr("Mở!") : fmtEta(left).replace(tr(" phút"), "′").replace(tr(" giây"), "″").replace(tr(" giờ"), "h")}</span>`);
+  b.title = ready ? `${tr("Rương theo giờ:")} ${rewardText(tm.reward)}` : `${tr("Rương theo giờ mở sau")} ${fmtEta(left)} — ${rewardText(tm.reward)}`;
   b.setAttribute("aria-label", b.title);
 }
 $("#timed").addEventListener("click", () => {
   const tm = R.questView(state).timed;
   if (tm.readyAt <= now()) claimQuest("timed");
-  else toast(`Rương mở sau ${fmtEta(tm.readyAt - now())}`);
+  else toast(`${tr("Rương mở sau")} ${fmtEta(tm.readyAt - now())}`);
 });
 
 function openTower() {
@@ -2023,11 +2024,11 @@ function renderTower() {
   $("#tower-cap").textContent = `(${total}/${R.CONFIG.tower.cap})`;
   $("#tower-list").innerHTML = Object.keys(R.SEEDS).filter((k) => k !== "odd" && (state.inventory[k] > 0 || state.tower[k] > 0)).map((k) => {
     const inv = state.inventory[k], tw = state.tower[k];
-    return `<div class="tower-row">${seedIcon(k, 28)}<span>${seedName(k)}<small>kho ${inv} · tháp <b>${tw}</b></small></span><span class="btns">
+    return `<div class="tower-row">${seedIcon(k, 28)}<span>${seedName(k)}<small>kho ${inv} ${tr("· tháp")} <b>${tw}</b></small></span><span class="btns">
       <button type="button" class="small" data-tw="${k}" data-n="1"${inv >= 1 && room >= 1 ? "" : " disabled"}>+1</button>
       <button type="button" class="small primary" data-tw="${k}" data-n="${Math.min(inv, room, 10)}"${inv >= 1 && room >= 1 ? "" : " disabled"}>+${Math.max(1, Math.min(inv, room, 10))}</button>
-      <button type="button" class="small" data-tw="${k}" data-n="-${tw}"${tw ? "" : " disabled"} title="Lấy lại về kho">↩</button></span></div>`;
-  }).join("") || '<p class="muted">Kho hết hạt — thả gà ra đồng để kiếm hạt.</p>';
+      <button type="button" class="small" data-tw="${k}" data-n="-${tw}"${tw ? "" : " disabled"} title="${tr("Lấy lại về kho")}">↩</button></span></div>`;
+  }).join("") || `<p class="muted">${tr("Kho hết hạt — thả gà ra đồng để kiếm hạt.")}</p>`;
 }
 $("#tower-list").addEventListener("click", async (ev) => {
   const b = ev.target.closest("[data-tw]");
@@ -2040,30 +2041,30 @@ $("#tower-list").addEventListener("click", async (ev) => {
 let feedSeed = null;
 function openFeedSeed(kind) {
   feedSeed = kind;
-  $("#feed-title").textContent = `Cho ăn ${seedName(kind).toLowerCase()} (còn ${state.inventory[kind]}) — chọn gà`;
+  $("#feed-title").textContent = `${tr("Cho ăn")} ${seedName(kind).toLowerCase()} ${tr("(còn")} ${state.inventory[kind]}${tr(") — chọn gà")}`;
   $("#feed-list").innerHTML = state.chickens.filter((c) => c.location === "coop").map((c) => {
     const v = R.chickenView(c, now());
     return `<button type="button" data-chick="${c.id}"><span class="ico">${chickenSvg(c).svg}</span><span><b>${c.sex === "rooster" ? "♂" : "♀"} ${esc(c.name)}</b><br><small class="muted">${STAGE[v.stage]} · no ${Math.round(v.satiety01 * 100)}%</small></span><b></b></button>`;
-  }).join("") || '<p class="muted">Không có con gà nào ở chuồng.</p>';
+  }).join("") || `<p class="muted">${tr("Không có con gà nào ở chuồng.")}</p>`;
   if (!$("#feed-dialog").open) $("#feed-dialog").showModal();
 }
 
 /* ---------- v7: khách qua đường ---------- */
 
 const V_SAY = {
-  seller: "Hạt ngon đây cháu ơi! Giá phải chăng, bà chỉ lấy vé thôi.",
-  trader: "Ta không dùng vé. Đưa đúng thứ ta cần, ta đổi cho thứ khác.",
-  collector: "Tôi đang tìm một con gà như thế này. Có thì tôi trả vé ngay.",
-  reader: "Đưa quả trứng đây, để ta soi xem trong đó có gì.",
-  haggler: "Hàng hiếm đấy! Nhưng giá thì… ta nói chuyện được.",
-  artisan: "Tự tay tôi làm cả. Trại đẹp thì gà cũng vui.",
-  stranger: "Ba cái giỏ. Chọn một. Một trong số đó có thứ rất quý…",
+  seller: tr("Hạt ngon đây cháu ơi! Giá phải chăng, bà chỉ lấy vé thôi."),
+  trader: tr("Ta không dùng vé. Đưa đúng thứ ta cần, ta đổi cho thứ khác."),
+  collector: tr("Tôi đang tìm một con gà như thế này. Có thì tôi trả vé ngay."),
+  reader: tr("Đưa quả trứng đây, để ta soi xem trong đó có gì."),
+  haggler: tr("Hàng hiếm đấy! Nhưng giá thì… ta nói chuyện được."),
+  artisan: tr("Tự tay tôi làm cả. Trại đẹp thì gà cũng vui."),
+  stranger: tr("Ba cái giỏ. Chọn một. Một trong số đó có thứ rất quý…"),
 };
-const itemText = (it) => (it.decor ? ({ bench: "Ghế gỗ", well: "Giếng nước", birdhouse: "Chuồng chim", windchime: "Chuông gió" })[it.decor] : it.egg ? `Trứng mang ${dexName(it.egg).toLowerCase()}` : rewardText(it));
+const itemText = (it) => (it.decor ? ({ bench: tr("Ghế gỗ"), well: tr("Giếng nước"), birdhouse: tr("Chuồng chim"), windchime: tr("Chuông gió") })[it.decor] : it.egg ? `${tr("Trứng mang")} ${dexName(it.egg).toLowerCase()}` : rewardText(it));
 const itemArt = (it) => (it.egg ? eggArt({ id: "v", shell: "#e9dcc3", fertile: true }) : it.bag ? bagArt(64, it.bag) : it.seeds ? seedIcon(Object.keys(it.seeds)[0], 56) : chestSvg(true));
 const dexName = (k) => tname("dex", k, R.DEX.find((d) => d.key === k)?.name ?? k);
 const price = (n) => `<span class="v-price">${ticketSvg(15)} ${n}</span>`;
-const orderText = (o) => `${o.traits.length ? `gà trưởng thành có ${o.traits.map((t) => dexName(t).toLowerCase()).join(" và ")}` : "một con gà trưởng thành"}${o.quality ? ", nuôi đủ chất" : ""}`;
+const orderText = (o) => `${o.traits.length ? `${tr("gà trưởng thành có")} ${o.traits.map((t) => dexName(t).toLowerCase()).join(tr(" và "))}` : tr("một con gà trưởng thành")}${o.quality ? tr(", nuôi đủ chất") : ""}`;
 
 function openVisitor() {
   if (!hasV7()) return;
@@ -2073,31 +2074,31 @@ function openVisitor() {
 function renderVisitor() {
   const v = R.visitorView(state, now()), body = $("#visitor-body");
   if (!v?.who || v.gone) {
-    $("#visitor-title").textContent = "Gian hàng bên đường";
+    $("#visitor-title").textContent = tr("Gian hàng bên đường");
     const nx = v?.next;
-    body.innerHTML = `<p class="muted">${v?.gone ? "Ông lái buôn giận dỗi bỏ đi rồi." : "Chưa có ai ghé."} ${nx ? `Khách tiếp theo (${R.VISITORS[nx.who].name}) tới sau ${fmtDur(nx.from - now())}.` : "Hôm nay không còn khách nào — mai lại có."}</p>`;
+    body.innerHTML = `<p class="muted">${v?.gone ? tr("Ông lái buôn giận dỗi bỏ đi rồi.") : tr("Chưa có ai ghé.")} ${nx ? `${tr("Khách tiếp theo (")}${tr(R.VISITORS[nx.who].name)}${tr(") tới sau")} ${fmtDur(nx.from - now())}.` : tr("Hôm nay không còn khách nào — mai lại có.")}</p>`;
     return;
   }
-  $("#visitor-title").textContent = v.name;
-  const head = `<div class="v-head">${visitorSvg(v.who)}<div class="v-say">${V_SAY[v.who]}<br><small class="muted">Ở lại thêm ${fmtEta(v.until - now())} · bạn có ${state.tickets} vé</small></div></div>`;
+  $("#visitor-title").textContent = tr(v.name);
+  const head = `<div class="v-head">${visitorSvg(v.who)}<div class="v-say">${V_SAY[v.who]}<br><small class="muted">${tr("Ở lại thêm")} ${fmtEta(v.until - now())} ${tr("· bạn có")} ${state.tickets} ${tr("vé")}</small></div></div>`;
   const done = (i) => v.bought.includes(i);
   let html = "";
   if (v.who === "seller" || v.who === "artisan") {
-    html = `<div class="v-list">${v.stock.map((it, i) => `<div class="v-card${done(i) ? " done" : ""}"><div class="art">${itemArt(it)}</div><b>${esc(itemText(it))}</b><button type="button" class="small primary" data-buy="${i}"${done(i) ? " disabled" : ""}>${done(i) ? "Đã mua" : `Mua ${price(it.price)}`}</button></div>`).join("")}</div>`;
+    html = `<div class="v-list">${v.stock.map((it, i) => `<div class="v-card${done(i) ? " done" : ""}"><div class="art">${itemArt(it)}</div><b>${esc(itemText(it))}</b><button type="button" class="small primary" data-buy="${i}"${done(i) ? " disabled" : ""}>${done(i) ? tr("Đã mua") : `Mua ${price(it.price)}`}</button></div>`).join("")}</div>`;
   } else if (v.who === "stranger") {
     const it = v.stock[0];
-    html = `<p class="muted">Trứng bí ẩn: khoảng ${Math.round(R.CONFIG.mystery.chance * 100)}% nở ra gà mang một <b>kỳ vật</b> — bộ phận độc nhất không lai giống ra được (đuôi công, cánh bướm…). Có hay không, chỉ biết khi trứng nở.</p><div class="v-list"><div class="v-card${done(0) ? " done" : ""}"><div class="art">${eggArt({ id: "m", shell: R.CONFIG.mystery.shell, fertile: true })}</div><b>Trứng bí ẩn</b><button type="button" class="small primary" data-buy="0"${done(0) ? " disabled" : ""}>${done(0) ? "Đã mua" : `Mua ${price(it.price)}`}</button></div></div>`;
+    html = `<p class="muted">${tr("Trứng bí ẩn: khoảng")} ${Math.round(R.CONFIG.mystery.chance * 100)}${tr("% nở ra gà mang một")} <b>${tr("kỳ vật")}</b> ${tr("— bộ phận độc nhất không lai giống ra được (đuôi công, cánh bướm…). Có hay không, chỉ biết khi trứng nở.")}</p><div class="v-list"><div class="v-card${done(0) ? " done" : ""}"><div class="art">${eggArt({ id: "m", shell: R.CONFIG.mystery.shell, fertile: true })}</div><b>${tr("Trứng bí ẩn")}</b><button type="button" class="small primary" data-buy="0"${done(0) ? " disabled" : ""}>${done(0) ? tr("Đã mua") : `Mua ${price(it.price)}`}</button></div></div>`;
   } else if (v.who === "trader") {
-    html = `<div class="v-list">${v.stock.map((o, i) => `<div class="v-card${done(i) ? " done" : ""}"><div class="art">${itemArt(o.get)}</div><b>${esc(rewardText(o.get))}</b><span class="muted">đổi lấy ${o.give.seed ? `${o.give.n} ${seedName(o.give.seed).toLowerCase()}` : `${o.give.eggs} trứng không phôi`}</span><button type="button" class="small primary" data-barter="${i}"${done(i) ? " disabled" : ""}>${done(i) ? "Đã đổi" : "Đổi"}</button></div>`).join("")}</div>`;
+    html = `<div class="v-list">${v.stock.map((o, i) => `<div class="v-card${done(i) ? " done" : ""}"><div class="art">${itemArt(o.get)}</div><b>${esc(rewardText(o.get))}</b><span class="muted">${tr("đổi lấy")} ${o.give.seed ? `${o.give.n} ${seedName(o.give.seed).toLowerCase()}` : `${o.give.eggs} ${tr("trứng không phôi")}`}</span><button type="button" class="small primary" data-barter="${i}"${done(i) ? " disabled" : ""}>${done(i) ? tr("Đã đổi") : tr("Đổi")}</button></div>`).join("")}</div>`;
   } else if (v.who === "collector") {
     const o = v.stock[0], list = state.chickens.filter((c) => c.location === "coop" && R.stageOf(c) === "adult");
-    html = `<p>Cần: <b>${esc(orderText(o))}</b> — trả ${price(o.pay)}</p>${done(0) ? '<p class="muted">Bạn đã giao rồi. Cảm ơn nhé!</p>' : `<div class="v-list">${list.map((c) => { const ok = R.matchesOrder(c, o); return `<div class="v-card${ok ? " match" : ""}"><div class="art">${chickenSvg(c).svg}</div><b>${esc(c.name)}</b><button type="button" class="small${ok ? " primary" : ""}" data-deliver="${c.id}"${ok ? "" : " disabled"}>${ok ? "Giao con này" : "Chưa đúng"}</button></div>`; }).join("") || '<p class="muted">Trại chưa có gà trưởng thành nào ở chuồng.</p>'}</div>`}`;
+    html = `<p>${tr("Cần:")} <b>${esc(orderText(o))}</b> ${tr("— trả")} ${price(o.pay)}</p>${done(0) ? `<p class="muted">${tr("Bạn đã giao rồi. Cảm ơn nhé!")}</p>` : `<div class="v-list">${list.map((c) => { const ok = R.matchesOrder(c, o); return `<div class="v-card${ok ? " match" : ""}"><div class="art">${chickenSvg(c).svg}</div><b>${esc(c.name)}</b><button type="button" class="small${ok ? " primary" : ""}" data-deliver="${c.id}"${ok ? "" : " disabled"}>${ok ? tr("Giao con này") : tr("Chưa đúng")}</button></div>`; }).join("") || `<p class="muted">${tr("Trại chưa có gà trưởng thành nào ở chuồng.")}</p>`}</div>`}`;
   } else if (v.who === "reader") {
     const eggs = state.eggs.filter((e) => e.fertile);
-    html = `<div class="v-list">${eggs.map((e) => `<div class="v-card"><div class="art">${eggArt(e)}</div>${knownText(e) || '<span class="muted">chưa soi</span>'}<button type="button" class="small" data-candle="${e.id}" data-what="sex"${e.known?.sex ? " disabled" : ""}>Trống hay mái ${price(v.stock[0].price)}</button><button type="button" class="small" data-candle="${e.id}" data-what="trait"${e.known?.all ? " disabled" : ""}>Một đặc điểm ${price(v.stock[1].price)}</button></div>`).join("") || '<p class="muted">Bạn không có quả trứng có phôi nào.</p>'}</div>`;
+    html = `<div class="v-list">${eggs.map((e) => `<div class="v-card"><div class="art">${eggArt(e)}</div>${knownText(e) || `<span class="muted">${tr("chưa soi")}</span>`}<button type="button" class="small" data-candle="${e.id}" data-what="sex"${e.known?.sex ? " disabled" : ""}>${tr("Trống hay mái")} ${price(v.stock[0].price)}</button><button type="button" class="small" data-candle="${e.id}" data-what="trait"${e.known?.all ? " disabled" : ""}>${tr("Một đặc điểm")} ${price(v.stock[1].price)}</button></div>`).join("") || `<p class="muted">${tr("Bạn không có quả trứng có phôi nào.")}</p>`}</div>`;
   } else if (v.who === "haggler") {
     const it = v.stock[0], cur = v.price ?? it.price, left = R.VISIT_CONFIG.haggle.tries - v.tries;
-    html = `<div class="v-list"><div class="v-card${done(0) ? " done" : ""}"><div class="art">${itemArt(it)}</div><b>${esc(itemText(it))}</b><span>Giá đang ra: ${price(cur)}</span></div></div>${done(0) ? '<p class="muted">Bạn đã mua món này.</p>' : `<div class="v-haggle"><label>Trả giá <input id="offer" type="number" min="1" max="${cur}" value="${Math.max(1, Math.round(cur * 0.8))}" inputmode="numeric"> vé</label><button type="button" class="primary" data-haggle="offer"${left > 0 ? "" : " disabled"}>Trả giá (còn ${Math.max(0, left)} lần)</button><button type="button" data-haggle="${cur}">Mua giá ${cur}</button></div><p class="muted">Trả thấp quá ông ấy sẽ bỏ đi.</p>`}`;
+    html = `<div class="v-list"><div class="v-card${done(0) ? " done" : ""}"><div class="art">${itemArt(it)}</div><b>${esc(itemText(it))}</b><span>${tr("Giá đang ra:")} ${price(cur)}</span></div></div>${done(0) ? `<p class="muted">${tr("Bạn đã mua món này.")}</p>` : `<div class="v-haggle"><label>${tr("Trả giá")} <input id="offer" type="number" min="1" max="${cur}" value="${Math.max(1, Math.round(cur * 0.8))}" inputmode="numeric"> ${tr("vé")}</label><button type="button" class="primary" data-haggle="offer"${left > 0 ? "" : " disabled"}>${tr("Trả giá (còn")} ${Math.max(0, left)} ${tr("lần)")}</button><button type="button" data-haggle="${cur}">${tr("Mua giá")} ${cur}</button></div><p class="muted">${tr("Trả thấp quá ông ấy sẽ bỏ đi.")}</p>`}`;
   }
   body.innerHTML = head + html;
   for (const el of body.querySelectorAll(".egg")) zoomArt(el);
@@ -2105,7 +2106,7 @@ function renderVisitor() {
 const knownText = (e) => {
   const k = e.known;
   if (!k) return "";
-  const parts = [k.sex ? (k.sex === "hen" ? "♀ mái" : "♂ trống") : "", ...(k.traits ?? []).map(dexName), k.all && !(k.traits ?? []).length ? "không có đặc điểm riêng" : ""].filter(Boolean);
+  const parts = [k.sex ? (k.sex === "hen" ? tr("♀ mái") : tr("♂ trống")) : "", ...(k.traits ?? []).map(dexName), k.all && !(k.traits ?? []).length ? tr("không có đặc điểm riêng") : ""].filter(Boolean);
   return parts.length ? `<span class="known">${parts.map(esc).join(" · ")}</span>` : "";
 };
 $("#visitor-body").addEventListener("click", async (ev) => {
@@ -2125,16 +2126,16 @@ $("#visitor-body").addEventListener("click", async (ev) => {
   handleEvents(r.events ?? []);
   if (!r.ok) {
     sfx("error");
-    toast(r.message);
+    toast(errText(r));
   } else {
     save();
-    if (r.gone) { sfx("sad"); toast("Ông lái buôn lắc đầu bỏ đi."); }
-    else if (r.counter != null) { sfx("tap"); toast(r.left ? `“${r.counter} vé, không bớt nữa đâu!” — còn ${r.left} lần trả giá` : `“Giá chót ${r.counter} vé. Mua thì mua.”`); }
-    else if (d.candle) { sfx("sparkle"); toast(`Thầy soi thấy: ${knownText({ known: r.known }).replace(/<[^>]+>/g, "")}`); }
-    else if (d.deliver) { sfx("coin"); if (d.deliver === selectedId) select(null); toast(`Giao gà, nhận ${r.tickets} vé`); }
+    if (r.gone) { sfx("sad"); toast(tr("Ông lái buôn lắc đầu bỏ đi.")); }
+    else if (r.counter != null) { sfx("tap"); toast(r.left ? `“${r.counter} ${tr("vé, không bớt nữa đâu!” — còn")} ${r.left} ${tr("lần trả giá")}` : `${tr("“Giá chót")} ${r.counter} ${tr("vé. Mua thì mua.”")}`); }
+    else if (d.candle) { sfx("sparkle"); toast(`${tr("Thầy soi thấy:")} ${knownText({ known: r.known }).replace(/<[^>]+>/g, "")}`); }
+    else if (d.deliver) { sfx("coin"); if (d.deliver === selectedId) select(null); toast(`${tr("Giao gà, nhận")} ${r.tickets} ${tr("vé")}`); }
     else if (r.got) {
       $("#visitor-dialog").close();
-      queueReveal({ kind: "reward", id: "shop", title: d.barter != null ? "Đổi xong!" : "Mua xong!", got: r.got });
+      queueReveal({ kind: "reward", id: "shop", title: d.barter != null ? tr("Đổi xong!") : "Mua xong!", got: r.got });
       pumpReveals();
     }
   }
@@ -2146,10 +2147,10 @@ $("#visitor-body").addEventListener("click", async (ev) => {
 /* ---------- v7: sân chơi — trò "đúng nhịp" (bản đầu; trò riêng cho từng tuổi viết sau theo hợp đồng run()) ---------- */
 
 const PLAY_INFO = {
-  hop: { name: "Nhảy vũng nước", speed: 0.9, zone: 0.26 },
-  dash: { name: "Chạy đua", speed: 1.25, zone: 0.22 },
-  peck: { name: "Mổ hạt", speed: 1.5, zone: 0.18 },
-  roll: { name: "Lăn trứng", speed: 0.8, zone: 0.28 },
+  hop: { name: tr("Nhảy vũng nước"), speed: 0.9, zone: 0.26 },
+  dash: { name: tr("Chạy đua"), speed: 1.25, zone: 0.22 },
+  peck: { name: tr("Mổ hạt"), speed: 1.5, zone: 0.18 },
+  roll: { name: tr("Lăn trứng"), speed: 0.8, zone: 0.28 },
 };
 // Vạch trắng chạy qua lại; bấm khi vạch nằm trong vùng xanh. 8 lượt, điểm = số lần trúng / 8.
 function rhythmGame(host, ch, kind) {
@@ -2158,7 +2159,7 @@ function rhythmGame(host, ch, kind) {
     let i = 0, hits = 0, pos = 0, dir = 1, last = performance.now(), zone = 0.5, over = false;
     host.innerHTML = `<div class="pg"><p class="rv-kicker">${P.name}</p><div class="pg-art">${ch ? chickenSvg(ch, { detail: "high" }).svg : ""}</div>
       <div class="pg-bar"><div class="pg-zone"></div><div class="pg-mark"></div></div><div class="pg-dots">${"<i></i>".repeat(rounds)}</div>
-      <div class="rv-actions"><button type="button" class="gold" data-pg="tap">Bấm!</button></div><p class="rv-sub">Bấm khi vạch trắng nằm trong vùng xanh</p></div>`;
+      <div class="rv-actions"><button type="button" class="gold" data-pg="tap">${tr("Bấm!")}</button></div><p class="rv-sub">${tr("Bấm khi vạch trắng nằm trong vùng xanh")}</p></div>`;
     zoomArt(host.querySelector(".pg-art"));
     const mark = host.querySelector(".pg-mark"), zoneEl = host.querySelector(".pg-zone"), dots = host.querySelectorAll(".pg-dots i"), art = host.querySelector(".pg-art");
     const place = () => { zone = 0.18 + Math.random() * 0.64; zoneEl.style.left = `${(zone - P.zone / 2) * 100}%`; zoneEl.style.width = `${P.zone * 100}%`; };
@@ -2197,11 +2198,11 @@ async function playFlow(id) {
   const ch = state.chickens.find((c) => c.id === id);
   const eggSubject = ch ? null : state.eggs.find((e) => e.id === id);
   const pay = canPlay();
-  if (!pay) { sfx("error"); return toast("Hết sức chơi và vé — sức chơi hồi 1 điểm mỗi 30 phút"); }
-  if (pay === "ticket" && !confirm("Hết sức chơi. Chơi bằng 1 vé (thưởng gấp rưỡi, thắng thì hoàn vé)?")) return;
+  if (!pay) { sfx("error"); return toast(tr("Hết sức chơi và vé — sức chơi hồi 1 điểm mỗi 30 phút")); }
+  if (pay === "ticket" && !confirm(tr("Hết sức chơi. Chơi bằng 1 vé (thưởng gấp rưỡi, thắng thì hoàn vé)?"))) return;
   const st = await act("startPlay", { id, ...(pay === "ticket" ? { pay } : {}) });
   handleEvents(st.events ?? []);
-  if (!st.ok) { sfx("error"); toast(st.message); return renderAll(); }
+  if (!st.ok) { sfx("error"); toast(errText(st)); return renderAll(); }
   save();
   renderAll();
   const dlg = $("#reveal"), t0 = Date.now();
@@ -2212,7 +2213,7 @@ async function playFlow(id) {
     sfx("whoosh");
     const art = ch ? chickenSvg(ch, { detail: "high" }).svg : eggArt(eggSubject ?? { id: "p", shell: "#f3ead8", fertile: true });
     const game = GAMES[st.kind];
-    const running = game ? game(rvBody(), { art, name: ch?.name ?? "Trứng", stats: playStats(ch), sfx }) : rhythmGame(rvBody(), ch, st.kind);
+    const running = game ? game(rvBody(), { art, name: ch?.name ?? tr("Trứng"), stats: playStats(ch), sfx }) : rhythmGame(rvBody(), ch, st.kind);
     for (const el of rvBody().querySelectorAll(".pg-hero")) zoomArt(el); // gà con / trứng chỉ chiếm một góc bản vẽ
     const score = await running;
     // luật chỉ nhận kết quả sau ít nhất minMs kể từ lúc bắt đầu
@@ -2224,10 +2225,10 @@ async function playFlow(id) {
     const pct = Math.round((r.score ?? 0) * 100);
     rvShow(`${r.win ? '<div class="rv-rays"></div>' : ""}<p class="rv-kicker">${GAME_NAMES[st.kind] ?? PLAY_INFO[st.kind].name}</p>
       <div class="rv-art">${ch ? chickenSvg(ch, { detail: "high" }).svg : eggArt(eggSubject ?? { id: "p", shell: "#f3ead8", fertile: true })}</div>
-      <h2 class="rv-title">${r.win ? "Thắng rồi!" : pct >= 30 ? "Cũng được đấy" : "Hụt mất rồi"}</h2>
-      <p class="rv-sub">Điểm ${pct}/100${r.win ? "" : ` · cần ${Math.round(R.CONFIG.play.winAt * 100)} để thắng`}</p>
-      <ul class="rv-list"><li>${!ch ? "Quả trứng sẽ nở sớm hơn" : (r.score ?? 0) <= 0 ? `${esc(ch.name)} chơi xong thì đói và mệt hơn` : st.kind === "peck" ? `${esc(ch.name)} khoẻ ra một chút, nhưng đói và mệt hơn` : `${esc(ch.name)} lớn nhanh hơn một chút, nhưng đói và mệt hơn`}</li>${r.ticket ? `<li>${ticketSvg(16)} Thắng: nhận lại 1 vé</li>` : r.win && r.pay === "ticket" ? "<li>Hôm nay đã nhận đủ vé thưởng</li>" : ""}${r.pay === "ticket" ? "<li>Chơi bằng vé: thưởng gấp rưỡi</li>" : `<li>Sức chơi còn ${R.energyOf(state, now())}/${R.CONFIG.energy.max}</li>`}</ul>
-      <div class="rv-actions"><button type="button" class="gold" data-go="ok">Về trại</button></div>`);
+      <h2 class="rv-title">${r.win ? tr("Thắng rồi!") : pct >= 30 ? tr("Cũng được đấy") : tr("Hụt mất rồi")}</h2>
+      <p class="rv-sub">${tr("Điểm")} ${pct}/100${r.win ? "" : ` ${tr("· cần")} ${Math.round(R.CONFIG.play.winAt * 100)} ${tr("để thắng")}`}</p>
+      <ul class="rv-list"><li>${!ch ? tr("Quả trứng sẽ nở sớm hơn") : (r.score ?? 0) <= 0 ? `${esc(ch.name)} ${tr("chơi xong thì đói và mệt hơn")}` : st.kind === "peck" ? `${esc(ch.name)} ${tr("khoẻ ra một chút, nhưng đói và mệt hơn")}` : `${esc(ch.name)} ${tr("lớn nhanh hơn một chút, nhưng đói và mệt hơn")}`}</li>${r.ticket ? `<li>${ticketSvg(16)} ${tr("Thắng: nhận lại 1 vé")}</li>` : r.win && r.pay === "ticket" ? `<li>${tr("Hôm nay đã nhận đủ vé thưởng")}</li>` : ""}${r.pay === "ticket" ? `<li>${tr("Chơi bằng vé: thưởng gấp rưỡi")}</li>` : `<li>${tr("Sức chơi còn")} ${R.energyOf(state, now())}/${R.CONFIG.energy.max}</li>`}</ul>
+      <div class="rv-actions"><button type="button" class="gold" data-go="ok">${tr("Về trại")}</button></div>`);
     sfx(r.win ? "claim" : "pop");
     if (r.win) confetti($("#reveal"), { n: 30 });
     await rvWait();
@@ -2243,9 +2244,9 @@ async function playFlow(id) {
 /* ---------- gợi ý bước tiếp theo (thay dòng hướng dẫn dài) ---------- */
 
 const DRAG_HINT = {
-  chicken: "Thả gà vào <b>Cổng</b> (ra đồng), <b>Máng ăn</b> (tự ăn) hoặc <b>Chợ</b> (đổi)",
-  egg: "Thả trứng vào <b>ổ ấp</b>, <b>Chuồng</b> (cất kho) hoặc <b>Chợ</b> (đổi)",
-  seed: "Thả hạt lên một con gà để cho ăn",
+  chicken: `${tr("Thả gà vào")} <b>${tr("Cổng")}</b> ${tr("(ra đồng),")} <b>${tr("Máng ăn")}</b> ${tr("(tự ăn) hoặc")} <b>${tr("Chợ")}</b> ${tr("(đổi)")}`,
+  egg: `${tr("Thả trứng vào")} <b>${tr("ổ ấp")}</b>, <b>${tr("Chuồng")}</b> ${tr("(cất kho) hoặc")} <b>${tr("Chợ")}</b> ${tr("(đổi)")}`,
+  seed: tr("Thả hạt lên một con gà để cho ăn"),
 };
 function nextStep() {
   if (drag?.active) return DRAG_HINT[drag.kind];
@@ -2263,25 +2264,25 @@ function nextStep() {
   const low = home.find((c) => views.get(c.id).satiety01 < 0.3);
   if (!state.chickens.length) {
     if (hatching.length) return hasV6() && (hatching[0].warmed ?? 0) < R.CONFIG.warm.max
-      ? `<b>Chạm vào quả trứng</b> trong ổ (góc phải sân) để sưởi ấm — trứng nở nhanh hơn. Còn ${fmtEta(Math.max(0, hatching[0].hatchAt - t))}`
-      : `Trứng đang ấp trong ổ (góc phải sân) — nở sau ${fmtEta(Math.max(0, hatching[0].hatchAt - t))}. Chờ gà con nhé!`;
-    if (yardEggs.some((e) => e.fertile) && freeNest) return "Kéo trứng có phôi (chấm xanh) vào <b>ổ ấp</b> để có gà mới";
-    if (storedFertile && freeNest) return "Mở <b>Kho</b> và bấm <b>Ấp</b> một trứng có phôi để có gà mới";
-    if (state.bags.length) return "Mở túi hạt trong <b>Kho</b>, rồi đổi trứng ở <b>Chợ</b>";
-    return "Trại chưa có gà. Mở <b>Kho</b> xem còn trứng có phôi không";
+      ? `<b>${tr("Chạm vào quả trứng")}</b> ${tr("trong ổ (góc phải sân) để sưởi ấm — trứng nở nhanh hơn. Còn")} ${fmtEta(Math.max(0, hatching[0].hatchAt - t))}`
+      : `${tr("Trứng đang ấp trong ổ (góc phải sân) — nở sau")} ${fmtEta(Math.max(0, hatching[0].hatchAt - t))}${tr(". Chờ gà con nhé!")}`;
+    if (yardEggs.some((e) => e.fertile) && freeNest) return `${tr("Kéo trứng có phôi (chấm xanh) vào")} <b>${tr("ổ ấp")}</b> ${tr("để có gà mới")}`;
+    if (storedFertile && freeNest) return `${tr("Mở")} <b>${tr("Kho")}</b> ${tr("và bấm")} <b>${tr("Ấp")}</b> ${tr("một trứng có phôi để có gà mới")}`;
+    if (state.bags.length) return `${tr("Mở túi hạt trong")} <b>${tr("Kho")}</b>${tr(", rồi đổi trứng ở")} <b>${tr("Chợ")}</b>`;
+    return `${tr("Trại chưa có gà. Mở")} <b>${tr("Kho")}</b> ${tr("xem còn trứng có phôi không")}`;
   }
-  if (hungry && seeds) return `${n(hungry)} đang đói — ${hasV7() ? "chạm <b>Tháp hạt</b> để đổ hạt cho gà tự ăn" : "kéo hạt từ khay lên gà, hoặc kéo gà vào <b>Máng ăn</b>"}`;
-  if (!seeds && state.bags.length) return `Hết hạt — mở ${state.bags.length} túi hạt trong <b>Kho</b>`;
-  if (!seeds && !out && home.length) return "Hết hạt — kéo một con gà ra <b>Cổng</b> để kiếm hạt ngoài cánh đồng";
+  if (hungry && seeds) return `${n(hungry)} ${tr("đang đói —")} ${hasV7() ? `${tr("chạm")} <b>${tr("Tháp hạt")}</b> ${tr("để đổ hạt cho gà tự ăn")}` : `${tr("kéo hạt từ khay lên gà, hoặc kéo gà vào")} <b>${tr("Máng ăn")}</b>`}`;
+  if (!seeds && state.bags.length) return `${tr("Hết hạt — mở")} ${state.bags.length} ${tr("túi hạt trong")} <b>${tr("Kho")}</b>`;
+  if (!seeds && !out && home.length) return `${tr("Hết hạt — kéo một con gà ra")} <b>${tr("Cổng")}</b> ${tr("để kiếm hạt ngoài cánh đồng")}`;
   if (yardEggs.length) return yardEggs.some((e) => e.fertile) && freeNest
-    ? "Có trứng ngoài sân — kéo trứng có phôi (chấm xanh) vào <b>ổ ấp</b>, hoặc chạm để nhặt"
-    : "Có trứng ngoài sân — chạm để nhặt vào kho";
-  if (low && seeds) return `${n(low)} sắp đói — ${hasV7() ? "đổ thêm hạt vào <b>Tháp hạt</b>" : "kéo hạt lên gà để cho ăn"}`;
-  if (state.bags.length) return `Có ${state.bags.length} túi hạt chưa mở — mở trong <b>Kho</b>`;
-  if (storedFertile && freeNest) return "Ổ ấp đang trống — mở <b>Kho</b> để ấp trứng có phôi";
-  if (out) return `${n(out)} đang ở ngoài đồng — chạm <b>Cổng</b> để xem gà kiếm hạt`;
-  if ((state.stats?.hatched ?? 0) <= 1 && !state.memorial?.length) return "Kéo gà ra <b>Cổng</b> để kiếm thêm hạt ngoài cánh đồng · chạm gà để xem chi tiết";
-  return "Chạm một con gà để xem độ no, dinh dưỡng và tuổi thọ";
+    ? `${tr("Có trứng ngoài sân — kéo trứng có phôi (chấm xanh) vào")} <b>${tr("ổ ấp")}</b>${tr(", hoặc chạm để nhặt")}`
+    : tr("Có trứng ngoài sân — chạm để nhặt vào kho");
+  if (low && seeds) return `${n(low)} ${tr("sắp đói —")} ${hasV7() ? `${tr("đổ thêm hạt vào")} <b>${tr("Tháp hạt")}</b>` : tr("kéo hạt lên gà để cho ăn")}`;
+  if (state.bags.length) return `${tr("Có")} ${state.bags.length} ${tr("túi hạt chưa mở — mở trong")} <b>${tr("Kho")}</b>`;
+  if (storedFertile && freeNest) return `${tr("Ổ ấp đang trống — mở")} <b>${tr("Kho")}</b> ${tr("để ấp trứng có phôi")}`;
+  if (out) return `${n(out)} ${tr("đang ở ngoài đồng — chạm")} <b>${tr("Cổng")}</b> ${tr("để xem gà kiếm hạt")}`;
+  if ((state.stats?.hatched ?? 0) <= 1 && !state.memorial?.length) return `${tr("Kéo gà ra")} <b>${tr("Cổng")}</b> ${tr("để kiếm thêm hạt ngoài cánh đồng · chạm gà để xem chi tiết")}`;
+  return tr("Chạm một con gà để xem độ no, dinh dưỡng và tuổi thọ");
 }
 function renderHint() {
   if (state) setHTML($("#yard-hint"), nextStep());
@@ -2306,7 +2307,7 @@ function renderAll() {
     renderInfo();
     renderFlock();
     renderHint();
-    setHTML($("#log"), logItems.map((l) => `<li>${new Date(l.at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })} · ${l.text}</li>`).join("") || '<li class="muted">Chưa có gì xảy ra.</li>');
+    setHTML($("#log"), logItems.map((l) => `<li>${new Date(l.at).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" })} · ${l.text}</li>`).join("") || `<li class="muted">${tr("Chưa có gì xảy ra.")}</li>`);
   } else renderRoster();
   if ($("#store-dialog").open) renderStore();
 }
@@ -2338,7 +2339,7 @@ function frame(t) {
         syncing = true;
         net.farm().then((r) => {
           syncing = false;
-          if (!r.ok) return setNetStatus(r.message || r.code);
+          if (!r.ok) return setNetStatus(errText(r));
           setNetStatus(null);
           applyServer(r);
           handleEvents(r.events ?? []);
@@ -2359,7 +2360,7 @@ function setNetStatus(msg) {
   const el = $("#net-status");
   if (!el) return;
   el.hidden = !online;
-  el.textContent = msg ? `Mất kết nối: ${msg}` : `Online · ${new URL(SERVER).host}`;
+  el.textContent = msg ? `${tr("Mất kết nối:")} ${msg}` : `Online · ${new URL(SERVER).host}`;
   el.classList.toggle("bad", !!msg);
 }
 
@@ -2367,17 +2368,17 @@ function setNetStatus(msg) {
 
 async function showStarterOnline() {
   const r = await net.starters();
-  if (!r.ok) return toast(r.message || "Không lấy được trứng khởi đầu");
+  if (!r.ok) return toast(r.ok === false && r.code ? errText(r) : tr("Không lấy được trứng khởi đầu"));
   const eggs = r.choices ?? [];
   $("#starter-eggs").innerHTML = eggs.map((e, i) => `<button type="button" data-pick="${e.choice ?? i}">${eggArt({ ...e, id: `s${i}`, fertile: true })}<span>${esc(e.shellName)}</span></button>`).join("");
   $("#starter-eggs").onclick = async (ev) => {
     const i = ev.target.closest("[data-pick]")?.dataset.pick;
     if (i == null) return;
     const n = await net.newFarm(Number(i));
-    if (!n.ok) return toast(n.message || n.code);
+    if (!n.ok) return toast(errText(n));
     applyServer(n);
     $("#starter").close();
-    await run(act("incubate", { eggId: state.eggs[0].id }), hasV6() ? "Trứng đã nằm trong ổ ấp — chạm vào trứng để sưởi ấm!" : "Trứng đã nằm trong ổ ấp ở góc sân. Chờ trứng nở nhé!");
+    await run(act("incubate", { eggId: state.eggs[0].id }), hasV6() ? tr("Trứng đã nằm trong ổ ấp — chạm vào trứng để sưởi ấm!") : tr("Trứng đã nằm trong ổ ấp ở góc sân. Chờ trứng nở nhé!"));
     syncYard();
   };
   $("#starter").showModal();
@@ -2389,8 +2390,8 @@ async function playIntro(force = false) {
   try { if (!force && localStorage.getItem(INTRO_KEY)) return; localStorage.setItem(INTRO_KEY, "1"); } catch {}
   const art = {
     yard: ICONS?.yardBackdrop ? ICONS.yardBackdrop(800, 480, 7) : "",
-    rooster: renderChickenFlat(express(randomGenome(mulberry32(2026), { sex: "rooster" }), { nutrition: 0.95, gloss: 0.6 }), { growth: 1, detail: "high", label: "Ông Mào Đỏ" }),
-    egg: (shell, i) => renderEggFlat({ egg: { shell, speckle: 0.2, seed: 11 + i } }, { label: "Trứng" }),
+    rooster: renderChickenFlat(express(randomGenome(mulberry32(2026), { sex: "rooster" }), { nutrition: 0.95, gloss: 0.6 }), { growth: 1, detail: "high", label: tr("Ông Mào Đỏ") }),
+    egg: (shell, i) => renderEggFlat({ egg: { shell, speckle: 0.2, seed: 11 + i } }, { label: tr("Trứng") }),
   };
   revealBusy = true;
   try {
@@ -2413,7 +2414,7 @@ async function showStarter() {
     R.incubate(state, state.eggs[0].id, now());
     $("#starter").close();
     sfx("pop");
-    toast("Trứng đã nằm trong ổ ấp — chạm vào trứng để sưởi ấm!");
+    toast(tr("Trứng đã nằm trong ổ ấp — chạm vào trứng để sưởi ấm!"));
     save();
     syncYard();
     renderAll();
@@ -2438,7 +2439,7 @@ $("#give-seeds").addEventListener("click", () => {
   renderAll();
 });
 $("#reset").addEventListener("click", () => {
-  if (!confirm(online ? "Bỏ trại trên máy chủ này và bắt đầu trại mới (tài khoản khách mới)?" : "Xoá trại hiện tại và chơi lại từ đầu?")) return;
+  if (!confirm(online ? tr("Bỏ trại trên máy chủ này và bắt đầu trại mới (tài khoản khách mới)?") : tr("Xoá trại hiện tại và chơi lại từ đầu?"))) return;
   if (online) net.forget();
   else localStorage.removeItem(SAVE_KEY);
   state = null; // không thì lúc rời trang (pagehide) save() ghi lại đúng trại vừa xoá
@@ -2461,7 +2462,7 @@ async function startOnline() {
     await net.ensureGuest();
   } catch (e) {
     setNetStatus(e.message);
-    return toast(`${e.message} — kiểm tra địa chỉ máy chủ trong bảng Dev`);
+    return toast(`${e.message} ${tr("— kiểm tra địa chỉ máy chủ trong bảng Dev")}`);
   }
   const r = await net.farm();
   if (r.code === "no_farm") return showStarter();
@@ -2470,8 +2471,8 @@ async function startOnline() {
     return startOnline();
   }
   if (!r.ok) {
-    setNetStatus(r.message || r.code);
-    return toast(r.message || r.code);
+    setNetStatus(errText(r));
+    return toast(errText(r));
   }
   applyServer(r);
   queueRecap(handleEvents(r.events ?? [], { quiet: true }));

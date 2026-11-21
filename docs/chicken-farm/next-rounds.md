@@ -80,19 +80,13 @@ Chưa làm gì: mô phỏng cân bằng cho kinh tế vé (H3), bạn bè (chủ
 
 Toàn màn hình không cuộn (`.view` co theo khung, `.hud` nổi trên cảnh); gà to hơn; nhãn điểm thả chỉ hiện khi rê chuột/kéo; đàn gà thành hàng ảnh nhỏ bên trái; bảng thông tin gà nổi góc phải; nhật ký và cách chơi thành hộp thoại; gà lần lượt đi ra từ chuồng khi vào game; chợ dạng thẻ hình; lớp đa ngôn ngữ `js/game/i18n.js` + nút đổi ngôn ngữ.
 
-## i18n — việc còn lại (việc lặp, không cần thiết kế thêm)
+## i18n — ĐÃ XONG (21/11), tiếng Anh là mặc định
 
-Hiện mới có khoá cho menu, tên hạt, lời nhiệm vụ. `READY = ["vi"]` nên mặc định vẫn là tiếng Việt; `?lang=en` để xem thử.
-
-1. Trong `main.js`, thay từng chuỗi tiếng Việt bằng `t("nhóm.khoá", { biến })`; thêm khoá vào `DICT.vi` (giữ nguyên câu gốc) và `DICT.en`.
-   Nhóm khoá: `menu.* hint.* toast.* info.* store.* dex.* reveal.* field.* trade.* quest.* time.*`.
-2. Tên dữ liệu của luật lấy theo id, không sửa `rules.js`: `tname("dex", key, d.name)`, `tname("breed", key, b.name)`, `tname("nutrient", key, …)`.
-3. Lỗi của luật: thay `toast(result.message)` bằng `toast(errText(result))`, thêm `err.<code>` cho mọi mã trong `rules.js` (tìm `err("`).
-4. `game.html`: thêm `data-i18n` / `data-i18n-title` / `data-i18n-aria` cho chữ tĩnh.
-5. `fmtDur` / `fmtEta`: chuyển sang khoá `time.*` (tiếng Anh: "5 min", "2 h 10 min", "3 days").
-6. Khi `grep -nP "[À-ỹ]" js/game/main.js` chỉ còn chú thích: đổi `READY = ["en", "vi"]` → tiếng Anh thành mặc định.
-
-Test: một test node đọc `i18n.js`, khẳng định `DICT.en` và `DICT.vi` có **cùng bộ khoá** và cùng tập biến `{…}` trong từng khoá.
+- Cách làm: khoá dịch là **chính câu tiếng Việt** trong mã, gọi qua `tr("…")` (`main.js`, `play.js`, `intro.js`, `net.js`); bản tiếng Anh ở `js/game/i18n-en.js` (661 mục, gồm `err.<mã lỗi>` cho mọi lỗi của luật). Tiếng Việt không cần từ điển: thiếu khoá thì hiện chính câu gốc.
+- Chữ tĩnh của `game.html` được dịch một lần lúc tải (`translateStatic` trong `i18n.js`); câu có thẻ `<b>` xen giữa đánh dấu `data-i18n-html` để dịch nguyên câu.
+- Tên dữ liệu của luật (hạt, sổ, giống, khách, kỳ vật, chất) dịch qua `tname()` / `tr(tên tiếng Việt)`; `rules.js` và server **không đổi** (vẫn trả câu tiếng Việt, client dịch theo mã lỗi).
+- Thêm câu mới: viết `tr("câu tiếng Việt")` trong mã rồi thêm một dòng vào `i18n-en.js`. Test `tests/chicken-farm/i18n.test.mjs` báo câu nào thiếu bản dịch.
+- Còn chưa dịch: nhãn `aria-label` bên trong hình SVG (`icons.js`, `chicken-flat.js`), trang Phòng gen (`index.html`), tên gà (là tên riêng, giữ nguyên).
 
 ---
 

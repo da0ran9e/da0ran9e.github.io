@@ -1,3 +1,4 @@
+import { t as tr } from "./i18n.js";
 // Trại Gà — đoạn mở đầu dạng visual novel ngắn (chạy lần đầu vào game, xem lại được trong Cách chơi).
 // Chỉ là trình diễn phía client, không đụng luật chơi.
 //
@@ -8,42 +9,42 @@
 // (chữ chạy từng ký tự; chạm lần 1 = hiện hết câu, lần 2 = sang câu kế). Phím cách / Enter = tiếp, Esc = bỏ qua.
 
 const NARRATOR = null; // lời dẫn chuyện: không có bảng tên
-const ROOSTER = "Ông Mào Đỏ";
+const ROOSTER = tr("Ông Mào Đỏ");
 
 // Kịch bản. Mỗi cảnh: bg (khoá nền), cast (nhân vật trên sân khấu), lines: [người nói, câu, tuỳ chọn { fx, pose }].
 const SCRIPT = [
   {
     bg: "night", cast: [],
     lines: [
-      [NARRATOR, "Ở cuối làng có một trại gà nhỏ."],
-      [NARRATOR, "Cụ chủ trại đã đi xa từ lâu. Cỏ mọc kín lối, chuồng gà im lìm."],
-      [NARRATOR, "Rồi một đêm…", { fx: "shoot" }],
-      [NARRATOR, "…một ngôi sao băng lao xuống, rơi đúng vào giữa sân trại!", { fx: "impact" }],
+      [NARRATOR, tr("Ở cuối làng có một trại gà nhỏ.")],
+      [NARRATOR, tr("Cụ chủ trại đã đi xa từ lâu. Cỏ mọc kín lối, chuồng gà im lìm.")],
+      [NARRATOR, tr("Rồi một đêm…"), { fx: "shoot" }],
+      [NARRATOR, tr("…một ngôi sao băng lao xuống, rơi đúng vào giữa sân trại!"), { fx: "impact" }],
     ],
   },
   {
     bg: "dawn", cast: ["eggs"],
     lines: [
-      [NARRATOR, "Sáng hôm sau, trong ổ rơm cũ có ba quả trứng đang toả sáng lấp lánh."],
-      [NARRATOR, "Chúng ấm áp lạ thường, như vừa được mặt trời ủ suốt đêm."],
+      [NARRATOR, tr("Sáng hôm sau, trong ổ rơm cũ có ba quả trứng đang toả sáng lấp lánh.")],
+      [NARRATOR, tr("Chúng ấm áp lạ thường, như vừa được mặt trời ủ suốt đêm.")],
     ],
   },
   {
     bg: "dawn", cast: ["eggs", "rooster"],
     lines: [
-      [ROOSTER, "Ò ó o! Lâu lắm rồi mới có người ghé cái trại này!", { pose: "hop" }],
-      [ROOSTER, "Ta là Mào Đỏ, canh trại từ hồi cụ chủ còn ở đây đấy."],
-      [ROOSTER, "Ba quả trứng kia rơi xuống cùng ngôi sao đêm qua. Mỗi quả mang một dòng giống chưa ai từng thấy."],
-      [NARRATOR, "Ông gà già nghiêng đầu, nhìn bạn từ đầu đến chân."],
-      [ROOSTER, "Hừm… trông cháu cũng được việc đấy. Cháu chăm chúng giúp ta nhé?", { pose: "hop" }],
+      [ROOSTER, tr("Ò ó o! Lâu lắm rồi mới có người ghé cái trại này!"), { pose: "hop" }],
+      [ROOSTER, tr("Ta là Mào Đỏ, canh trại từ hồi cụ chủ còn ở đây đấy.")],
+      [ROOSTER, tr("Ba quả trứng kia rơi xuống cùng ngôi sao đêm qua. Mỗi quả mang một dòng giống chưa ai từng thấy.")],
+      [NARRATOR, tr("Ông gà già nghiêng đầu, nhìn bạn từ đầu đến chân.")],
+      [ROOSTER, tr("Hừm… trông cháu cũng được việc đấy. Cháu chăm chúng giúp ta nhé?"), { pose: "hop" }],
     ],
   },
   {
     bg: "day", cast: ["rooster"],
     lines: [
-      [ROOSTER, "Chọn một quả, sưởi ấm nó, cho gà con ăn hạt thật ngon…"],
-      [ROOSTER, "…rồi một ngày, cả trại này sẽ lại rộn tiếng gà!", { pose: "hop" }],
-      [ROOSTER, "Nào, đi chọn trứng thôi!"],
+      [ROOSTER, tr("Chọn một quả, sưởi ấm nó, cho gà con ăn hạt thật ngon…")],
+      [ROOSTER, tr("…rồi một ngày, cả trại này sẽ lại rộn tiếng gà!"), { pose: "hop" }],
+      [ROOSTER, tr("Nào, đi chọn trứng thôi!")],
     ],
   },
 ];
@@ -73,7 +74,7 @@ function stageHtml(scene, art) {
 export function playIntro(dialog, art, sfx = () => {}) {
   return new Promise((done) => {
     dialog.innerHTML = `<div class="vn-stage"></div>
-      <button type="button" class="vn-skip">Bỏ qua ⏭</button>
+      <button type="button" class="vn-skip">${tr("Bỏ qua ⏭")}</button>
       <div class="vn-box" role="button" tabindex="0" aria-live="polite"><div class="vn-name" hidden></div><p class="vn-text"></p><span class="vn-next" aria-hidden="true">▼</span></div>`;
     const stage = dialog.querySelector(".vn-stage"), box = dialog.querySelector(".vn-box");
     const nameEl = dialog.querySelector(".vn-name"), textEl = dialog.querySelector(".vn-text");

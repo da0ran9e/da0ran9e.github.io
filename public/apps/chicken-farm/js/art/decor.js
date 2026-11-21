@@ -120,7 +120,7 @@ export const nestCrackSvg = (level) => svg("0 0 96 96", `
 
 /* ---------- v7: gian hàng bên đường, khách qua đường, sân chơi ---------- */
 
-export const stallSvg = () => {
+export const stallSvg = (sign = "CHỢ") => {
   // quầy gỗ có mái bạt sọc mép lượn sóng, trên quầy: rổ trứng, bao hạt, biển "CHỢ"
   const scallop = Array.from({ length: 7 }, (_, i) => `<path d="M${10 + i * 14},27 a7,7 0 0 0 14,0Z" fill="${i % 2 ? "#fffdf6" : "#e4572e"}"/>`).join("");
   const stripes = Array.from({ length: 7 }, (_, i) => `<path d="M${14 + i * 14},10 L${10 + i * 14},27 h14 L${28 + i * 14},10Z" fill="${i % 2 ? "#fffdf6" : "#e4572e"}"/>`).join("");
@@ -133,7 +133,7 @@ export const stallSvg = () => {
   <path d="M22,56 q12,-14 26,0z" fill="#c9a66b"/>${[26, 32, 38, 44, 29, 35, 41].map((x, i) => `<ellipse cx="${x}" cy="${i < 4 ? 52 : 47}" rx="3.4" ry="4.2" fill="${["#f6f0e4", "#e8c9a0", "#b5dccd", "#f6f0e4"][i % 4]}"/>`).join("")}
   <path d="M62,56 q-2,-16 8,-18 q12,-2 12,10 q0,6 -2,8z" fill="#d4ac72"/><path d="M66,42 q6,-4 12,0" stroke="#7d5a2e" stroke-width="1.6" fill="none"/><circle cx="70" cy="40" r="2" fill="#e3b23c"/><circle cx="75" cy="39" r="2" fill="#4f8f97"/>
   <rect x="86" y="44" width="18" height="12" rx="2" fill="#fffdf6"/><path d="M95,44 v-6" stroke="#8d5f33" stroke-width="1.6"/>
-  <text x="95" y="53" text-anchor="middle" font-size="7" font-weight="800" font-family="system-ui,sans-serif" fill="#8a3414">CHỢ</text>`, "decor-stall", "Gian hàng bên đường");
+  <text x="95" y="53" text-anchor="middle" font-size="7" font-weight="800" font-family="system-ui,sans-serif" fill="#8a3414">${sign}</text>`, "decor-stall", "Gian hàng bên đường");
 };
 
 const LOOK = {

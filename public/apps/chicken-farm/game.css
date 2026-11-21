@@ -712,3 +712,4 @@ dialog.vn.vn-out { opacity: 0; }
 body.idle .bar, body.idle .field-head, body.idle .field-roster { opacity: 0; pointer-events: none; transition: opacity 1.2s; }
 .bar, .field-head, .field-roster { transition: opacity .3s; }
 body.idle { cursor: none; }
+.seeds { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }

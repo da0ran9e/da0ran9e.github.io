@@ -1,3 +1,4 @@
+import { t as tr } from "./i18n.js";
 // Trại Gà — client gọi server M2 (server có thẩm quyền). Xem server/README.md.
 // Client chỉ gửi Ý ĐỊNH; server dùng giờ của server, tự tung ngẫu nhiên, trả về trại đã bỏ seed.
 
@@ -19,17 +20,17 @@ export function createNet(base) {
         body: body ? JSON.stringify(body) : undefined,
       });
     } catch {
-      return { ok: false, code: "offline", message: "Không kết nối được máy chủ", status: 0 };
+      return { ok: false, code: "offline", message: tr("Không kết nối được máy chủ"), status: 0 };
     }
     let json;
     try {
       json = await res.json();
     } catch {
-      json = { ok: false, code: "bad_response", message: `Máy chủ trả lỗi ${res.status}` };
+      json = { ok: false, code: "bad_response", message: `${tr("Máy chủ trả lỗi")} ${res.status}` };
     }
     if (!res.ok && json.ok !== false) json.ok = false;
     json.status = res.status;
-    if (res.status === 429) json.message ??= "Thao tác nhanh quá, thử lại sau giây lát";
+    if (res.status === 429) json.message ??= tr("Thao tác nhanh quá, thử lại sau giây lát");
     return json;
   }
 
@@ -42,7 +43,7 @@ export function createNet(base) {
     async ensureGuest() {
       if (token) return true;
       const r = await req("POST", "/api/guest", {});
-      if (!r.token) throw new Error(r.message || "Không tạo được tài khoản khách");
+      if (!r.token) throw new Error(r.message || tr("Không tạo được tài khoản khách"));
       token = r.token;
       try {
         localStorage.setItem(tokenKey, token);
