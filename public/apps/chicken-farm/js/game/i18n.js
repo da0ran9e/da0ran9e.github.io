@@ -26,7 +26,7 @@ const DICT = {
     "quest.warm": "Sưởi ấm quả trứng: chạm vào trứng trong ổ {n} lần", "quest.hatch": "Đón gà con đầu tiên chào đời",
     "quest.feed": "Cho gà ăn {n} hạt", "quest.forage": "Để gà kiếm {n} hạt ngoài đồng", "quest.lucky": "Chạm {n} đốm sáng ngoài đồng",
     "quest.hatch2": "Ấp nở quả trứng thứ hai", "quest.juvenile": "Nuôi một con thành gà giò", "quest.adult": "Nuôi một con tới trưởng thành",
-    "quest.collect": "Nhặt {n} quả trứng ngoài sân", "quest.dex2": "Đạt mục ★★ đầu tiên trong Sổ sưu tầm", "quest.open": "Mở {n} túi hạt",
+    "quest.collect": "Nhặt {n} quả trứng ngoài sân", "quest.dex2": "Đạt mục ★★ đầu tiên trong Sổ sưu tầm", "quest.open": "Mở {n} túi hạt", "quest.harvest": "Thu hoạch {n} luống rau",
     "quest.claim": "Nhận", "quest.step": "Bước {a}/{b}", "quest.today": "Việc hôm nay",
   },
   en: {
@@ -37,7 +37,7 @@ const DICT = {
     "quest.warm": "Warm the egg: tap the egg in the nest {n} times", "quest.hatch": "Welcome your first chick",
     "quest.feed": "Feed your chickens {n} seeds", "quest.forage": "Let a chicken find {n} seeds in the field", "quest.lucky": "Tap {n} sparkles in the field",
     "quest.hatch2": "Hatch a second egg", "quest.juvenile": "Raise a chick into a young chicken", "quest.adult": "Raise a chicken to adulthood",
-    "quest.collect": "Pick up {n} eggs in the yard", "quest.dex2": "Earn your first ★★ entry in the Book", "quest.open": "Open {n} seed bags",
+    "quest.collect": "Pick up {n} eggs in the yard", "quest.dex2": "Earn your first ★★ entry in the Book", "quest.open": "Open {n} seed bags", "quest.harvest": "Harvest {n} garden beds",
     "quest.claim": "Claim", "quest.step": "Step {a}/{b}", "quest.today": "Today",
   },
 };

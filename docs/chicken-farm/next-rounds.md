@@ -20,6 +20,8 @@
 - Đã viết các test còn để lại ở đầu `v7-tower`, `v7-play`, `v7-visitors`, `v7-brood-knock-timed`.
 - **"Có hồn" (ideas 2, 4, 5) ĐÃ CÀI:** tính cách từ gen (`PERSONALITY`, `personalityOf`: tham ăn / hiếu động / nhút nhát / chăm đẻ / điềm tĩnh — đổi chỗ quanh quẩn và nhịp nghỉ trên sân qua `addChicken({home, restMul})`, hiện ở bảng gà và màn chào đời); gia phả 3 đời (`state.family` nhớ gà đã rời trại khi còn là bố mẹ / ông bà của gà, trứng đang có — `leave()`, `kinOf()`; hộp "Gia phả" từ bảng gà, đặc điểm truyền xuống tô màu); lông kỷ niệm (`CONFIG.feather`: gà trưởng thành, đói ≤ 10% đời, chết vì tuổi già → `state.feathers`, sự kiện `feather`, album trong Kỷ niệm). Test: `v9-soul.test.mjs`. Còn có thể làm: mốc album lông mở trang trí.
 
+- **Luật v10 — VƯỜN RAU (chủ dự án duyệt 22/11) ĐÃ CÀI:** `CONFIG.garden` (3 luống, +1 mỗi mốc Sổ tới 5; hạt thường 1 giờ, hạt chất 3 giờ, hạt quý 8 giờ; mùa mưa ×0,8, mùa khô ×1,25; tưới −5% mỗi lần, tối đa 6; thu 3 hạt, 25% được thêm 1; hạt lạ không trồng). Hành động `plant`, `waterPlot`, `harvest` (server tung số được mùa), việc trong ngày `harvest`. Cây vẽ từ thành phần dinh dưỡng của hạt (`plantSvg` trong `decor.js`: khoáng → lá to, năng lượng → bắp / bông, đạm → đậu leo, sắc tố → hoa, hạt quý → bí vàng). Khu vườn bên trái giữa chuồng và sân chơi. Test: `v10-garden.test.mjs`, `server/test/garden.test.mjs`. **Server phải cập nhật lên luật v10 cùng lúc với trang.**
+
 ## Quyết định mới của chủ dự án (2026-11-17) — CHƯA CÀI, thay cho thiết kế cũ ở những chỗ ghi dưới đây
 
 Chủ dự án chốt năm điểm. Mã hiện tại **chưa** theo các điểm này; phiên sau cài theo đúng mục này, không theo phần cũ.

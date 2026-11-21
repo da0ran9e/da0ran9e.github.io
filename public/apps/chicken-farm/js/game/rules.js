@@ -33,7 +33,7 @@ export const SEEDS = {
 };
 
 export const CONFIG = {
-  version: 9,
+  version: 10,
   stepMs: MIN,
   // Ấp 5–30 phút theo gen "thời gian ấp" của chính quả trứng (genome.express).
   // Lớn: chất lượng dinh dưỡng 1 → 20 phút, 0 → 24 giờ (thang lũy thừa), nhân gen "tốc độ lớn".
@@ -117,6 +117,16 @@ export const CONFIG = {
   },
   // v9 — ĐÊM TRĂNG TRÒN (ideas 9): ±1 ngày quanh lúc trăng tròn thiên văn, từ 18:00 tới 6:00 giờ Việt Nam. Trứng có phôi đẻ lúc đó
   // có tỉ lệ biến dị ×mutationMul (nhân với phần tăng của hạt lạ). Tính từ chu kỳ trăng trung bình — lệch vài giờ so với lịch, đủ dùng.
+  // v10 — VƯỜN RAU (chủ dự án duyệt 22/11): luống trồng bằng hạt trong kho; cây lớn cả khi người chơi vắng mặt;
+  // tưới (chạm luống) bớt cutPct thời gian lớn mỗi lần, tối đa `water.max` lần; thu hoạch được `yield` hạt cùng loại
+  // (bonusChance thêm 1). Luống: `plots` lúc đầu, mỗi mốc Sổ ★★ thêm 1 tới `plotsMax`. Hạt lạ không trồng được.
+  // Mùa mưa lớn nhanh hơn, mùa khô chậm hơn (seasonMul, tính lúc gieo).
+  garden: {
+    plots: 3, plotsMax: 5, yield: 3, bonusChance: 0.25,
+    growMs: { common: HOUR, protein: 3 * HOUR, energy: 3 * HOUR, mineral: 3 * HOUR, pigment: 3 * HOUR, premium: 8 * HOUR },
+    water: { cutPct: 0.05, max: 6, cooldownMs: 3000 },
+    seasonMul: { rain: 0.8, dry: 1.25 },
+  },
   // v9 — LÔNG KỶ NIỆM (ideas 5): gà đã trưởng thành, sống trọn đời và đói không quá maxStarvedPct đời mình thì để lại một chiếc lông
   // (album trong Kỷ niệm). Thuần kỷ niệm, không tác dụng lên luật. Album giữ tối đa `cap` chiếc gần nhất.
   feather: { maxStarvedPct: 0.1, cap: 200 },
@@ -316,8 +326,9 @@ export const DAILY_TASKS = {
   hatch: { goal: 1, text: (n) => `Ấp nở ${n} gà con`, needs: hasBrood },
   collect: { goal: 2, text: (n) => `Nhặt ${n} quả trứng ngoài sân`, needs: (s) => s.chickens.some((c) => c.sex === "hen" && c.adultAt != null) },
   open: { goal: 2, text: (n) => `Mở ${n} túi hạt`, needs: (s) => s.bags.length + s.eggs.filter((e) => e.hatchAt === null).length >= 2 },
+  harvest: { goal: 2, text: (n) => `Thu hoạch ${n} luống rau`, needs: (s) => !!s.garden }, // v10
 };
-export const COUNTERS = ["warm", "hatch", "feed", "forage", "lucky", "juvenile", "adult", "collect", "dex2", "open", "trade", "play", "knock"];
+export const COUNTERS = ["warm", "hatch", "feed", "forage", "lucky", "juvenile", "adult", "collect", "dex2", "open", "trade", "play", "knock", "harvest"];
 const bump = (state, key, n = 1) => { state.count[key] = (state.count[key] ?? 0) + n; };
 export const dayIndex = (now) => Math.floor((now + CONFIG.daily.tzOffsetMs) / DAY);
 
@@ -329,6 +340,8 @@ function ensure(state) {
   if (state.timed?.start == null) state.timed = { start: state.updatedAt ?? 0, claimed: 0 }; // v8: bản v7 lưu {step, readyAt}
   if (!state.energy) state.energy = { n: CONFIG.energy.max, at: state.updatedAt ?? 0 };
   if (!state.feathers) { state.feathers = []; state.family = {}; } // v9
+  if (!state.garden) state.garden = []; // v10 (độ dài theo gardenSize, bù dần)
+  while (state.garden.length < gardenSize(state)) state.garden.push(null);
   if (!state.count) {
     // v6: bộ đếm nhiệm vụ, chuỗi mở đầu, chuỗi ngày, giống
     state.count = Object.fromEntries(COUNTERS.map((k) => [k, 0]));
@@ -435,6 +448,7 @@ export function newGame(seed, now, choice = 0) {
     eggs: [],
     memorial: [],
     feathers: [], // v9: lông kỷ niệm
+    garden: Array(CONFIG.garden.plots).fill(null), // v10: luống rau — null | { seed, at, readyAt, water }
     family: {}, // v9: gà đã rời trại còn trong gia phả
     stats: { hatched: 0, laid: 0, traded: 0, died: 0 },
     seenAt: now, // lần cuối người chơi có mặt (Q14)
@@ -853,6 +867,64 @@ export function incubate(state, eggId, now) {
 
 // THÁP HẠT (v7): đổ hạt từ kho vào tháp / lấy lại. Gà tự ăn trong stepChicken khi người chơi có mặt.
 const towerCount = (state) => Object.values(state.tower).reduce((a, b) => a + b, 0);
+/* ---------- vườn rau (v10) ---------- */
+
+export const gardenSize = (state) => Math.min(CONFIG.garden.plotsMax, CONFIG.garden.plots + (state.milestones ?? 0));
+export const canPlant = (seed) => !!CONFIG.garden.growMs[seed];
+// thời gian lớn của một hạt nếu gieo lúc `now` (theo mùa)
+export const growMsOf = (seed, now) => Math.round(CONFIG.garden.growMs[seed] * (CONFIG.garden.seasonMul[seasonOf(now)] ?? 1));
+// Bản xem một luống: { plot, seed, growth 0..1, ready, readyAt, water, waterLeft } | { plot, empty: true }
+export function plotView(state, i, now) {
+  const p = state.garden?.[i];
+  if (!p) return { plot: i, empty: true };
+  const total = p.total ?? (p.readyAt - p.at);
+  return { plot: i, seed: p.seed, growth: clamp((now - p.at) / Math.max(1, p.readyAt - p.at), 0, 1), ready: now >= p.readyAt, readyAt: p.readyAt, water: p.water ?? 0, waterLeft: CONFIG.garden.water.max - (p.water ?? 0), total };
+}
+const plotOf = (state, plot) => (Number.isInteger(plot) && plot >= 0 && plot < gardenSize(state) ? plot : -1);
+
+export function plant(state, plot, seed, now) {
+  return act(state, now, () => {
+    const i = plotOf(state, plot);
+    if (i < 0) return err("no_plot", "Không có luống này");
+    if (state.garden[i]) return err("plot_busy", "Luống này đang có cây");
+    if (!canPlant(seed)) return err("bad_seed", "Hạt này không trồng được");
+    if (!(state.inventory[seed] >= 1)) return err("no_seed", "Hết loại hạt này");
+    const total = growMsOf(seed, now);
+    state.inventory[seed]--;
+    state.garden[i] = { seed, at: now, readyAt: now + total, total, water: 0 };
+    return { plot: i, seed, readyAt: now + total };
+  });
+}
+// Tưới: kéo giờ chín sớm lại cutPct × tổng thời gian lớn (không sớm hơn bây giờ).
+export function waterPlot(state, plot, now) {
+  return act(state, now, () => {
+    const i = plotOf(state, plot), W = CONFIG.garden.water, p = i < 0 ? null : state.garden[i];
+    if (!p) return err("no_plant", "Luống này chưa có cây");
+    if (now >= p.readyAt) return err("ready", "Cây đã chín — thu hoạch thôi");
+    if ((p.water ?? 0) >= W.max) return err("watered", "Đã tưới đủ rồi");
+    if (now - (state.waterAt ?? -1e15) < W.cooldownMs) return err("too_fast", "Tưới từ từ thôi");
+    p.water = (p.water ?? 0) + 1;
+    p.readyAt = Math.max(now, p.readyAt - Math.round(W.cutPct * p.total));
+    state.waterAt = now;
+    return { plot: i, readyAt: p.readyAt, water: p.water };
+  });
+}
+// Thu hoạch: `yield` hạt cùng loại (đôi khi thêm 1). opts.rng: server truyền nguồn ngẫu nhiên riêng.
+export function harvest(state, plot, now, opts = {}) {
+  return act(state, now, () => {
+    const i = plotOf(state, plot), G = CONFIG.garden, p = i < 0 ? null : state.garden[i];
+    if (!p) return err("no_plant", "Luống này chưa có cây");
+    if (now < p.readyAt) return err("not_ready", "Cây chưa chín");
+    const rng = opts.rng ?? rngFor(state, "harvest", i, p.at);
+    const n = G.yield + (rng() < G.bonusChance ? 1 : 0);
+    if (seedCount(state) + n > CONFIG.storage.seeds) return err("seeds_full", "Kho hạt đầy — dùng bớt hạt rồi thu hoạch");
+    state.inventory[p.seed] += n;
+    state.garden[i] = null;
+    bump(state, "harvest");
+    return { plot: i, seed: p.seed, n };
+  });
+}
+
 export function fillTower(state, seed, n, now) {
   return act(state, now, () => {
     if (!SEEDS[seed]) return err("bad_seed", "Không có loại hạt này");

@@ -46,6 +46,10 @@ function slot(body) {
   if (!Number.isInteger(body.slot) || body.slot < 0 || body.slot > 5) throw bad('"slot" phải là số nguyên 0..5');
   return body.slot;
 }
+function plot(body) {
+  if (!Number.isInteger(body.plot) || body.plot < 0 || body.plot >= R.CONFIG.garden.plotsMax) throw bad(`"plot" phải là số nguyên 0..${R.CONFIG.garden.plotsMax - 1}`);
+  return body.plot;
+}
 function count(body, key, max) {
   const v = body[key];
   if (!Number.isInteger(v) || v < 1 || v > max) throw bad(`"${key}" phải là số nguyên 1..${max}`);
@@ -95,4 +99,8 @@ export const ARGS = {
   // luật v7 — tháp hạt
   fillTower: (b) => ({ seed: seedKind(b), n: count(b, "n", R.CONFIG.tower.cap) }),
   takeFromTower: (b) => ({ seed: seedKind(b), n: count(b, "n", R.CONFIG.tower.cap) }),
+  // luật v10 — vườn rau
+  plant: (b) => ({ plot: plot(b), seed: seedKind(b) }),
+  waterPlot: (b) => ({ plot: plot(b) }),
+  harvest: (b) => ({ plot: plot(b) }),
 };

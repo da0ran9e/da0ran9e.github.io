@@ -94,6 +94,9 @@ const SFX = {
   step: (c, t) => { for (let i = 0; i < 3; i++) noise(c, t + i * 0.07, { dur: 0.04, gain: 0.12, type: "lowpass", freq: 900 }); },
   gate: (c, t) => { tone(c, t, { type: "sawtooth", f0: 200, f1: 270, dur: 0.32, gain: 0.04 }); noise(c, t + 0.28, { dur: 0.06, gain: 0.12, type: "lowpass", freq: 500 }); },
   ticket: (c, t) => notes(c, t, [[1568, 0, 0.08], [2093, 0.07, 0.08], [2637, 0.14, 0.2]], { type: "sine", gain: 0.16 }),
+  // v10 — vườn rau: tưới (tiếng nước róc rách), thu hoạch (sột soạt + hai nốt vui)
+  water: (c, t) => { for (const d of [0, 0.06, 0.13]) noise(c, t + d, { dur: 0.09, gain: 0.07, type: "bandpass", freq: 1800 + d * 4000, q: 2 }); tone(c, t + 0.05, { f0: 900, f1: 1400, dur: 0.06, gain: 0.05 }); },
+  harvest: (c, t) => { noise(c, t, { dur: 0.16, gain: 0.08, type: "highpass", freq: 2200 }); notes(c, t + 0.1, [[880, 0, 0.08], [1320, 0.08, 0.16]], { type: "sine", gain: 0.16 }); },
   merchant: (c, t) => notes(c, t, [[1319, 0, 0.12], [1568, 0.12, 0.12], [1760, 0.24, 0.12], [2093, 0.36, 0.3]], { type: "sine", gain: 0.12 }),
 };
 

@@ -126,7 +126,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 60px; }
 .nest.warmed .nest-art { animation: bump .4s cubic-bezier(.3, 1.8, .5, 1); }
 .nest.nope .nest-art { animation: nope .25s; }
 @keyframes nope { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
-.nest.hint::after { content: "👆 Chạm để sưởi"; position: absolute; bottom: 104%; left: 10%; transform: translateX(-50%); background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; box-shadow: 0 2px 6px rgb(0 0 0 / .25); animation: bob 1s ease-in-out infinite; pointer-events: none; }
+.nest.hint::after { content: var(--t-warm, "👆 Chạm để sưởi"); position: absolute; bottom: 104%; left: 10%; transform: translateX(-50%); background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; box-shadow: 0 2px 6px rgb(0 0 0 / .25); animation: bob 1s ease-in-out infinite; pointer-events: none; }
 @keyframes bob { 50% { translate: 0 -4px; } }
 .nest .eta { position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); font-size: 10.5px; font-weight: 600; white-space: nowrap; background: rgb(255 253 246 / .9); color: #3b332a; border-radius: 999px; padding: 0 6px; }
 .nest { border-radius: 50%; }
@@ -152,7 +152,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 12px 16px 60px; }
 .fc svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .fc.hop svg { animation: hop .5s cubic-bezier(.3, 1.4, .5, 1); transform-origin: 50% 90%; }
 @keyframes hop { 0% { transform: scale(1.12, .86); } 40% { transform: translateY(-16%) scale(.94, 1.08); } 75% { transform: translateY(0) scale(1.06, .94); } 100% { transform: none; } }
-.fc.hungry::after { content: "đói"; position: absolute; left: 50%; top: 4%; transform: translateX(-50%); background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; line-height: 1.5; border-radius: 999px; padding: 0 6px; animation: bob 1.2s ease-in-out infinite; pointer-events: none; }
+.fc.hungry::after { content: var(--t-hungry, "đói"); position: absolute; left: 50%; top: 4%; transform: translateX(-50%); background: var(--bad); color: #fff; font-size: 10px; font-weight: 700; line-height: 1.5; border-radius: 999px; padding: 0 6px; animation: bob 1.2s ease-in-out infinite; pointer-events: none; }
 .fc .tag { position: absolute; left: 50%; top: -4px; transform: translateX(-50%); font-size: 11px; white-space: nowrap; background: rgb(255 255 255 / .8); color: #2c2620; border-radius: 999px; padding: 0 6px; }
 #yard .fc { pointer-events: auto; cursor: grab; touch-action: none; }
 #yard .fc .tag { opacity: 0; transition: opacity .15s; }
@@ -375,7 +375,7 @@ dialog.reveal::backdrop { background: radial-gradient(circle at 50% 38%, rgb(74 
 .rv-chip { display: inline-flex; align-items: center; gap: 5px; background: rgb(255 255 255 / .14); border-radius: 999px; padding: 3px 11px; font-size: 13px; }
 .rv-chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c, #fff); }
 .rv-chip.new { background: rgb(255 217 90 / .3); box-shadow: 0 0 0 1.5px #ffd95a inset; }
-.rv-chip.new::after { content: "mới"; font-size: 10px; font-weight: 800; text-transform: uppercase; color: #ffe39a; }
+.rv-chip.new::after { content: var(--t-new, "mới"); font-size: 10px; font-weight: 800; text-transform: uppercase; color: #ffe39a; }
 .rv-note { margin: 10px auto 0; max-width: 340px; font-size: 13.5px; background: rgb(255 255 255 / .1); border-radius: 12px; padding: 7px 12px; }
 .rv-actions { display: grid; gap: 8px; margin-top: 16px; justify-items: center; }
 .rv-actions button { min-width: 200px; padding: 10px 18px; font-size: 16px; color: var(--ink); }
@@ -803,3 +803,26 @@ body.idle { cursor: none; }
 .decor-play .swing.s2 { animation-duration: 3.4s; animation-delay: -1.2s; }
 @keyframes swing { 0%, 100% { transform: rotate(-9deg); } 50% { transform: rotate(9deg); } }
 @media (prefers-reduced-motion: reduce) { .decor-play .swing { animation: none; } }
+
+/* v10 — vườn rau */
+.plot { position: absolute; width: 7.4%; aspect-ratio: 60 / 84; transform: translate(-50%, -88%); pointer-events: auto; cursor: pointer; touch-action: manipulation; }
+.plot .plot-bed { position: absolute; left: 0; right: 0; bottom: 0; }
+.plot .plot-plant { position: absolute; left: -22%; right: -22%; bottom: 16%; transform-origin: 50% 100%; }
+.plot svg { width: 100%; display: block; overflow: visible; }
+.plot.empty .plot-bed { filter: saturate(.85); }
+.plot.empty::after { content: "+"; position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%); font-weight: 800; font-size: 15px; color: #fffdf6; opacity: .75; }
+.plot:hover .plot-plant { animation: plant-sway .9s ease-in-out; }
+.plot.ripe .plot-plant { animation: plant-sway 2.4s ease-in-out infinite; }
+@keyframes plant-sway { 25% { transform: rotate(-3deg); } 75% { transform: rotate(3deg); } }
+.plot .ripe { animation: v-glint 1.6s ease-in-out infinite; }
+.plot .eta { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); font-size: 10px; font-weight: 600; white-space: nowrap; background: rgb(255 253 246 / .9); color: #3b332a; border-radius: 999px; padding: 0 6px; pointer-events: none; }
+.plot.ripe .eta { background: #7cc35f; color: #fff; }
+.plant-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 10px 0; }
+.plant-opt { display: grid; justify-items: center; gap: 2px; padding: 8px 6px; border-radius: 14px; background: var(--chip); border: 0; text-align: center; }
+.plant-opt:not(:disabled):hover { box-shadow: 0 0 0 2px var(--accent) inset; }
+.plant-opt:disabled { opacity: .45; }
+.plant-opt .po-art { width: 64px; height: 72px; }
+.plant-opt .po-art svg { width: 100%; height: 100%; }
+.plant-opt small { color: var(--muted); font-size: 11.5px; }
+.plant-opt .po-yield { color: var(--ok); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .plot .plot-plant, .plot .ripe { animation: none !important; } }

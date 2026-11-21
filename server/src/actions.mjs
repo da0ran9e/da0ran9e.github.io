@@ -26,7 +26,7 @@ export function serverRoll(secret, purpose, playerId, counter) {
 //   tradeForEgg → seed riêng cho quả trứng của cửa hàng
 //   fieldBonus  → seed riêng cho lần bới đốm sáng (số hạt, loại hạt, hay cả túi)
 //   claim       → seed riêng cho phần thưởng nhiệm vụ (trứng quà)
-const SEEDED = new Set(["openBag", "tradeForEgg", "fieldBonus", "claim", "buy", "barter", "candle", "haggle"]);
+const SEEDED = new Set(["openBag", "tradeForEgg", "fieldBonus", "claim", "buy", "barter", "candle", "haggle", "harvest"]);
 // now: bảng rơi ngoài đồng theo mùa (luật v9) — loại hạt đã tung ghi vào nhật ký nên phát lại không cần biết mùa
 export function rollFor(type, secret, playerId, counter, now = null) {
   if (type === "fieldFind") return { kind: R.rollSeed("field", mulberry32(serverRoll(secret, "field", playerId, counter)), now) };
@@ -65,6 +65,10 @@ export const ACTIONS = {
   fillTower: (s, a, now) => R.fillTower(s, a.seed, a.n, now),
   takeFromTower: (s, a, now) => R.takeFromTower(s, a.seed, a.n, now),
   claim: (s, a, now, rolled) => R.claim(s, a.id, now, { rng: mulberry32(rolled.seed >>> 0) }),
+  // luật v10 — vườn rau
+  plant: (s, a, now) => R.plant(s, a.plot, a.seed, now),
+  waterPlot: (s, a, now) => R.waterPlot(s, a.plot, now),
+  harvest: (s, a, now, rolled) => R.harvest(s, a.plot, now, { rng: mulberry32(rolled.seed >>> 0) }),
   advance: () => ({ ok: true }), // hành động hệ thống: chỉ mô phỏng tới `now`
 };
 

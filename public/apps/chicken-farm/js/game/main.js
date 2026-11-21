@@ -17,7 +17,7 @@ import { GAMES, GAME_NAMES } from "./play.js";
 import { playIntro as runIntro } from "./intro.js";
 import { music } from "./music.js";
 import { t as tr, name as tname, errText, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
-import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, towerSvg, ticketSvg, ownedDecor, roadSvg, relicSvg, fieldHorizon } from "../art/decor.js";
+import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, towerSvg, plantSvg, bedSvg, gardenSvg, ticketSvg, ownedDecor, roadSvg, relicSvg, fieldHorizon } from "../art/decor.js";
 
 let ICONS = null;
 try {
@@ -37,6 +37,8 @@ const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
 function setHTML(el, html) {
   if (el && el._html !== html) { el._html = html; el.innerHTML = html; }
 }
+// chữ trong CSS (::after) theo ngôn ngữ
+for (const [k, v] of [["--t-warm", `👆 ${tr("Chạm để sưởi")}`], ["--t-hungry", tr("đói")], ["--t-new", tr("mới")]]) document.documentElement.style.setProperty(k, JSON.stringify(v));
 const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 // Tiếng mở / đóng cho các hộp thoại thường (màn "bất ngờ" và đoạn mở đầu có âm thanh riêng).
 const QUIET_DIALOGS = new Set(["reveal", "vn", "starter"]);
@@ -379,6 +381,9 @@ const OFFLINE = {
   knockEgg: (a, t) => R.knockEgg(state, a.eggId, t),
   startPlay: (a, t) => R.startPlay(state, a.id, t),
   endPlay: (a, t) => R.endPlay(state, a.score, t),
+  plant: (a, t) => R.plant(state, a.plot, a.seed, t),
+  waterPlot: (a, t) => R.waterPlot(state, a.plot, t),
+  harvest: (a, t) => R.harvest(state, a.plot, t),
 };
 async function act(name, args = {}, opts) {
   if (!online) return OFFLINE[name](args, now());
@@ -810,6 +815,98 @@ function nestSlots() {
   const pos = n === 1 ? [[0, -2]] : [[-32, -4], [36, -4], [-32, 44], [36, 44]];
   return state.incubators.map((id, i) => ({ id, i, x: s.x + (pos[i]?.[0] ?? -30 - (i - 3) * 70), y: s.y + (pos[i]?.[1] ?? 44) }));
 }
+/* ---------- vườn rau (v10) ---------- */
+
+const GARDEN = { x: 126, y: 236 }; // giữa khu vườn (bên trái, giữa chuồng và sân chơi)
+const PLOT_POS = [[-56, 10], [0, 10], [56, 10], [-28, 50], [28, 50]]; // đáy luống so với GARDEN
+const plotXY = (i) => ({ x: GARDEN.x + PLOT_POS[i][0], y: GARDEN.y + PLOT_POS[i][1] });
+function plotTip(v) {
+  if (v.empty) return tr("Luống trống — chạm để gieo hạt");
+  const nm = seedName(v.seed);
+  if (v.ready) return `${nm}: ${tr("đã chín — chạm để thu hoạch")}`;
+  return `${nm}: ${tr("chín sau")} ${fmtEta(Math.max(0, v.readyAt - now()))}${v.waterLeft > 0 ? ` ${tr("— chạm để tưới")} (${v.water}/${R.CONFIG.garden.water.max})` : ` ${tr("— đã tưới đủ")}`}`;
+}
+function renderGarden() {
+  const host = $("#yard-garden");
+  if (!host) return;
+  if (!state.garden) { host.innerHTML = ""; return; }
+  const t = now(), n = state.garden.length;
+  while (host.children.length > n) host.lastElementChild.remove();
+  for (let i = 0; i < n; i++) {
+    let el = host.children[i];
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "plot";
+      el.dataset.plot = i;
+      el.setAttribute("role", "button");
+      el.tabIndex = 0;
+      el.innerHTML = '<div class="plot-bed"></div><div class="plot-plant"></div><span class="eta"></span>';
+      host.append(el);
+      const { x, y } = plotXY(i);
+      el.style.left = `${(x / W) * 100}%`;
+      el.style.top = `${(y / H) * 100}%`;
+    }
+    const v = R.plotView(state, i, t);
+    const key = v.empty ? "empty" : `${v.seed}|${Math.round(v.growth * 24)}|${v.ready}`;
+    if (el._key !== key) {
+      el._key = key;
+      el.querySelector(".plot-bed").innerHTML = bedSvg(!v.empty && v.water > 0 && !v.ready);
+      el.querySelector(".plot-plant").innerHTML = v.empty ? "" : plantSvg(R.SEEDS[v.seed].n, v.growth, v.ready, i * 7 + 3);
+    }
+    const tip = plotTip(v);
+    if (el.title !== tip) { el.title = tip; el.setAttribute("aria-label", tip); }
+    el.classList.toggle("empty", v.empty);
+    el.classList.toggle("ripe", !!v.ready);
+    const eta = v.empty ? "" : v.ready ? tr("Chín!") : fmtEta(Math.max(0, v.readyAt - t));
+    const e = el.querySelector(".eta");
+    if (e.textContent !== eta) e.textContent = eta;
+    e.hidden = !eta;
+  }
+}
+$("#yard-garden")?.addEventListener("click", async (ev) => {
+  const el = ev.target.closest("[data-plot]");
+  if (!el || !state?.garden) return;
+  const i = Number(el.dataset.plot), v = R.plotView(state, i, now()), { x, y } = plotXY(i);
+  if (v.empty) return openPlant(i);
+  if (v.ready) {
+    const r = await act("harvest", { plot: i });
+    if (await run(Promise.resolve(r))) {
+      sfx("harvest");
+      popIn("#yard-pops", x, y - 46, `+${r.n} ${seedName(r.seed)}`);
+      burst($("#yard-pops"), `${(x / W) * 100}%`, `${((y - 30) / H) * 100}%`, { kind: "star", n: 10, colors: ["#ffd95a", "#7cc35f", "#fff"] });
+      const chip = $('#res [data-res="seeds"]');
+      if (chip) { const rc = el.getBoundingClientRect(); flyTo(seedIcon(r.seed, 22), rc.left + rc.width / 2, rc.top, chip); }
+      if (r.n > R.CONFIG.garden.yield) toast(`${tr("Được mùa! Thêm 1 hạt")}`);
+    }
+    return;
+  }
+  if (v.waterLeft <= 0) return toast(tr("Đã tưới đủ — chờ cây chín nhé"));
+  if (await run(act("waterPlot", { plot: i }))) {
+    sfx("water");
+    burst($("#yard-pops"), `${(x / W) * 100}%`, `${((y - 24) / H) * 100}%`, { kind: "spark", n: 9, colors: ["#8fd3ff", "#c9ecff", "#5fb3e8"], rise: 18 });
+  }
+});
+let plantTarget = 0;
+function openPlant(i) {
+  plantTarget = i;
+  const ks = Object.keys(R.SEEDS).filter((k) => R.canPlant(k));
+  $("#plant-list").innerHTML = ks.map((k) => {
+    const have = state.inventory[k] ?? 0;
+    return `<button type="button" class="plant-opt" data-seed="${k}"${have ? "" : " disabled"}><span class="po-art">${plantSvg(R.SEEDS[k].n, 1, false, 5)}</span><b>${esc(seedName(k))}</b><small>${tr("có")} ${have} · ${tr("chín sau")} ${fmtDur(R.growMsOf(k, now()))}</small><small class="po-yield">→ ${R.CONFIG.garden.yield} ${esc(seedName(k))}</small></button>`;
+  }).join("");
+  $("#plant-dialog").showModal();
+}
+$("#plant-list")?.addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-seed]");
+  if (!b || b.disabled) return;
+  $("#plant-dialog").close();
+  const { x, y } = plotXY(plantTarget);
+  if (await run(act("plant", { plot: plantTarget, seed: b.dataset.seed }))) {
+    sfx("drop");
+    burst($("#yard-pops"), `${(x / W) * 100}%`, `${((y - 10) / H) * 100}%`, { kind: "spark", n: 7, colors: ["#8a5a36", "#a5713e", "#7cc35f"], rise: 12 });
+  }
+});
+
 function renderNests() {
   const host = $("#yard-nests");
   const slots = nestSlots();
@@ -2059,6 +2156,7 @@ function renderDecor() {
     const vis = R.visitorView(state, now());
     const here = vis?.who && !vis.gone;
     extra.push(...ownedDecor(state.decorOwned));
+    if (state.garden) extra.push({ key: "garden", x: GARDEN.x, y: GARDEN.y + 66, w: 220, html: gardenSvg() });
     extra.push({ key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 46, w: 220, html: playgroundSvg() });
     const inTower = Object.values(state.tower ?? {}).reduce((a, b) => a + b, 0);
     extra.push({ key: "tower", x: 384, y: 156, w: 54, html: towerSvg(inTower / R.CONFIG.tower.cap) });
@@ -2423,6 +2521,8 @@ function nextStep() {
     if (state.bags.length) return `${tr("Mở túi hạt trong")} <b>${tr("Kho")}</b>${tr(", rồi đổi trứng ở")} <b>${tr("Chợ")}</b>`;
     return `${tr("Trại chưa có gà. Mở")} <b>${tr("Kho")}</b> ${tr("xem còn trứng có phôi không")}`;
   }
+  const ripe = (state.garden ?? []).findIndex((p, i) => p && R.plotView(state, i, t).ready);
+  if (ripe >= 0 && !hungry) return `${tr("Rau đã chín —")} ${tr("chạm")} <b>${tr("luống rau")}</b> ${tr("để thu hoạch")}`;
   if (hungry && seeds) return `${n(hungry)} ${tr("đang đói —")} ${hasV7() ? `${tr("chạm")} <b>${tr("Tháp hạt")}</b> ${tr("để đổ hạt cho gà tự ăn")}` : `${tr("kéo hạt từ khay lên gà, hoặc kéo gà vào")} <b>${tr("Máng ăn")}</b>`}`;
   if (!seeds && state.bags.length) return `${tr("Hết hạt — mở")} ${state.bags.length} ${tr("túi hạt trong")} <b>${tr("Kho")}</b>`;
   if (!seeds && !out && home.length) return `${tr("Hết hạt — kéo một con gà ra")} <b>${tr("Cổng")}</b> ${tr("để kiếm hạt ngoài cánh đồng")}`;
@@ -2454,6 +2554,7 @@ function renderAll() {
     renderDecor();
     renderQuest();
     renderNests();
+    renderGarden();
     renderYardEggs();
     renderTray();
     renderInfo();

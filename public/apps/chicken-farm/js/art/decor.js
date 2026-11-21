@@ -259,6 +259,104 @@ export const playgroundSvg = () => svg("0 0 200 132", `
   <circle cx="140" cy="114" r="4.4" fill="#e4572e"/><path d="M136.6,112 q3.4,-2.4 6.8,0" stroke="#fff" stroke-width="1" fill="none" opacity=".8"/>
   <circle cx="60" cy="114" r="3.4" fill="#7cc35f"/>`, "decor-play", tr("Sân chơi"));
 
+/* ---------- v10: vườn rau ---------- */
+
+// Cây trồng vẽ từ THÀNH PHẦN DINH DƯỠNG của hạt (n = { protein, energy, mineral, pigment }):
+//   khoáng → lá to, xanh đậm · năng lượng → bông lúa / bắp vàng rủ · đạm → quả đậu treo · sắc tố → hoa
+//   hạt nghèo, cân bằng (hạt thường) → khóm lá mảnh như lúa · hạt giàu mọi chất (hạt quý) → quả bí vàng dưới gốc.
+// growth 0..1 (mầm → lớn → ra hoa/quả), ready: chín (sáng lên). seed: số để mỗi cây hơi khác nhau. Khung 60×70, đất ở y=62.
+export function plantSvg(n, growth = 1, ready = false, seed = 1) {
+  const tot = (n.protein + n.energy + n.mineral + n.pigment) || 1, sh = (k) => n[k] / tot;
+  const rich = Math.min(1, tot / 64), g = Math.max(0, Math.min(1, growth));
+  let r = (seed >>> 0) * 2654435761 % 4294967296;
+  const rnd = () => ((r = (r * 1664525 + 1013904223) % 4294967296) / 4294967296);
+  const f1 = (v) => v.toFixed(1);
+  const cx = 30, gy = 62;
+  if (g < 0.12) { // mầm
+    const k = 0.5 + g * 4;
+    return svg("0 0 60 70", `<path d="M30,62 V${f1(62 - 8 * k)}" stroke="#6fae3f" stroke-width="1.6"/><path d="M30,${f1(62 - 7 * k)} q-6,-4 -8,0 q4,3 8,0z M30,${f1(62 - 8 * k)} q6,-5 8,-1 q-4,3 -8,1z" fill="#8cc95a"/>`, "plant");
+  }
+  const sizeK = 0.35 + 0.65 * Math.min(1, (g - 0.12) / 0.6), fruitK = Math.max(0, (g - 0.55) / 0.45);
+  const H = (20 + 26 * rich) * sizeK, top = gy - H;
+  const leafC = sh("mineral") > 0.4 ? "#3f8f3a" : sh("mineral") > 0.2 ? "#5aa646" : "#78bb52", leafD = "#2f7a2e";
+  let o = "";
+  // khóm lá mảnh (hạt nghèo / cân bằng)
+  const grassy = 1 - Math.max(sh("protein"), sh("energy"), sh("mineral"), sh("pigment"));
+  const blades = Math.round(2 + grassy * 8 * (1 - rich));
+  for (let i = 0; i < blades; i++) {
+    const a = -90 + (i - (blades - 1) / 2) * 13 + (rnd() - 0.5) * 8, L = H * (0.6 + rnd() * 0.4), rad = a * Math.PI / 180;
+    o += `<path d="M${cx + (i - blades / 2) * 1.2},${gy} q${f1(Math.cos(rad) * L * 0.3)},${f1(Math.sin(rad) * L * 0.6)} ${f1(Math.cos(rad) * L * 0.55)},${f1(Math.sin(rad) * L)}" stroke="${leafC}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`;
+  }
+  // đậu leo: cọc tre + dây leo (hạt nhiều đạm)
+  if (sh("protein") > 0.4) {
+    o += `<path d="M${cx - 9},${gy + 1} L${cx - 7},${f1(top - 6)} M${cx + 9},${gy + 1} L${cx + 7},${f1(top - 6)} M${cx - 8},${f1(top - 2)} L${cx + 8},${f1(top - 2)}" stroke="#c9a66b" stroke-width="1.8" stroke-linecap="round"/>`;
+    for (const d of [-1, 1]) o += `<path d="M${cx},${gy - 4} C${cx + d * 10},${f1(gy - H * 0.3)} ${cx - d * 2},${f1(gy - H * 0.6)} ${cx + d * 8},${f1(top)}" stroke="#6fae3f" stroke-width="1.4" fill="none"/>`;
+  }
+  // thân chính
+  o += `<path d="M${cx},${gy} Q${cx + (rnd() - 0.5) * 4},${f1(gy - H / 2)} ${cx},${f1(top)}" stroke="#5c9a37" stroke-width="${f1(1.6 + 1.6 * rich)}" fill="none" stroke-linecap="round"/>`;
+  // lá to theo khoáng
+  const pairs = 1 + Math.round(sh("mineral") * 3 + rich), lw = 5 + 9 * sh("mineral") + 3 * rich, fat = 0.32 + 0.3 * sh("mineral");
+  for (let i = 0; i < pairs; i++) {
+    const y = gy - H * (0.16 + 0.6 * (i / Math.max(1, pairs))), L = lw * sizeK * (1 - i * 0.1);
+    for (const d of [-1, 1]) {
+      const ang = d * (28 + rnd() * 14) - 90 + d * 60, ex = cx + d * L * 0.62, ey = y - L * 0.22;
+      o += `<ellipse cx="${f1(ex)}" cy="${f1(ey)}" rx="${f1(L * 0.66)}" ry="${f1(L * fat)}" fill="${leafC}" transform="rotate(${f1(d * -22)} ${f1(ex)} ${f1(ey)})"/>`
+        + `<path d="M${cx},${f1(y)} L${f1(cx + d * L * 1.2)},${f1(y - L * 0.48)}" stroke="${leafD}" stroke-width=".7" opacity=".55"/>`;
+      void ang;
+    }
+  }
+  if (fruitK > 0) {
+    // quả đậu treo theo đạm
+    const pods = Math.round(sh("protein") * 6);
+    for (let i = 0; i < pods; i++) {
+      const y = gy - H * (0.22 + 0.6 * (i / Math.max(1, pods))), d = i % 2 ? 1 : -1, L = 9 + 8 * fruitK, x0 = cx + d * 5;
+      const pc = ready ? "#a9c24e" : "#7fb83f";
+      o += `<path d="M${cx},${f1(y - 1)} Q${f1(cx + d * 3)},${f1(y - 2)} ${f1(x0)},${f1(y)}" stroke="#5c9a37" stroke-width="1" fill="none"/>`
+        + `<path d="M${f1(x0)},${f1(y)} q${f1(d * 6)},${f1(L * 0.45)} ${f1(d * 2.6)},${f1(L)} q${f1(-d * 1.6)},${f1(L * 0.12)} ${f1(-d * 3.4)},${f1(-L * 0.2)} q${f1(d * 1.6)},${f1(-L * 0.4)} ${f1(-d * 1.4)},${f1(-L * 0.8)}z" fill="${pc}" stroke="#4f7f28" stroke-width=".7"/>`
+        + [0.3, 0.55, 0.78].map((t) => `<circle cx="${f1(x0 + d * (1.6 + 1.2 * Math.sin(t * 3)))}" cy="${f1(y + L * t)}" r="1" fill="#c9e38a" opacity=".8"/>`).join("");
+    }
+    // bông / bắp theo năng lượng
+    const ears = Math.round(sh("energy") * 3.4 + (grassy > 0.55 ? 3 : 0));
+    for (let i = 0; i < ears; i++) {
+      const a = -90 + (i - (ears - 1) / 2) * 26, rad = a * Math.PI / 180, L = (6 + 7 * fruitK) * (sh("energy") > 0.4 ? 1.2 : 0.8);
+      const bx = cx + Math.cos(rad) * 3, by = top + 2, ex = bx + Math.cos(rad) * L * 0.4 + (i - (ears - 1) / 2) * 4, ey = by + Math.sin(rad) * L * 0.3 + L * 0.5;
+      if (sh("energy") > 0.4) o += `<ellipse cx="${f1(ex)}" cy="${f1(ey)}" rx="${f1(3.4 * fruitK + 1.4)}" ry="${f1(L * 0.55)}" fill="#f2c94c" stroke="#c99a2a" stroke-width=".6" transform="rotate(${f1((i - (ears - 1) / 2) * 25)} ${f1(ex)} ${f1(ey)})"/><path d="M${f1(ex)},${f1(ey + L * 0.4)} q-3,3 -4,7 M${f1(ex)},${f1(ey + L * 0.4)} q3,3 4,7" stroke="#7fb24a" stroke-width="1.2" fill="none"/>`;
+      else for (let k = 0; k < 5; k++) o += `<ellipse cx="${f1(bx + (ex - bx) * (k / 4) + 1.2)}" cy="${f1(by + (ey - by) * (k / 4))}" rx="1.1" ry="1.8" fill="${ready ? "#e9b949" : "#c9cf6a"}"/>`;
+    }
+    // hoa theo sắc tố
+    if (sh("pigment") > 0.24) {
+      const R0 = (2.5 + 6 * sh("pigment")) * fruitK + 1.5, petals = sh("pigment") > 0.5 ? 10 : 6;
+      const pc = sh("pigment") > 0.5 ? "#f6b52e" : rich > 0.8 ? "#f29ac0" : "#ff8fb3";
+      for (let i = 0; i < petals; i++) { const a = i / petals * Math.PI * 2; o += `<ellipse cx="${f1(cx + Math.cos(a) * R0 * 0.9)}" cy="${f1(top + Math.sin(a) * R0 * 0.9)}" rx="${f1(R0 * 0.55)}" ry="${f1(R0 * 0.3)}" fill="${pc}" transform="rotate(${f1(a * 180 / Math.PI)} ${f1(cx + Math.cos(a) * R0 * 0.9)} ${f1(top + Math.sin(a) * R0 * 0.9)})"/>`; }
+      o += `<circle cx="${cx}" cy="${f1(top)}" r="${f1(R0 * 0.55)}" fill="${sh("pigment") > 0.5 ? "#7a4a22" : "#f2c94c"}"/>`;
+    }
+    // quả bí vàng dưới gốc (hạt giàu mọi chất)
+    if (rich > 0.8) {
+      const pr = 4 + 6 * fruitK;
+      o += `<ellipse cx="${cx + 9}" cy="${f1(gy - pr * 0.8)}" rx="${f1(pr * 1.15)}" ry="${f1(pr * 0.85)}" fill="#f2a93b"/><path d="M${cx + 9},${f1(gy - pr * 1.6)} v${f1(pr * 1.6)} M${f1(cx + 9 - pr * 0.6)},${f1(gy - pr * 1.5)} q-2,${f1(pr * 0.7)} 0,${f1(pr * 1.4)} M${f1(cx + 9 + pr * 0.6)},${f1(gy - pr * 1.5)} q2,${f1(pr * 0.7)} 0,${f1(pr * 1.4)}" stroke="#d9862a" stroke-width=".9" fill="none"/><path d="M${cx + 9},${f1(gy - pr * 1.6)} q2,-3 5,-3" stroke="#5c9a37" stroke-width="1.4" fill="none"/>`;
+    }
+  }
+  if (ready) o += `<g class="ripe">${[[cx - 12, top + 4], [cx + 13, top + 10], [cx + 2, top - 6]].map(([x, y]) => `<path d="M${f1(x)},${f1(y - 3)} l.9,2.1 2.1,.9 -2.1,.9 -.9,2.1 -.9,-2.1 -2.1,-.9 2.1,-.9z" fill="#fff6c4"/>`).join("")}</g>`;
+  return svg("0 0 60 70", o, `plant${ready ? " is-ripe" : ""}`);
+}
+// Một luống đất (khung 60×30): mô đất có rãnh, viền gỗ thấp.
+export const bedSvg = (wet = false) => svg("0 0 60 30", `
+  <ellipse cx="30" cy="22" rx="29" ry="7.5" fill="#000" opacity=".1"/>
+  <ellipse cx="30" cy="18" rx="28" ry="9" fill="#a5713e"/><ellipse cx="30" cy="16.4" rx="26" ry="7.6" fill="${wet ? "#6b4529" : "#8a5a36"}"/>
+  <path d="M9,15 q21,-5 42,0 M7,18.4 q23,-5 46,0" stroke="${wet ? "#4f321d" : "#6f4528"}" stroke-width="1.3" fill="none" opacity=".8"/>
+  ${wet ? `<ellipse cx="22" cy="17" rx="4" ry="1.2" fill="#9ccbe0" opacity=".55"/><ellipse cx="38" cy="15" rx="3" ry="1" fill="#9ccbe0" opacity=".5"/>` : ""}`, "bed");
+// Khung vườn (lớp trang trí, sau các luống): rào phên tre thấp quanh mảnh đất + biển gỗ có cây non.
+export const gardenSvg = () => svg("0 0 220 130", `
+  <ellipse cx="110" cy="112" rx="108" ry="16" fill="#000" opacity=".07"/>
+  <path d="M14,34 Q110,24 206,34 L214,108 Q110,124 6,108Z" fill="#c9a26b" opacity=".55"/>
+  <path d="M10,104 Q110,120 210,104" fill="none" stroke="#8d5f33" stroke-width="3"/>
+  <path d="M12,40 Q110,30 208,40" fill="none" stroke="#8d5f33" stroke-width="2.2"/>
+  ${Array.from({ length: 12 }, (_, i) => { const x = 10 + i * 18.2, yb = 104 + 14 * Math.sin(Math.PI * (x - 10) / 200) * 0.9; return `<path d="M${x.toFixed(1)},${(yb + 2).toFixed(1)} V${(yb - 13).toFixed(1)}" stroke="#a5713e" stroke-width="2.6" stroke-linecap="round"/>`; }).join("")}
+  <path d="M10,96 Q110,112 210,96" fill="none" stroke="#b98652" stroke-width="2"/>
+  ${[12, 208].map((x) => `<path d="M${x},${x < 100 ? 104 : 104} V40" stroke="#8d5f33" stroke-width="2.6"/>`).join("")}
+  <g transform="translate(184 6)"><path d="M10,34 V10" stroke="#8d5f33" stroke-width="2.4"/><rect x="0" y="4" width="22" height="12" rx="2" fill="#d7a970" stroke="#8d5f33" stroke-width="1"/>
+  <path d="M11,14 v-5 M11,10 q-4,-3 -6,0 q3,2 6,0z M11,9 q4,-4 6,-1 q-3,2 -6,1z" stroke="#4f9e3a" stroke-width="1" fill="#6fb049"/></g>`, "decor-garden", tr("Vườn rau"));
+
 // Tháp hạt (v9): kho hạt có ô kính cho thấy mức hạt, ống máng đổ xuống máng ăn bên trái. fill: 0..1.
 export function towerSvg(fill = 0) {
   const f = Math.max(0, Math.min(1, fill)), top = 34, bot = 76, lv = bot - (bot - top) * f;
