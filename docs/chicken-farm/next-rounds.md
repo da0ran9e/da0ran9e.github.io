@@ -253,6 +253,8 @@ Chủ dự án định có một đoạn hình ảnh ngắn kể chuyện. **N�
 - Chữ đi qua `t("intro.1")…` (đã có lớp đa ngôn ngữ), mỗi khung một tiếng `sfx` hợp cảnh; nhạc nền bắt đầu ở khung cuối.
 - Bản nháp nội dung (thay tuỳ ý): (1) trại gà cũ bỏ hoang, cỏ mọc đầy sân → (2) trong ổ rơm còn sót ba quả trứng, mỗi quả một màu vỏ → (3) một lá thư: "Mỗi quả mang một dòng giống khác nhau. Hãy chọn một quả, sưởi ấm nó…" → (4) "…và dựng lại trại gà." → chuyển sang hộp chọn trứng.
 
+> **Cập nhật 21/11:** đã làm F3 (đoạn mở đầu dạng visual novel: `js/game/intro.js`, 4 cảnh, khung thoại chữ chạy, Ông Mào Đỏ), F2 (8 hiệu ứng mới trong `fx.js`; tiếng dế đêm nằm trong nhạc nền), F1 (nhạc nền tự sinh `js/game/music.js`, nút ♪ riêng, cảnh yard / field / night), D (dải phong cảnh trên cánh đồng `fieldHorizon()` trong `decor.js`, chế độ treo máy 20 giây, nút toàn màn hình). Nhạc chưa ai nghe thử bằng tai. **Còn lại: hoàn tất đa ngôn ngữ (~680 dòng chữ: main.js 348, rules.js 230, game.html 72, play/intro 32) và đợt E.**
+
 ### Thứ tự đề nghị cho các đợt còn lại
 
 1. Hoàn tất đa ngôn ngữ (lặp, rẻ) → 2. F2 (rẻ) → 3. B (đổi cách cho ăn — ảnh hưởng mọi thứ sau) → 4. C → 5. F1, F3 → 6. D → 7. E.

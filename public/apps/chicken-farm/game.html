@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Trại Gà</title>
   <meta name="description" content="Nuôi gà, thả đồng, ấp trứng, sưu tầm — mỗi con gà được vẽ từ bộ gen riêng.">
-  <link rel="stylesheet" href="game.css?v=28">
+  <link rel="stylesheet" href="game.css?v=31">
 </head>
 <body>
   <header class="bar">
@@ -23,6 +23,7 @@
       <button type="button" id="open-log" class="icon" aria-label="Nhật ký" title="Nhật ký"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0-6 6v4l-2 3h16l-2-3V9a6 6 0 0 0-6-6zm-2.5 15a2.5 2.5 0 0 0 5 0z" fill="currentColor"/></svg></button>
       <button type="button" id="open-help" class="icon" aria-label="Cách chơi" title="Cách chơi"><b>?</b></button>
       <button type="button" id="lang" class="icon" data-i18n-aria="menu.lang"></button>
+      <button type="button" id="music" class="icon" aria-label="Nhạc nền" title="Bật / tắt nhạc nền"><b>♪</b></button>
       <button type="button" id="sound" class="icon" aria-pressed="true" aria-label="Âm thanh" title="Bật / tắt âm thanh"></button>
     </nav>
     <details class="dev" id="dev">
@@ -94,6 +95,7 @@
     <section id="view-field" class="view" hidden aria-label="Cánh đồng">
       <div class="field-head">
         <button type="button" id="back-yard" class="primary">← Về trại</button>
+        <button type="button" id="fullscreen" class="icon-btn" title="Toàn màn hình (treo máy)" aria-label="Toàn màn hình">⛶</button>
         <p class="muted" id="field-who">Mỗi lần chỉ thả được 1 con. Gà chỉ kiếm ăn khi bạn đang xem; rời màn hình là gà tự về chuồng. Gà no rồi thì hạt nhặt được mang về kho.</p>
       </div>
       <div class="scene field" id="field">
@@ -215,6 +217,8 @@
     </form>
   </dialog>
 
+  <dialog id="vn" class="vn" aria-label="Đoạn mở đầu"></dialog>
+
   <dialog id="reveal" class="reveal" aria-label="Phần thưởng">
     <div class="rv" id="reveal-body"></div>
   </dialog>
@@ -224,19 +228,21 @@
        main.js mới với rules.js / field.js cũ còn trong bộ nhớ đệm và trang game không chạy. -->
   <script type="importmap">
   {"imports": {
-    "./js/genome.js": "./js/genome.js?v=28",
-    "./js/chicken-flat.js": "./js/chicken-flat.js?v=28",
-    "./js/chicken-svg.js": "./js/chicken-svg.js?v=28",
-    "./js/art/icons.js": "./js/art/icons.js?v=28",
-    "./js/art/decor.js": "./js/art/decor.js?v=28",
-    "./js/game/rules.js": "./js/game/rules.js?v=28",
-    "./js/game/field.js": "./js/game/field.js?v=28",
-    "./js/game/net.js": "./js/game/net.js?v=28",
-    "./js/game/fx.js": "./js/game/fx.js?v=28",
-    "./js/game/i18n.js": "./js/game/i18n.js?v=28",
-    "./js/game/play.js": "./js/game/play.js?v=28"
+    "./js/genome.js": "./js/genome.js?v=31",
+    "./js/chicken-flat.js": "./js/chicken-flat.js?v=31",
+    "./js/chicken-svg.js": "./js/chicken-svg.js?v=31",
+    "./js/art/icons.js": "./js/art/icons.js?v=31",
+    "./js/art/decor.js": "./js/art/decor.js?v=31",
+    "./js/game/rules.js": "./js/game/rules.js?v=31",
+    "./js/game/field.js": "./js/game/field.js?v=31",
+    "./js/game/net.js": "./js/game/net.js?v=31",
+    "./js/game/fx.js": "./js/game/fx.js?v=31",
+    "./js/game/i18n.js": "./js/game/i18n.js?v=31",
+    "./js/game/play.js": "./js/game/play.js?v=31",
+    "./js/game/intro.js": "./js/game/intro.js?v=31",
+    "./js/game/music.js": "./js/game/music.js?v=31"
   }}
   </script>
-  <script type="module" src="js/game/main.js?v=28"></script>
+  <script type="module" src="js/game/main.js?v=31"></script>
 </body>
 </html>

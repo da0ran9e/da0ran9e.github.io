@@ -14,8 +14,10 @@ import * as R from "./rules.js";
 import { FIELD, createField, addChicken, removeChicken, tickField, snapshot, fieldTraits, setReadyAt, setLure } from "./field.js";
 import { sfx, sound, buzz, burst, confetti, flyTo, bump } from "./fx.js";
 import { GAMES, GAME_NAMES } from "./play.js";
+import { playIntro as runIntro } from "./intro.js";
+import { music } from "./music.js";
 import { t, name as tname, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
-import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, ticketSvg, ownedDecor, roadSvg, relicSvg } from "../art/decor.js";
+import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, ticketSvg, ownedDecor, roadSvg, relicSvg, fieldHorizon } from "../art/decor.js";
 
 let ICONS = null;
 try {
@@ -36,6 +38,14 @@ function setHTML(el, html) {
   if (el && el._html !== html) { el._html = html; el.innerHTML = html; }
 }
 const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Tiếng mở / đóng cho các hộp thoại thường (màn "bất ngờ" và đoạn mở đầu có âm thanh riêng).
+const QUIET_DIALOGS = new Set(["reveal", "vn", "starter"]);
+const showModal0 = HTMLDialogElement.prototype.showModal;
+HTMLDialogElement.prototype.showModal = function () {
+  if (!this.open && !QUIET_DIALOGS.has(this.id)) sfx("open");
+  return showModal0.call(this);
+};
+document.addEventListener("close", (e) => { if (e.target instanceof HTMLDialogElement && !QUIET_DIALOGS.has(e.target.id)) sfx("close"); }, true);
 
 /* ---------- chế độ online / offline ---------- */
 
@@ -230,7 +240,10 @@ function handleEvents(events, { quiet = false } = {}) {
       text = `<b>${esc(nameOf(e.chickenId))}</b> đã trưởng thành`;
       loud = true;
       if (recap) recap.adults.push(nameOf(e.chickenId));
-      else stageFx(e.chickenId, "Trưởng thành!");
+      else {
+        stageFx(e.chickenId, "Trưởng thành!");
+        if (state.chickens.find((c) => c.id === e.chickenId)?.sex === "rooster") sfx("crow", 0.9);
+      }
     } else if (e.type === "laid") {
       text = `<b>${esc(nameOf(e.chickenId))}</b> đẻ một trứng ${e.fertile ? "có phôi" : "không phôi"} ngoài sân`;
       loud = true;
@@ -645,6 +658,7 @@ function renderRes() {
   // số vừa tăng thì nảy lên một cái
   const cur = { seeds, eggs: eggs.length, bags: state.bags.length, chickens: state.chickens.length, tickets: state.tickets ?? 0 };
   if (resPrev) for (const k of Object.keys(cur)) if (cur[k] > resPrev[k]) bump($(`#res [data-res="${k}"]`));
+  if (resPrev && cur.tickets > resPrev.tickets) sfx("ticket", 0.2);
   resPrev = cur;
 }
 $("#res").addEventListener("click", (ev) => {
@@ -716,6 +730,7 @@ onKeyActivate($("#yard-zones"), (el) => zoneTap(el.dataset.zone));
 onKeyActivate($("#yard-eggs"), (el) => collectWithAnim(el.dataset.id));
 // hiệu ứng "trúng" ở điểm thả sau khi thả thành công
 function flashZone(key) {
+  sfx("drop");
   const el = key === "nest" ? $("#yard-nests .nest") : $(`#yard-zones [data-zone="${key}"]`);
   if (!el) return;
   el.classList.remove("hit");
@@ -1571,7 +1586,7 @@ async function sendToField(id) {
 function ensureField() {
   if (field) return;
   field = createField({ seed: (sceneSeed() ^ 0x5eed) >>> 0 });
-  if (ICONS?.fieldBackdrop) $("#field-bg").innerHTML = ICONS.fieldBackdrop(W, H, sceneSeed());
+  if (ICONS?.fieldBackdrop) $("#field-bg").innerHTML = ICONS.fieldBackdrop(W, H, sceneSeed()) + fieldHorizon(sceneSeed());
 }
 function startObserving() {
   ensureField();
@@ -1629,7 +1644,7 @@ function takeLucky(ev) {
   if (!setLure(field, out.id, lucky.x, lucky.y)) return;
   lucky.taken = true;
   lucky.el.classList.add("taken");
-  sfx("tap");
+  sfx("step");
   buzz(8);
 }
 $("#field-spots").addEventListener("pointerdown", takeLucky); // chạm / chuột: nhận ngay lúc ấn xuống
@@ -1781,13 +1796,17 @@ function stepField() {
 
 let view = "yard";
 function showField() {
+  sfx("gate");
   view = "field";
+  setTimeout(wake, 0);
   $("#view-yard").hidden = true;
   $("#view-field").hidden = false;
   startObserving();
   scrollTo({ top: 0 });
 }
 function showYard() {
+  if (view === "field") sfx("gate");
+  document.body.classList.remove("idle");
   stopObserving();
   view = "yard";
   $("#view-field").hidden = true;
@@ -1796,6 +1815,18 @@ function showYard() {
   renderAll();
 }
 $("#back-yard").addEventListener("click", showYard);
+// Treo máy ở cánh đồng: 20 giây không chạm / gõ phím thì ẩn các nút, chỉ còn cảnh và gà. Chạm lại là hiện.
+let idleTimer = 0;
+function wake() {
+  document.body.classList.remove("idle");
+  clearTimeout(idleTimer);
+  if (view === "field") idleTimer = setTimeout(() => { if (view === "field" && !document.querySelector("dialog[open]")) document.body.classList.add("idle"); }, 20000);
+}
+for (const ev of ["pointerdown", "pointermove", "keydown"]) addEventListener(ev, wake, { passive: true });
+$("#fullscreen").addEventListener("click", () => {
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => toast("Trình duyệt không cho toàn màn hình"));
+});
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     stopObserving();
@@ -1915,7 +1946,7 @@ function renderDecor() {
       z.classList.toggle("has-visitor", !!here);
       const lb = z.querySelector(".label"), txt = here ? vis.name : "Chợ";
       if (lb.textContent !== txt) lb.textContent = txt;
-      if (here && z.dataset.seen !== String(vis.from)) { z.dataset.seen = String(vis.from); sfx("sparkle"); }
+      if (here && z.dataset.seen !== String(vis.from)) { z.dataset.seen = String(vis.from); sfx("merchant"); }
     }
     const tw = $('#yard-zones [data-zone="feeder"] .label'), n = Object.values(state.tower).reduce((a, b) => a + b, 0), tx = `Tháp hạt ${n}/${R.CONFIG.tower.cap}`;
     if (tw && tw.textContent !== tx) tw.textContent = tx;
@@ -1927,7 +1958,11 @@ function renderDecor() {
 function renderSky() {
   const h = new Date(now()).getHours();
   const sky = h < 5 || h >= 19 ? "night" : h < 7 ? "dawn" : h >= 17 ? "dusk" : "day";
-  if (document.body.dataset.sky !== sky) document.body.dataset.sky = sky;
+  music.scene(sky === "night" ? "night" : view === "field" ? "field" : "yard");
+  if (document.body.dataset.sky !== sky) {
+    if (sky === "dawn" && document.body.dataset.sky && state.chickens.some((c) => c.sex === "rooster" && c.adultAt != null)) sfx("crow");
+    document.body.dataset.sky = sky;
+  }
 }
 for (const amb of document.querySelectorAll(".amb")) {
   let h = '<i class="cloud"></i>';
@@ -1944,8 +1979,17 @@ function renderSound() {
 }
 $("#sound").addEventListener("click", () => {
   sound.toggle();
+  if (sound.muted) music.stop(); else music.start();
   renderSound();
 });
+function renderMusic() {
+  const b = $("#music");
+  b.setAttribute("aria-pressed", String(music.enabled));
+  b.classList.toggle("off", !music.enabled);
+  b.title = music.enabled ? "Đang bật nhạc nền — bấm để tắt" : "Đang tắt nhạc nền — bấm để bật";
+}
+$("#music").addEventListener("click", () => { music.toggle(); renderMusic(); });
+renderMusic();
 renderSound();
 applyI18n();
 $("#lang").textContent = lang.toUpperCase();
@@ -2343,30 +2387,16 @@ async function showStarterOnline() {
 const INTRO_KEY = "trai-ga-intro";
 async function playIntro(force = false) {
   try { if (!force && localStorage.getItem(INTRO_KEY)) return; localStorage.setItem(INTRO_KEY, "1"); } catch {}
-  const yard = ICONS?.yardBackdrop ? ICONS.yardBackdrop(800, 480, 7) : "";
-  const egg = (shell, i) => renderEggFlat({ egg: { shell, speckle: 0.2, seed: 11 + i } }, { label: "Trứng" });
-  const letter = `<svg viewBox="0 0 120 90"><rect x="14" y="8" width="92" height="74" rx="6" fill="#fffdf6" stroke="#d6ccb4" stroke-width="2"/>${[24, 36, 48, 60].map((y, i) => `<path d="M28,${y} h${i === 3 ? 40 : 64}" stroke="#b9ad94" stroke-width="3" stroke-linecap="round"/>`).join("")}<path d="M80,68 q8,-10 16,0" stroke="#e4572e" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`;
-  const night = `<svg viewBox="0 0 400 240"><defs><linearGradient id="nsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c2452"/><stop offset="1" stop-color="#4a3f7a"/></linearGradient></defs><rect width="400" height="240" fill="url(#nsky)"/>${Array.from({ length: 34 }, (_, i) => `<circle cx="${(i * 97) % 400}" cy="${(i * 53) % 150}" r="${i % 3 ? 1 : 1.8}" fill="#fff" opacity="${0.5 + (i % 4) / 8}"/>`).join("")}<path d="M300,30 L150,150" stroke="#fff6c4" stroke-width="3" stroke-linecap="round" opacity=".9" class="shoot"/><circle cx="150" cy="150" r="6" fill="#ffd95a"/><path d="M0,200 Q100,170 200,195 T400,185 V240 H0Z" fill="#253a2a"/></svg>`;
-  const glow = `<div class="intro-eggs glow">${["#f3ead8", "#b5dccd", "#c69a72"].map(egg).join("")}</div>`;
-  const rooster = renderChickenFlat(express(randomGenome(mulberry32(2026), { sex: "rooster" }), { nutrition: 0.95, gloss: 0.6 }), { growth: 1, detail: "high", label: "Gà trống già" });
-  const frames = [
-    { art: `<div class="intro-art">${night}</div>`, text: "Một đêm nọ, một ngôi sao băng rơi xuống trại gà bỏ hoang…" },
-    { art: glow, text: "Sáng hôm sau, giữa ổ rơm cũ có ba quả trứng phát sáng lấp lánh." },
-    { art: `<div class="intro-rooster">${rooster}</div>`, text: "Một chú gà trống già bỗng cất tiếng nói: “Mỗi quả mang một dòng giống từ trên trời. Chọn một quả và sưởi ấm nó nhé!”" },
-    { art: `<div class="intro-art">${yard}</div>`, text: "Ấp nở chúng, và trại gà sẽ hồi sinh!", last: true },
-  ];
+  const art = {
+    yard: ICONS?.yardBackdrop ? ICONS.yardBackdrop(800, 480, 7) : "",
+    rooster: renderChickenFlat(express(randomGenome(mulberry32(2026), { sex: "rooster" }), { nutrition: 0.95, gloss: 0.6 }), { growth: 1, detail: "high", label: "Ông Mào Đỏ" }),
+    egg: (shell, i) => renderEggFlat({ egg: { shell, speckle: 0.2, seed: 11 + i } }, { label: "Trứng" }),
+  };
   revealBusy = true;
   try {
-    for (const f of frames) {
-      rvShow(`<div class="intro">${f.art}<p class="rv-title intro-text">${f.text}</p><div class="rv-actions"><button type="button" class="gold" data-go="next">${f.last ? "Bắt đầu" : "Tiếp"}</button>${f.last ? "" : '<button type="button" class="plain" data-go="skip">Bỏ qua</button>'}</div></div>`);
-      for (const el of rvBody().querySelectorAll(".intro-eggs svg")) zoomArt(el);
-      sfx(f.last ? "claim" : "pop");
-      if ((await rvWait()) === "skip") break;
-    }
+    await runIntro($("#vn"), art, sfx);
   } finally {
     revealBusy = false;
-    if ($("#reveal").open) $("#reveal").close();
-    rvBody().innerHTML = "";
   }
 }
 

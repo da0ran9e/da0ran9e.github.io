@@ -83,7 +83,25 @@ const SFX = {
   grow: (c, t) => notes(c, t, [[440, 0, 0.1], [554, 0.08, 0.1], [659, 0.16, 0.1], [880, 0.24, 0.24]], { type: "sine", gain: 0.18 }),
   sad: (c, t) => notes(c, t, [[392, 0, 0.22], [330, 0.2, 0.36]], { type: "sine", gain: 0.14 }),
   error: (c, t) => tone(c, t, { type: "square", f0: 170, f1: 130, dur: 0.12, gain: 0.06 }),
+  // F2 (next-rounds.md): mở / đóng hộp thoại, thả đồ trúng chỗ, gà gáy, chạy, cổng, vé, khách tới
+  open: (c, t) => { tone(c, t, { f0: 520, f1: 700, dur: 0.07, gain: 0.12 }); tone(c, t + 0.05, { f0: 780, f1: 940, dur: 0.07, gain: 0.1 }); },
+  close: (c, t) => { tone(c, t, { f0: 760, f1: 600, dur: 0.06, gain: 0.1 }); tone(c, t + 0.05, { f0: 560, f1: 420, dur: 0.07, gain: 0.09 }); },
+  drop: (c, t) => { tone(c, t, { f0: 140, f1: 80, dur: 0.12, gain: 0.3 }); noise(c, t, { dur: 0.06, gain: 0.08, type: "lowpass", freq: 600 }); },
+  crow: (c, t) => {
+    for (const [d, f, len] of [[0, 520, 0.12], [0.13, 640, 0.12], [0.27, 760, 0.55]]) tone(c, t + d, { type: "sawtooth", f0: f, f1: d > 0.2 ? f * 0.72 : f * 1.05, dur: len, gain: 0.06 });
+    tone(c, t + 0.27, { type: "triangle", f0: 1520, f1: 1100, dur: 0.55, gain: 0.04 });
+  },
+  step: (c, t) => { for (let i = 0; i < 3; i++) noise(c, t + i * 0.07, { dur: 0.04, gain: 0.12, type: "lowpass", freq: 900 }); },
+  gate: (c, t) => { tone(c, t, { type: "sawtooth", f0: 200, f1: 270, dur: 0.32, gain: 0.04 }); noise(c, t + 0.28, { dur: 0.06, gain: 0.12, type: "lowpass", freq: 500 }); },
+  ticket: (c, t) => notes(c, t, [[1568, 0, 0.08], [2093, 0.07, 0.08], [2637, 0.14, 0.2]], { type: "sine", gain: 0.16 }),
+  merchant: (c, t) => notes(c, t, [[1319, 0, 0.12], [1568, 0.12, 0.12], [1760, 0.24, 0.12], [2093, 0.36, 0.3]], { type: "sine", gain: 0.12 }),
 };
+
+// Cho nhạc nền (music.js) dùng chung ngữ cảnh âm thanh và nút tắt tiếng. null nếu đang tắt tiếng / trình duyệt không hỗ trợ.
+export function audioOut() {
+  const c = audio();
+  return c ? { ctx: c, master } : null;
+}
 
 export function sfx(name, delay = 0) {
   const c = audio();

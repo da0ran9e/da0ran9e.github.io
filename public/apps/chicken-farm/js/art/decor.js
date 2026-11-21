@@ -189,3 +189,31 @@ const RELIC = {
   dogHead: `<ellipse cx="20" cy="22" rx="12" ry="11" fill="#c08a52"/><path d="M8,16 C2,22 4,32 10,30 Z M32,16 C38,22 36,32 30,30 Z" fill="#7d5a2e"/><circle cx="15.5" cy="19" r="1.8" fill="#2c2620"/><circle cx="24.5" cy="19" r="1.8" fill="#2c2620"/><ellipse cx="20" cy="26" rx="4" ry="3" fill="#2c2620"/><path d="M20,29 q0,4 -3,5 M20,29 q0,4 3,5" stroke="#2c2620" stroke-width="1.2" fill="none"/>`,
 };
 export const relicSvg = (key, size = 40) => `<svg viewBox="0 0 40 40" width="${size}" height="${size}" class="relic-icon" aria-hidden="true">${RELIC[key] ?? `<circle cx="20" cy="20" r="12" fill="#ffd95a"/>`}</svg>`;
+
+/* ---------- v8: dải phong cảnh phía trên cánh đồng (màn treo máy — next-rounds.md đợt D) ---------- */
+// Vẽ trong khung 800×480 nhưng chỉ ở dải y 0..120 (gà không đi tới vùng này: FIELD top 40 + margin 56).
+// Màu trời, mặt trời / trăng đổi theo [data-sky] bằng CSS; mây, cối xay quay bằng CSS (tắt khi giảm chuyển động).
+export function fieldHorizon(seed = 1) {
+  const r = (i) => ((Math.sin(seed * 97 + i * 13.37) + 1) / 2);
+  const trees = Array.from({ length: 26 }, (_, i) => {
+    const x = i * 32 + r(i) * 18 - 6, s = 9 + r(i + 40) * 8;
+    return `<circle cx="${x.toFixed(1)}" cy="${(98 - s * 0.6).toFixed(1)}" r="${s.toFixed(1)}"/>`;
+  }).join("");
+  const cloud = (x, y, s, d) => `<g class="fh-cloud" style="animation-duration:${d}s;animation-delay:${-d * r(x)}s"><g transform="translate(${x} ${y}) scale(${s})"><ellipse cx="0" cy="0" rx="26" ry="9"/><ellipse cx="-12" cy="-6" rx="13" ry="10"/><ellipse cx="9" cy="-9" rx="15" ry="12"/></g></g>`;
+  return `<svg viewBox="0 0 800 480" preserveAspectRatio="xMidYMid slice" aria-hidden="true" class="field-horizon">
+  <defs>
+    <linearGradient id="fh-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--sky-top)"/><stop offset="1" style="stop-color:var(--sky-low)"/></linearGradient>
+    <linearGradient id="fh-fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a6d36f" stop-opacity="0"/><stop offset="1" stop-color="#a6d36f"/></linearGradient>
+  </defs>
+  <rect width="800" height="104" fill="url(#fh-sky)"/>
+  <circle class="fh-sun" cx="640" cy="34" r="16"/><circle class="fh-sun-glow" cx="640" cy="34" r="34"/>
+  <g class="fh-moon"><circle cx="150" cy="30" r="11" fill="#fff6c4"/><circle cx="156" cy="26" r="10" style="fill:var(--sky-top)"/></g>
+  <g class="fh-stars">${Array.from({ length: 22 }, (_, i) => `<circle cx="${(i * 71 + 30) % 800}" cy="${(i * 29) % 70 + 6}" r="${i % 4 ? 0.9 : 1.6}"/>`).join("")}</g>
+  <g class="fh-clouds">${cloud(80, 26, 1, 140)}${cloud(330, 40, 0.8, 180)}${cloud(560, 20, 1.2, 160)}</g>
+  <path class="fh-hill-far" d="M0,80 C90,60 170,66 250,74 C330,82 400,58 500,62 C600,66 690,52 800,64 V108 H0Z"/>
+  <path class="fh-hill-near" d="M0,92 C120,78 220,84 330,90 C450,96 540,80 660,84 C720,86 760,82 800,86 V112 H0Z"/>
+  <g class="fh-mill" transform="translate(560 46)"><path d="M-6,46 L-3,8 h6 L6,46Z" fill="#e9dcc3"/><rect x="-2" y="30" width="4" height="7" rx="1" fill="#8d5f33"/><path d="M-7,10 L0,1 L7,10Z" fill="#c4643f"/><g class="fh-blades"><path d="M0,6 L0,-18 M0,6 L24,6 M0,6 L0,30 M0,6 L-24,6" stroke="#fffdf6" stroke-width="3.4" stroke-linecap="round"/></g></g>
+  <g class="fh-trees">${trees}</g>
+  <rect y="100" width="800" height="26" fill="url(#fh-fade)"/>
+</svg>`;
+}
