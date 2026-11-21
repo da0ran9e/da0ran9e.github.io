@@ -2080,7 +2080,25 @@ function renderDecor() {
   const front = { key: "stall-front", ...stallAt, html: stallSvg(tr("CHỢ"), "front") };
   if (vi >= 0) extra.splice(vi + 1, 0, front); else extra.push(front);
   extra.unshift({ key: "stall", ...stallAt, html: stallSvg(tr("CHỢ"), "back") });
-  setHTML($("#yard-decor"), [...decorItems(R.decorOf(state), sceneSeed()), ...extra].map((d) => `<div class="decor" data-decor="${d.key}" style="left:${(d.x / W) * 100}%;top:${(d.y / H) * 100}%;width:${(d.w / W) * 100}%">${d.html}</div>`).join(""));
+  // cập nhật từng món (theo key): món mới mới "bật" ra; món đổi nội dung (vd. mức hạt trong tháp) chỉ thay hình, không nhảy lại
+  const host = $("#yard-decor"), items = [...decorItems(R.decorOf(state), sceneSeed()), ...extra];
+  const keep = new Set(items.map((d) => d.key));
+  for (const el of [...host.children]) if (!keep.has(el.dataset.decor)) el.remove();
+  let prev = null;
+  for (const d of items) {
+    let el = host.querySelector(`:scope > [data-decor="${d.key}"]`);
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "decor";
+      el.dataset.decor = d.key;
+    }
+    const style = `left:${(d.x / W) * 100}%;top:${(d.y / H) * 100}%;width:${(d.w / W) * 100}%`;
+    if (el.getAttribute("style") !== style) el.setAttribute("style", style);
+    if (el._html !== d.html) { el._html = d.html; el.innerHTML = d.html; }
+    // giữ đúng thứ tự lớp (mái gian hàng → khách → quầy)
+    if (prev ? prev.nextElementSibling !== el : host.firstElementChild !== el) prev ? prev.after(el) : host.prepend(el);
+    prev = el;
+  }
 }
 function renderSky() {
   const h = new Date(now()).getHours();
