@@ -230,30 +230,34 @@ export function visitorSvg(who) {
   return svg("0 0 90 104", `<ellipse cx="45" cy="100" rx="24" ry="3.4" fill="#000" opacity=".12"/><g class="v-body">${art}</g>`, `visitor visitor-${who}`, tr("Khách qua đường"));
 }
 
-// Sân chơi (v9 vẽ lại): bãi cát viền gỗ, cầu trượt nhỏ, lốp xe, bập bênh, dây cờ — chỗ để kéo gà vào chơi.
-export const playgroundSvg = () => svg("0 0 140 84", `
-  <ellipse cx="70" cy="74" rx="66" ry="10" fill="#000" opacity=".08"/>
-  <ellipse cx="70" cy="70" rx="64" ry="12" fill="#b98652"/><ellipse cx="70" cy="68" rx="60" ry="10" fill="#ecd9a0"/>
-  <path d="M22,68 q8,-3 16,0 M56,72 q10,-3 20,0 M92,67 q9,-3 18,0" stroke="#d8c07e" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-  <path d="M10,22 V66 M130,22 V66" stroke="#8d5f33" stroke-width="3.4" stroke-linecap="round"/>
-  <path d="M10,24 Q70,40 130,24" fill="none" stroke="#7d5a2e" stroke-width="1.3"/>
-  ${[18, 30, 42, 54, 66, 78, 90, 102, 114].map((x, i) => { const y = 24 + 16 * Math.sin(Math.PI * (x - 10) / 120) * 0.62; return `<path class="flag" d="M${x},${y.toFixed(1)} l4.5,9 4.5,-9z" fill="${["#e4572e", "#f2b318", "#5b9bd5", "#7cc35f"][i % 4]}"/>`; }).join("")}
-  <g transform="translate(14 36)">
-    <path d="M4,30 V6 M14,30 V6" stroke="#a5713e" stroke-width="2.6"/><path d="M4,10 h10 M4,17 h10 M4,24 h10" stroke="#a5713e" stroke-width="1.8"/>
-    <path d="M14,6 Q26,10 32,30 L26,31 Q21,15 12,12Z" fill="#e4572e"/><path d="M14,6 Q26,10 32,30" fill="none" stroke="#b8401f" stroke-width="1.4"/>
-    <rect x="2" y="3" width="14" height="4" rx="1.6" fill="#8d5f33"/>
+// Sân chơi (v9, góc dưới trái): bãi cát viền gỗ, xích đu, cầu trượt, bập bênh, lốp xe, xô xẻng, dây cờ.
+export const playgroundSvg = () => svg("0 0 200 132", `
+  <ellipse cx="100" cy="118" rx="98" ry="14" fill="#000" opacity=".08"/>
+  <ellipse cx="100" cy="110" rx="96" ry="20" fill="#a5713e"/><ellipse cx="100" cy="107" rx="91" ry="17" fill="#b98652"/>
+  <ellipse cx="100" cy="107" rx="86" ry="14.5" fill="#ecd9a0"/>
+  <path d="M30,106 q10,-3 20,0 M80,112 q12,-3 24,0 M128,104 q10,-3 20,0 M150,112 q9,-3 18,0" stroke="#d8c07e" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+  <path d="M8,26 V104 M192,26 V104" stroke="#8d5f33" stroke-width="3.6" stroke-linecap="round"/><circle cx="8" cy="25" r="3" fill="#f2b318"/><circle cx="192" cy="25" r="3" fill="#f2b318"/>
+  <path d="M8,30 Q100,48 192,30" fill="none" stroke="#7d5a2e" stroke-width="1.3"/>
+  ${Array.from({ length: 15 }, (_, i) => { const x = 16 + i * 11.4, y = 30 + 18 * Math.sin(Math.PI * (x - 8) / 184) * 0.62; return `<path class="flag" d="M${x.toFixed(1)},${y.toFixed(1)} l4.4,9 4.4,-9z" fill="${["#e4572e", "#f2b318", "#5b9bd5", "#7cc35f"][i % 4]}"/>`; }).join("")}
+  <g>
+    <path d="M22,98 L34,46 L46,98 M58,98 L70,46 L82,98" stroke="#a5713e" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M30,46 H74" stroke="#8d5f33" stroke-width="4" stroke-linecap="round"/>
+    <g class="swing" style="transform-origin:44px 46px"><path d="M40,47 V80 M48,47 V80" stroke="#6b6a70" stroke-width="1"/><rect x="38" y="79" width="12" height="3.4" rx="1.2" fill="#e4572e"/></g>
+    <g class="swing s2" style="transform-origin:62px 46px"><path d="M58,47 V76 M66,47 V76" stroke="#6b6a70" stroke-width="1"/><rect x="56" y="75" width="12" height="3.4" rx="1.2" fill="#5b9bd5"/></g>
   </g>
-  <g transform="translate(58 46)">
-    <path d="M2,20 L36,10" stroke="#b98652" stroke-width="4.4" stroke-linecap="round"/><path d="M2,20 L36,10" stroke="#d9a56a" stroke-width="1.6" stroke-linecap="round"/>
-    <path d="M15,22 L19,13 L23,22Z" fill="#8d5f33"/>
-    <rect x="-1" y="15" width="6" height="3" rx="1.2" fill="#f2b318"/><rect x="33" y="5" width="6" height="3" rx="1.2" fill="#f2b318"/>
+  <g transform="translate(130 50)">
+    <path d="M6,52 V10 M18,52 V10" stroke="#a5713e" stroke-width="2.8"/><path d="M6,18 h12 M6,27 h12 M6,36 h12 M6,45 h12" stroke="#a5713e" stroke-width="1.8"/>
+    <rect x="3" y="6" width="18" height="5" rx="2" fill="#8d5f33"/>
+    <path d="M18,8 Q38,14 52,52 L44,54 Q32,22 16,14Z" fill="#f2b318"/><path d="M18,8 Q38,14 52,52" fill="none" stroke="#d99a00" stroke-width="1.6"/>
   </g>
-  <g transform="translate(104 48)">
-    <ellipse cx="10" cy="11" rx="11" ry="11" fill="#3b3a3e"/><ellipse cx="10" cy="11" rx="5.5" ry="5.5" fill="#ecd9a0"/>
-    <path d="M2,6 a10,10 0 0 1 6,-4" stroke="#6b6a70" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+  <g transform="translate(78 96)">
+    <path d="M0,10 L44,0" stroke="#b98652" stroke-width="4.6" stroke-linecap="round"/><path d="M0,10 L44,0" stroke="#d9a56a" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M18,13 L22,4 L26,13Z" fill="#8d5f33"/><rect x="-3" y="5" width="6" height="3" rx="1.2" fill="#7cc35f"/><rect x="41" y="-5" width="6" height="3" rx="1.2" fill="#7cc35f"/>
   </g>
-  <circle cx="98" cy="70" r="4" fill="#5b9bd5"/><path d="M95,68 q3,-2 6,0" stroke="#fff" stroke-width="1" fill="none" opacity=".8"/>
-  <circle cx="48" cy="72" r="3.2" fill="#e4572e"/>`, "decor-play", tr("Sân chơi"));
+  <g transform="translate(166 96)"><ellipse cx="10" cy="9" rx="11" ry="10" fill="#3b3a3e"/><ellipse cx="10" cy="9" rx="5.4" ry="5" fill="#ecd9a0"/><path d="M2,5 a10,9 0 0 1 6,-4" stroke="#6b6a70" stroke-width="1.6" fill="none" stroke-linecap="round"/></g>
+  <g transform="translate(22 104)"><path d="M0,0 h12 l-2,10 h-8z" fill="#5b9bd5"/><path d="M1,0 q5,-7 10,0" stroke="#2f6aa0" stroke-width="1" fill="none"/><path d="M15,10 L22,-4" stroke="#e4572e" stroke-width="2" stroke-linecap="round"/><path d="M20,-6 l5,1 -2,5z" fill="#e4572e"/></g>
+  <circle cx="140" cy="114" r="4.4" fill="#e4572e"/><path d="M136.6,112 q3.4,-2.4 6.8,0" stroke="#fff" stroke-width="1" fill="none" opacity=".8"/>
+  <circle cx="60" cy="114" r="3.4" fill="#7cc35f"/>`, "decor-play", tr("Sân chơi"));
 
 // Tháp hạt (v9): kho hạt có ô kính cho thấy mức hạt, ống máng đổ xuống máng ăn bên trái. fill: 0..1.
 export function towerSvg(fill = 0) {

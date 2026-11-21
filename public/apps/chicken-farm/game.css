@@ -797,3 +797,9 @@ body.idle { cursor: none; }
 .visitor .glint { animation: v-glint 3.6s ease-in-out infinite; }
 @keyframes v-glint { 0%, 88%, 100% { opacity: 1; } 92% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .visitor .v-body, .visitor .glow, .visitor .glint { animation: none; } }
+
+/* v9 — sân chơi góc trái: xích đu đung đưa */
+.decor-play .swing { animation: swing 2.8s ease-in-out infinite; }
+.decor-play .swing.s2 { animation-duration: 3.4s; animation-delay: -1.2s; }
+@keyframes swing { 0%, 100% { transform: rotate(-9deg); } 50% { transform: rotate(9deg); } }
+@media (prefers-reduced-motion: reduce) { .decor-play .swing { animation: none; } }

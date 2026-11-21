@@ -740,7 +740,7 @@ const DEFAULT_SPOTS = {
   nest: { x: 600, y: 104, r: 66 },
   gate: { x: 680, y: 234, r: 48 },
   market: { x: 748, y: 340, r: 50 }, // gian hàng bên đường: chợ + khách qua đường
-  play: { x: 430, y: 404, r: 52 },
+  play: { x: 160, y: 382, r: 70 }, // góc dưới trái
 };
 const SPOTS = {};
 for (const [k, d] of Object.entries(DEFAULT_SPOTS)) SPOTS[k] = { ...d, ...(ICONS?.YARD_SPOTS?.[k] || {}) };
@@ -2059,7 +2059,7 @@ function renderDecor() {
     const vis = R.visitorView(state, now());
     const here = vis?.who && !vis.gone;
     extra.push(...ownedDecor(state.decorOwned));
-    extra.push({ key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 34, w: 136, html: playgroundSvg() });
+    extra.push({ key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 46, w: 220, html: playgroundSvg() });
     const inTower = Object.values(state.tower ?? {}).reduce((a, b) => a + b, 0);
     extra.push({ key: "tower", x: 384, y: 156, w: 54, html: towerSvg(inTower / R.CONFIG.tower.cap) });
     if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.market.x + 2, y: SPOTS.market.y + 17, w: 52, html: visitorSvg(vis.who) }); // đứng sau quầy
