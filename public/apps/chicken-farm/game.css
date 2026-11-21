@@ -541,8 +541,8 @@ body.v7 #tray { display: none; }
 .timed { display: grid; justify-items: center; gap: 0; padding: 5px 9px; border-radius: 14px; font-size: 11.5px; font-variant-numeric: tabular-nums; background: color-mix(in srgb, var(--card) 94%, transparent); }
 .timed svg { width: 34px; height: 30px; display: block; }
 .timed.ready { border-color: var(--gold); box-shadow: 0 2px 0 #c98f00, 0 0 0 3px rgb(242 179 24 / .25); animation: q-pulse 1.1s ease-in-out infinite; font-weight: 800; }
-.zone[data-zone="feeder"] .label, .zone[data-zone="stall"].has-visitor .label { opacity: 1; }
-.zone[data-zone="stall"].has-visitor .label { background: var(--accent); color: #fff; animation: bob 1.2s ease-in-out infinite; }
+.zone[data-zone="feeder"] .label, .zone[data-zone="market"] .label { opacity: 1; }
+.zone[data-zone="market"].has-visitor .label { background: var(--accent); color: #fff; animation: bob 1.2s ease-in-out infinite; }
 .nest.knock .pips { background: var(--accent); font-size: 12px; padding: 1px 9px; animation: q-pulse .6s ease-in-out infinite; }
 .nest.knock .incubator-egg { animation-duration: .3s; }
 .tower-list { display: grid; gap: 6px; margin: 12px 0; }

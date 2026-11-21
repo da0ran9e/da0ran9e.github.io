@@ -660,8 +660,7 @@ const DEFAULT_SPOTS = {
   water: { x: 430, y: 118, r: 30 },
   nest: { x: 610, y: 95, r: 60 },
   gate: { x: 765, y: 210, r: 55 },
-  market: { x: 110, y: 415, r: 58 },
-  stall: { x: 752, y: 392, r: 46 }, // ngoài hàng rào, bên đường
+  market: { x: 752, y: 318, r: 50 }, // gian hàng bên đường: chợ + khách qua đường
   play: { x: 430, y: 404, r: 52 },
 };
 const SPOTS = {};
@@ -669,10 +668,9 @@ for (const [k, d] of Object.entries(DEFAULT_SPOTS)) SPOTS[k] = { ...d, ...(ICONS
 for (const s of Object.values(SPOTS)) s.r ??= 50;
 const ZONES = [
   { key: "gate", label: "Cổng · Cánh đồng", accepts: ["chicken"], aria: "Cổng: xem cánh đồng. Kéo gà vào đây để thả ra đồng" },
-  { key: "market", label: "Chợ", accepts: ["chicken", "egg"], aria: "Chợ: kéo gà hoặc trứng vào để đổi" },
+  { key: "market", label: "Chợ", accepts: ["chicken", "egg"], aria: "Gian hàng bên đường: kéo gà hoặc trứng vào để đổi; chạm để gặp khách đang ghé" },
   { key: "coop", label: "Chuồng · Kho", accepts: ["egg"], aria: "Chuồng: mở Kho. Kéo trứng vào để cất" },
   { key: "feeder", label: "Tháp hạt", accepts: [], aria: "Tháp hạt: đổ hạt vào cho gà tự ăn" },
-  { key: "stall", label: "Gian hàng", accepts: [], aria: "Gian hàng bên đường: xem khách đang ghé" },
   { key: "play", label: "Sân chơi", accepts: ["chicken"], aria: "Sân chơi: kéo gà vào để chơi (tốn 1 sức chơi, hết thì 1 vé)" },
 ];
 
@@ -690,9 +688,12 @@ function zoneTap(z) {
     else toast("Kéo một con gà ra cổng để thả ra cánh đồng");
   }
   if (z === "coop") openStore();
-  if (z === "market") toast("Kéo gà hoặc trứng vào chợ để đổi lấy hạt / trứng");
+  if (z === "market") {
+    const vis = hasV7() && R.visitorView(state, now());
+    if (vis?.who && !vis.gone) openVisitor();
+    else toast("Kéo gà hoặc trứng vào gian hàng để đổi lấy hạt / trứng / vé");
+  }
   if (z === "feeder") hasV7() ? openTower() : toast("Kéo gà vào máng: tự chọn hạt hợp với gà nhất");
-  if (z === "stall") openVisitor();
   if (z === "play") {
     // trứng đang ấp không kéo được: chạm sân chơi để chơi với quả trứng trong ổ
     const egg = hasV7() && state.eggs.find((e) => e.hatchAt !== null && (e.played ?? 0) < R.CONFIG.play.eggMax);
@@ -1907,18 +1908,20 @@ function renderDecor() {
     const vis = R.visitorView(state, now());
     const here = vis?.who && !vis.gone;
     extra.push(...ownedDecor(state.decorOwned));
-    extra.push({ key: "stall", x: SPOTS.stall.x, y: SPOTS.stall.y + 34, w: 96, html: stallSvg() }, { key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 30, w: 96, html: playgroundSvg() });
-    if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.stall.x - 46, y: SPOTS.stall.y + 40, w: 62, html: visitorSvg(vis.who) });
-    const z = $('#yard-zones [data-zone="stall"]');
+    extra.push({ key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 30, w: 96, html: playgroundSvg() });
+    if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.market.x - 30, y: SPOTS.market.y + 36, w: 56, html: visitorSvg(vis.who) });
+    const z = $('#yard-zones [data-zone="market"]');
     if (z) {
       z.classList.toggle("has-visitor", !!here);
-      const lb = z.querySelector(".label"), txt = here ? vis.name : "Gian hàng";
+      const lb = z.querySelector(".label"), txt = here ? vis.name : "Chợ";
       if (lb.textContent !== txt) lb.textContent = txt;
       if (here && z.dataset.seen !== String(vis.from)) { z.dataset.seen = String(vis.from); sfx("sparkle"); }
     }
     const tw = $('#yard-zones [data-zone="feeder"] .label'), n = Object.values(state.tower).reduce((a, b) => a + b, 0), tx = `Tháp hạt ${n}/${R.CONFIG.tower.cap}`;
     if (tw && tw.textContent !== tx) tw.textContent = tx;
   }
+  // gian hàng bên đường luôn có (chợ), kể cả với server luật cũ
+  extra.unshift({ key: "stall", x: SPOTS.market.x, y: SPOTS.market.y + 34, w: 96, html: stallSvg() });
   setHTML($("#yard-decor"), [...decorItems(R.decorOf(state), sceneSeed()), ...extra].map((d) => `<div class="decor" data-decor="${d.key}" style="left:${(d.x / W) * 100}%;top:${(d.y / H) * 100}%;width:${(d.w / W) * 100}%">${d.html}</div>`).join(""));
 }
 function renderSky() {

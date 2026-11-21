@@ -441,7 +441,7 @@ export const YARD_SPOTS = Object.freeze({
   water: Object.freeze({ x: 452, y: 136, r: 40 }), // cạnh đĩa nước
   nest: Object.freeze({ x: 700, y: 104, r: 70 }), // giữa ổ rơm (trứng / ổ ấp đặt ở đây)
   gate: Object.freeze({ x: 680, y: 248, r: 50 }), // cổng ra đồng ở hàng rào phải (dời vào trong: ngoài rào là con đường + gian hàng)
-  market: Object.freeze({ x: 114, y: 414, r: 58 }), // quầy chợ góc dưới trái
+  market: Object.freeze({ x: 752, y: 318, r: 50 }), // gian hàng bên đường (ngoài hàng rào): chợ + khách qua đường
 });
 
 // tấm gỗ: chữ nhật bo góc, mép hơi xô lệch
@@ -660,40 +660,7 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   gt += path(tongue(rng, [759, 222], -122, 8, 2.6, { tip: "point", bend: 0.2, base: 0.6 }).d + tongue(rng, [759, 222], -62, 9, 2.8, { tip: "point", bend: -0.2, base: 0.6 }).d, "#4f9e3a");
   o += T(`<g transform="translate(-82 40)">${gt}</g>`, 680, 248);
 
-  // quầy chợ có mái bạt sọc (góc dưới trái)
-  let mk = "";
-  mk += path(blob(rng, [116, 452], 66, 9, 0, 0.06, 10), "#000", ` opacity=".14"`);
-  mk += path(plank(rng, 62, 372, 70, 450, 0.3) + plank(rng, 160, 372, 168, 450, 0.3), woodD);
-  // hàng trên quầy: giỏ trứng + bao hạt
-  mk += path(blob(rng, [92, 404], 16, 6, 0, 0.08, 9), strawD);
-  mk += path(blob(rng, [86, 398], 6, 7.4, -8, 0.05, 9) + blob(rng, [98, 397], 5.6, 7, 10, 0.05, 9), "#f6eedf");
-  mk += path(blob(rng, [92, 400], 5.4, 6.8, 0, 0.05, 9), "#e9c7a0");
-  mk += path(blob(rng, [92, 409], 17, 5, 0, 0.08, 9), straw);
-  mk += path(smoothPts([[124, 410], [122, 396], [128, 386], [136, 384], [144, 386], [150, 396], [148, 410]]), "#d4ac72");
-  mk += path(blob(rng, [136, 385], 7, 2.6, 0, 0.1, 8), SEED_COLORS.energy.c);
-  mk += path(brushStroke(rng, [[127, 392], [126, 400], [128, 407]], 1), "#ecd2a2", ` opacity=".8"`);
-  // mặt quầy + thân quầy
-  mk += path(plank(rng, 56, 408, 174, 418, 0.4), woodL);
-  mk += path(plank(rng, 62, 416, 168, 446, 0.6), wood);
-  mk += path(brushStroke(rng, [[68, 426], [115, 427], [162, 426]], 1) + brushStroke(rng, [[68, 437], [115, 438], [162, 437]], 1), woodD, ` opacity=".55"`);
-  // mái bạt sọc đỏ–kem, mép lượn sóng
-  const aw0 = 50, aw1 = 180, ay = 360, n = 6, sw = (aw1 - aw0) / n;
-  mk += path(`M${aw0 + 6},${ay - 14}L${aw1 - 6},${ay - 14}L${aw1 + 2},${ay + 8}L${aw0 - 2},${ay + 8}Z`, "#f4ead6");
-  let red = "";
-  for (let i = 0; i < n; i += 2) {
-    const a = aw0 + i * sw, b = a + sw, ta = lerp(aw0 + 6, aw1 - 6, i / n), tb = lerp(aw0 + 6, aw1 - 6, (i + 1) / n);
-    red += `M${f(ta)},${ay - 14}L${f(tb)},${ay - 14}L${f(b)},${ay + 8}L${f(a)},${ay + 8}Z`;
-  }
-  mk += path(red, "#d9503c");
-  let sc = "", scR = "";
-  for (let i = 0; i < n; i++) {
-    const cx = aw0 + (i + 0.5) * sw;
-    const d = `M${f(cx - sw / 2)},${ay + 7}Q${f(cx)},${ay + 19} ${f(cx + sw / 2)},${ay + 7}Z`;
-    if (i % 2) sc += d; else scR += d;
-  }
-  mk += path(scR, "#d9503c") + path(sc, "#f4ead6");
-  mk += path(brushStroke(rng, [[aw0 + 10, ay - 11], [115, ay - 12], [aw1 - 10, ay - 11]], 1.2), "#fff", ` opacity=".45"`);
-  o += T(mk, 114, 414);
+  // (quầy chợ cũ ở góc dưới trái đã bỏ: chợ và khách qua đường dùng chung MỘT gian hàng ngoài đường, vẽ ở lớp trang trí)
 
   // hoa nhỏ ven rào và hai góc dưới
   const petals = ["#fff8ec", "#ffd7e6", "#fff1a6", "#e6dcff"];
