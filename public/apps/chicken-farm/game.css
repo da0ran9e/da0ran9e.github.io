@@ -788,3 +788,12 @@ body.idle { cursor: none; }
 .relic-art { width: 96px; height: 86px; }
 .relic-art svg { width: 100%; height: 100%; }
 .relic-card.unknown .relic-art svg { filter: brightness(0); opacity: .16; }
+
+/* v9 — khách qua đường: thở nhẹ, đèn / nến toả sáng, mắt khách lạ nhấp nháy */
+.visitor .v-body { transform-origin: 45px 100px; animation: v-breathe 3.2s ease-in-out infinite; }
+@keyframes v-breathe { 50% { transform: scale(1.015, .985); } }
+.visitor .glow { animation: v-glow 2.4s ease-in-out infinite; }
+@keyframes v-glow { 50% { opacity: .1; } }
+.visitor .glint { animation: v-glint 3.6s ease-in-out infinite; }
+@keyframes v-glint { 0%, 88%, 100% { opacity: 1; } 92% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .visitor .v-body, .visitor .glow, .visitor .glint { animation: none; } }

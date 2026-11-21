@@ -738,8 +738,8 @@ const DEFAULT_SPOTS = {
   feeder: { x: 330, y: 120, r: 42 },
   water: { x: 430, y: 118, r: 30 },
   nest: { x: 610, y: 95, r: 60 },
-  gate: { x: 765, y: 210, r: 55 },
-  market: { x: 752, y: 318, r: 50 }, // gian hàng bên đường: chợ + khách qua đường
+  gate: { x: 680, y: 234, r: 48 },
+  market: { x: 748, y: 340, r: 50 }, // gian hàng bên đường: chợ + khách qua đường
   play: { x: 430, y: 404, r: 52 },
 };
 const SPOTS = {};
@@ -2061,7 +2061,7 @@ function renderDecor() {
     extra.push({ key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 34, w: 136, html: playgroundSvg() });
     const inTower = Object.values(state.tower ?? {}).reduce((a, b) => a + b, 0);
     extra.push({ key: "tower", x: 384, y: 156, w: 54, html: towerSvg(inTower / R.CONFIG.tower.cap) });
-    if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.market.x - 30, y: SPOTS.market.y + 36, w: 56, html: visitorSvg(vis.who) });
+    if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.market.x + 2, y: SPOTS.market.y + 17, w: 52, html: visitorSvg(vis.who) }); // đứng sau quầy
     const z = $('#yard-zones [data-zone="market"]');
     if (z) {
       z.classList.toggle("has-visitor", !!here);
@@ -2073,7 +2073,12 @@ function renderDecor() {
     if (tw && tw.textContent !== tx) tw.textContent = tx;
   }
   // gian hàng bên đường luôn có (chợ), kể cả với server luật cũ
-  extra.unshift({ key: "stall", x: SPOTS.market.x + 2, y: SPOTS.market.y + 40, w: 104, html: stallSvg(tr("CHỢ")) });
+  // gian hàng tách hai lớp: mái + cột (sau khách) và quầy (trước khách)
+  const stallAt = { x: SPOTS.market.x + 2, y: SPOTS.market.y + 42, w: 92 };
+  const vi = extra.findIndex((d) => d.key.startsWith("visitor-"));
+  const front = { key: "stall-front", ...stallAt, html: stallSvg(tr("CHỢ"), "front") };
+  if (vi >= 0) extra.splice(vi + 1, 0, front); else extra.push(front);
+  extra.unshift({ key: "stall", ...stallAt, html: stallSvg(tr("CHỢ"), "back") });
   setHTML($("#yard-decor"), [...decorItems(R.decorOf(state), sceneSeed()), ...extra].map((d) => `<div class="decor" data-decor="${d.key}" style="left:${(d.x / W) * 100}%;top:${(d.y / H) * 100}%;width:${(d.w / W) * 100}%">${d.html}</div>`).join(""));
 }
 function renderSky() {

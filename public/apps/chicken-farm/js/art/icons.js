@@ -441,8 +441,8 @@ export const YARD_SPOTS = Object.freeze({
   feeder: Object.freeze({ x: 300, y: 138, r: 52 }), // trước máng thóc
   water: Object.freeze({ x: 452, y: 136, r: 40 }), // cạnh đĩa nước
   nest: Object.freeze({ x: 700, y: 104, r: 70 }), // giữa ổ rơm (trứng / ổ ấp đặt ở đây)
-  gate: Object.freeze({ x: 680, y: 248, r: 50 }), // cổng ra đồng ở hàng rào phải (dời vào trong: ngoài rào là con đường + gian hàng)
-  market: Object.freeze({ x: 752, y: 318, r: 50 }), // gian hàng bên đường (ngoài hàng rào): chợ + khách qua đường
+  gate: Object.freeze({ x: 680, y: 234, r: 48 }), // cổng ra đồng ở hàng rào phải (dời vào trong: ngoài rào là con đường + gian hàng)
+  market: Object.freeze({ x: 748, y: 340, r: 50 }), // gian hàng bên đường (ngoài hàng rào): chợ + khách qua đường
 });
 
 // tấm gỗ: chữ nhật bo góc, mép hơi xô lệch
@@ -653,54 +653,76 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   let peb = "";
   for (let i = 0; i < 7; i++) peb += blob(rng, P(60 + rng() * 680, 170 + rng() * 290), (1.6 + rng() * 2) * S, (1.2 + rng() * 1.2) * S, rng() * 180, 0.15, 7);
   o += path(peb, "#c9bfa6", ` opacity=".8"`);
-  // NGOÀI hàng rào phải: dải cỏ + con đường đất chạy dọc, rẽ vào cổng (gian hàng của khách đứng bên đường)
-  // dải cỏ ngoài rào: mép trên lượn mềm, đậm hơn sân một chút
-  let out = `<path d="M702,214 C724,196 752,184 800,176 V480 H702Z" fill="#a9d577"/>`;
-  out += `<path d="M712,480 C716,420 708,360 714,300 C716,262 720,236 736,214" fill="none" stroke="#9cca6a" stroke-width="10" stroke-linecap="round" opacity=".7"/>`;
-  // con đường: vào từ mép phải, uốn xuống đáy, có nhánh rẽ vào cổng; mép sẫm, lòng sáng, vệt bánh xe, sỏi
-  const road = "M806,196 C782,206 764,222 758,256 C752,296 768,330 762,372 C756,412 748,446 752,486";
-  const spur = "M758,256 C740,252 722,250 700,250";
-  out += `<path d="${road}" fill="none" stroke="${earthD}" stroke-width="40" stroke-linecap="round"/><path d="${spur}" fill="none" stroke="${earthD}" stroke-width="26" stroke-linecap="round"/>`;
-  out += `<path d="${road}" fill="none" stroke="${earth}" stroke-width="33" stroke-linecap="round"/><path d="${spur}" fill="none" stroke="${earth}" stroke-width="20" stroke-linecap="round"/>`;
-  for (const dx of [-7, 7]) out += `<path d="M${800 + dx},204 C${778 + dx},214 ${764 + dx},228 ${759 + dx},258 C${753 + dx},296 ${769 + dx},330 ${763 + dx},372 C${757 + dx},412 ${749 + dx},446 ${753 + dx},486" fill="none" stroke="${earthD}" stroke-width="2.4" stroke-linecap="round" opacity=".45" stroke-dasharray="14 9"/>`;
-  out += `<path d="M770,214 C764,222 760,236 759,250" fill="none" stroke="${earthL}" stroke-width="5" stroke-linecap="round" opacity=".8"/><path d="M766,332 C768,350 766,364 762,378" fill="none" stroke="${earthL}" stroke-width="5" stroke-linecap="round" opacity=".7"/>`;
-  for (const [x, y, r] of [[748, 300, 2.2], [772, 284, 1.6], [754, 420, 2], [770, 450, 1.5], [744, 470, 1.8], [778, 240, 1.4], [728, 248, 1.6]]) out += `<ellipse cx="${x}" cy="${y}" rx="${r * 1.4}" ry="${r}" fill="#c9bfa6"/>`;
-  // bụi cỏ và hoa ven đường
-  for (const [x, y] of [[726, 330], [790, 300], [722, 420], [792, 410], [734, 470]]) out += `<path d="M${x - 6},${y} q2,-10 4,-12 M${x},${y} q0,-12 1,-15 M${x + 6},${y} q-1,-10 -4,-12" stroke="#5f9a3e" stroke-width="2.4" fill="none" stroke-linecap="round"/>`;
-  for (const [x, y, c] of [[786, 336, "#fff6f0"], [728, 392, "#ffd36b"], [794, 446, "#ff9db0"]]) out += `<circle cx="${x}" cy="${y}" r="3" fill="${c}"/><circle cx="${x}" cy="${y}" r="1.2" fill="#f2b318"/>`;
+  {
+  // ---- BÊN PHẢI (v9 vẽ lại): ngoài rào là dải cỏ + con đường quê có dải cỏ giữa; ranh giới là hàng rào cây xanh
+  //      điểm hoa, mở ra một cổng gỗ có vòm và biển "ra đồng". Vẽ ở toạ độ 800×480, neo về chỗ co giãn bằng T().
+  const R2 = mulberry32((seed >>> 0) + 4242); // nguồn riêng: không xô lệch phần trên
+  let out = `<path d="M700,150 C730,146 770,140 806,136 V486 H700Z" fill="#9fcf6c"/>`;
+  out += `<path d="M708,486 C712,420 704,360 708,300 C710,250 712,190 722,150" fill="none" stroke="#8fc25e" stroke-width="12" stroke-linecap="round" opacity=".6"/>`;
+  // con đường: vào từ mép phải dưới mái ổ, uốn xuống đáy; nhánh rẽ vào cổng
+  const road = "M812,160 C786,176 768,200 762,236 C756,280 774,320 768,366 C762,410 752,446 756,490";
+  const spur = "M764,236 C748,236 730,235 712,235";
+  const st = (d, c, w, extra = "") => `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w}" stroke-linecap="round"${extra}/>`;
+  out += st(road, "#000", 50, ` opacity=".06"`) + st(road, earthD, 46) + st(spur, earthD, 30) + st(road, earth, 40) + st(spur, earth, 23);
+  // hai vệt bánh xe sáng + dải cỏ giữa đường
+  for (const dx of [-9, 9]) out += st(`M${812 + dx},${168 + dx * 0.3} C${786 + dx},${182} ${769 + dx},${204} ${763 + dx},${238} C${757 + dx},${280} ${775 + dx},${320} ${769 + dx},${366} C${763 + dx},${410} ${753 + dx},${446} ${757 + dx},${490}`, earthL, 6, ` opacity=".75"`);
+  let med = "";
+  for (let y = 190; y < 480; y += 9) {
+    const t = (y - 160) / 330, x = 762 + Math.sin(t * 5.2) * 6 + (y > 380 ? -6 : 0) + (R2() - 0.5) * 2;
+    if (R2() < 0.45) for (let k = 0; k < 3; k++) med += tongue(R2, [x + (k - 1) * 2, y], -90 + (k - 1) * 25 + (R2() - 0.5) * 16, 4 + R2() * 4, 1.3, { tip: "point", base: 0.9 }).d;
+  }
+  out += path(med, "#86bb58");
+  for (let i = 0; i < 16; i++) {
+    const y = 180 + R2() * 300, side = R2() < 0.5 ? -1 : 1, x = 762 + side * (18 + R2() * 4) + (y > 380 ? -6 : 0);
+    out += `<ellipse cx="${f(x)}" cy="${f(y)}" rx="${f(1.6 + R2() * 1.4)}" ry="${f(1.1 + R2())}" fill="${R2() < 0.5 ? "#c9bfa6" : "#b5a98d"}"/>`;
+  }
+  // hoa dại và cỏ lau ven đường
+  for (const [x, y] of [[792, 282], [794, 404], [786, 214], [734, 452], [740, 342]]) out += `<path d="M${x - 5},${y} q1,-9 3,-12 M${x},${y} q0,-12 1,-16 M${x + 5},${y} q-1,-9 -3,-12" stroke="#5f9a3e" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+  for (const [x, y, c] of [[796, 320, "#fff6f0"], [738, 392, "#ffd36b"], [798, 452, "#ff9db0"], [790, 246, "#e6dcff"], [736, 300, "#ff9db0"]]) out += `<circle cx="${x}" cy="${y}" r="3.2" fill="${c}"/><circle cx="${x}" cy="${y}" r="1.3" fill="#f2b318"/>`;
   o += T(out, 752, 320);
-  // hàng rào bên phải (từ góc ổ xuống đáy) + cổng ra đồng — vẽ ở x 782 rồi dời cả khối vào trong (−82, +40)
-  const fx = 782;
-  // đồng cỏ xanh bên ngoài cổng + lối đất mòn dẫn ra
-  let gt = ""; // (mảng cỏ ngoài cổng cũ bỏ đi: ngoài rào giờ là dải cỏ + con đường vẽ ở trên)
-  gt += path(brushStroke(rng, [[690, 214], [730, 210], [768, 207], [806, 204]], 15), earth, ` opacity=".75"`);
-  gt += path(brushStroke(rng, [[704, 216], [744, 211], [804, 206]], 7), earthL, ` opacity=".6"`);
-  const sidePosts = [118, 150, 262, 304, 348, 392, 436, 480];
-  let rp = "", rl = "", rrail = "";
-  for (const y of sidePosts) {
-    const tall = y === 150 || y === 262;
-    const h = tall ? 62 : 40, w = tall ? 13 : 11;
-    rp += plank(rng, fx - w / 2, y - h, fx + w / 2, y + 2, 0.5);
-    rl += brushStroke(rng, [[fx - w * 0.2, y - h + 6], [fx - w * 0.22, y - h / 2], [fx - w * 0.18, y - 4]], 1.2);
+
+  // hàng rào cây: chuỗi bụi chồng nhau dọc x≈700, hở một khoảng cho cổng (y 218–282); bóng đổ vào sân
+  const hx = 700, gapA = 206, gapB = 264;
+  let hedgeR = `<path d="M${hx - 16},150 V${gapA} M${hx - 16},${gapB} V486" stroke="#000" stroke-width="20" opacity=".07" stroke-linecap="round"/>`;
+  let hD = "", hM = "", hL = "", fl = "";
+  for (const [y0, y1] of [[140, gapA], [gapB, 498]]) {
+    hD += `M${hx},${y0} L${hx},${y1}`; // thân bụi liền (vẽ bằng nét dày bên dưới)
+    for (let y = y0; y <= y1; y += 7 + R2() * 7) {
+      const x = hx + (R2() - 0.5) * 10, r = 9 + R2() * 9;
+      hM += blob(R2, [x, y], r, r * (0.75 + R2() * 0.2), R2() * 60 - 30, 0.18, 9);
+      if (R2() < 0.45) hL += blob(R2, [x - r * 0.35, y - r * 0.4], r * 0.38, r * 0.26, -25, 0.2, 7);
+      if (R2() < 0.16) { const c = ["#fff6f0", "#ff9db0", "#ffd36b"][Math.floor(R2() * 3)], fx2 = x - 6 + R2() * 12, fy = y - 6 + R2() * 10; fl += `<circle cx="${f(fx2)}" cy="${f(fy)}" r="2.3" fill="${c}"/><circle cx="${f(fx2)}" cy="${f(fy)}" r=".9" fill="#f2b318"/>`; }
+    }
   }
-  // thanh ngang dọc hàng rào (bỏ khoảng cổng)
-  for (const [a, b] of [[96, 150], [262, 482]]) for (const dy of [28, 12]) {
-    rrail += smoothPts([[fx - 3.4, a - dy], [fx + 3.4, a - dy], [fx + 3.4, b - dy], [fx - 3.4, b - dy]]);
+  hedgeR += `<path d="${hD}" stroke="${darker}" stroke-width="30" stroke-linecap="round" fill="none"/>` + path(hM, dark) + path(hL, light, ` opacity=".55"`) + fl;
+  // cổng gỗ: hai cột có chóp, vòm cong nối hai đỉnh cột, biển treo (mầm cỏ + mũi tên = ra đồng)
+  const post = (y) => path(plank(R2, hx - 7, y - 42, hx + 7, y + 4, 0.4), woodD) + path(brushStroke(R2, [[hx - 2, y - 36], [hx - 2.4, y - 18], [hx - 2, y]], 1.3), woodL, ` opacity=".8"`)
+    + path(`M${hx - 9},${y - 42} L${hx},${y - 50} L${hx + 9},${y - 42}Z`, roofD);
+  let gate = path(blob(R2, [hx - 4, gapB + 6], 12, 4, 0, 0.1, 8) + blob(R2, [hx - 4, gapA + 6], 12, 4, 0, 0.1, 8), "#000", ` opacity=".14"`);
+  gate += path(blob(R2, [hx - 12, (gapA + gapB) / 2], 26, 28, 0, 0.1, 10), earth, ` opacity=".9"`); // lối đất mòn qua cổng
+  gate += post(gapA) + post(gapB);
+  gate += `<path d="M${hx},${gapA - 46} C${hx - 24},${gapA - 24} ${hx - 24},${gapB - 64} ${hx},${gapB - 46}" fill="none" stroke="${woodD}" stroke-width="6" stroke-linecap="round"/>`;
+  gate += `<path d="M${hx},${gapA - 46} C${hx - 24},${gapA - 24} ${hx - 24},${gapB - 64} ${hx},${gapB - 46}" fill="none" stroke="${wood}" stroke-width="2.4" stroke-linecap="round"/>`;
+  // dây leo hoa trên vòm
+  for (let i = 0; i < 7; i++) {
+    const t = i / 6, x = hx - 18 * Math.sin(Math.PI * t) - 0.5, y = lerp(gapA - 46, gapB - 46, t);
+    gate += path(blob(R2, [x, y], 4.4, 3.2, R2() * 180, 0.2, 7), i % 2 ? dark : "#6fb049");
+    if (i % 2 === 0) gate += `<circle cx="${f(x - 2)}" cy="${f(y - 2)}" r="1.8" fill="${["#ff9db0", "#fff6f0", "#ffd36b"][i % 3]}"/>`;
   }
-  gt += path(blob(rng, [fx + 2, 300], 8, 190, 0, 0.05, 10), "#000", ` opacity=".07"`);
-  gt += path(rrail, shade(wood, 0.05)) + path(rp, woodD) + path(rl, wood, ` opacity=".8"`);
-  // cánh cổng mở toang vào trong sân (bản lề ở cột dưới): nhìn chính diện, khung ván + thanh chéo
-  gt += path(blob(rng, [758, 264], 26, 4, 0, 0.08, 8), "#000", ` opacity=".12"`);
-  gt += path(plank(rng, 736, 226, 780, 233, 0.3) + plank(rng, 736, 247, 780, 254, 0.3), wood);
-  gt += path(brushStroke(rng, [[741, 252], [758, 241], [776, 229]], 2), shade(wood, 0.1));
-  gt += path(plank(rng, 734, 220, 742, 264, 0.3) + plank(rng, 773, 220, 781, 264, 0.3), woodD);
-  // ngưỡng cổng sáng (đồng cỏ phía ngoài lộ qua khe)
-  // (ngưỡng cổng sáng cũ bỏ: sau khi dời rào nó thành một mảng bầu dục thừa)
-  // biển gỗ đóng trên cánh cổng: mầm cỏ = "ra đồng"
-  gt += path(plank(rng, 749, 206, 769, 224, 0.4), woodL);
-  gt += path(plank(rng, 757, 222, 761, 228, 0.2), woodD);
-  gt += path(tongue(rng, [759, 222], -122, 8, 2.6, { tip: "point", bend: 0.2, base: 0.6 }).d + tongue(rng, [759, 222], -62, 9, 2.8, { tip: "point", bend: -0.2, base: 0.6 }).d, "#4f9e3a");
-  o += T(`<g transform="translate(-82 40)">${gt}</g>`, 680, 248);
+  // biển treo dưới đỉnh vòm
+  const signY = (gapA + gapB) / 2 - 50;
+  gate += `<path d="M${hx - 16},${signY - 6} v6 M${hx - 16},${signY + 12} v6" stroke="${woodD}" stroke-width="1.2"/>`;
+  gate += path(plank(R2, hx - 26, signY, hx - 6, signY + 13, 0.4), woodL) + `<path d="M${hx - 23},${signY + 9} q3,-5 6,-1 M${hx - 13},${signY + 6.5} h5 l-2,-2 m2,2 l-2,2" stroke="#4f9e3a" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
+  // cánh cổng mở vào trong sân (bản lề ở cột dưới): tấm song gỗ nằm chéo
+  let leaf = "";
+  for (let i = 0; i < 5; i++) {
+    const t = i / 4, bx = lerp(hx - 8, hx - 46, t), by = lerp(gapB - 6, gapB - 22, t);
+    leaf += path(plank(R2, bx - 2.4, by - 30, bx + 2.4, by + 2, 0.3), wood);
+  }
+  leaf += path(brushStroke(R2, [[hx - 8, gapB - 30], [hx - 27, gapB - 38], [hx - 46, gapB - 46]], 2.4) + brushStroke(R2, [[hx - 8, gapB - 14], [hx - 27, gapB - 22], [hx - 46, gapB - 30]], 2.4), woodD);
+  gate += leaf;
+  o += T(hedgeR + gate, 690, 236);
+  }
 
   // (quầy chợ cũ ở góc dưới trái đã bỏ: chợ và khách qua đường dùng chung MỘT gian hàng ngoài đường, vẽ ở lớp trang trí)
 

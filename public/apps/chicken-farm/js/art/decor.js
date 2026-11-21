@@ -121,43 +121,115 @@ export const nestCrackSvg = (level) => svg("0 0 96 96", `
 
 /* ---------- v7: gian hàng bên đường, khách qua đường, sân chơi ---------- */
 
-export const stallSvg = (sign = "CHỢ") => {
-  // quầy gỗ có mái bạt sọc mép lượn sóng, trên quầy: rổ trứng, bao hạt, biển "CHỢ"
-  const scallop = Array.from({ length: 7 }, (_, i) => `<path d="M${10 + i * 14},27 a7,7 0 0 0 14,0Z" fill="${i % 2 ? "#fffdf6" : "#e4572e"}"/>`).join("");
-  const stripes = Array.from({ length: 7 }, (_, i) => `<path d="M${14 + i * 14},10 L${10 + i * 14},27 h14 L${28 + i * 14},10Z" fill="${i % 2 ? "#fffdf6" : "#e4572e"}"/>`).join("");
-  return svg("0 0 120 96", `
-  <ellipse cx="60" cy="92" rx="50" ry="4.5" fill="#000" opacity=".14"/>
-  <rect x="16" y="22" width="5" height="68" rx="2" fill="#8d5f33"/><rect x="99" y="22" width="5" height="68" rx="2" fill="#8d5f33"/>
-  <path d="M6,12 Q60,2 114,12 L112,27 H8Z" fill="#c4643f"/>${stripes}${scallop}
-  <rect x="10" y="56" width="100" height="32" rx="3" fill="#b98652"/><rect x="10" y="56" width="100" height="6" rx="2" fill="#d7a970"/>
-  <path d="M14,70 h92 M14,80 h92" stroke="#a9743f" stroke-width="1.6"/>
-  <path d="M22,56 q12,-14 26,0z" fill="#c9a66b"/>${[26, 32, 38, 44, 29, 35, 41].map((x, i) => `<ellipse cx="${x}" cy="${i < 4 ? 52 : 47}" rx="3.4" ry="4.2" fill="${["#f6f0e4", "#e8c9a0", "#b5dccd", "#f6f0e4"][i % 4]}"/>`).join("")}
-  <path d="M62,56 q-2,-16 8,-18 q12,-2 12,10 q0,6 -2,8z" fill="#d4ac72"/><path d="M66,42 q6,-4 12,0" stroke="#7d5a2e" stroke-width="1.6" fill="none"/><circle cx="70" cy="40" r="2" fill="#e3b23c"/><circle cx="75" cy="39" r="2" fill="#4f8f97"/>
-  <rect x="86" y="44" width="18" height="12" rx="2" fill="#fffdf6"/><path d="M95,44 v-6" stroke="#8d5f33" stroke-width="1.6"/>
-  <text x="95" y="53" text-anchor="middle" font-size="7" font-weight="800" font-family="system-ui,sans-serif" fill="#8a3414">${sign}</text>`, "decor-stall", tr("Gian hàng bên đường"));
+// Gian hàng bên đường (v9 vẽ lại, cao hơn để khách đứng SAU quầy): part "back" = cột, mái bạt, kệ sau;
+// part "front" = quầy hàng có rổ trứng, bao hạt, biển tên; "all" = cả hai. Khung 120×124, đáy ở y≈120.
+export const stallSvg = (sign = "CHỢ", part = "all") => {
+  const n = 8, wTop = 112 / n;
+  const stripes = Array.from({ length: n }, (_, i) => `<path d="M${6 + i * wTop + 3},8 L${4 + i * wTop},30 h${wTop} L${6 + (i + 1) * wTop + 3},8Z" fill="${i % 2 ? "#fffdf6" : "#e4572e"}"/>`).join("");
+  const scallop = Array.from({ length: n }, (_, i) => `<path d="M${4 + i * wTop},30 a${wTop / 2},${wTop / 2 * 0.8} 0 0 0 ${wTop},0Z" fill="${i % 2 ? "#fffdf6" : "#e4572e"}"/>`).join("");
+  const back = `
+  <ellipse cx="60" cy="119" rx="54" ry="4.5" fill="#000" opacity=".14"/>
+  <rect x="14" y="24" width="6" height="94" rx="2" fill="#8d5f33"/><rect x="100" y="24" width="6" height="94" rx="2" fill="#8d5f33"/>
+  <path d="M17,30 V116" stroke="#b07a46" stroke-width="1.4"/><path d="M103,30 V116" stroke="#b07a46" stroke-width="1.4"/>
+  <rect x="20" y="52" width="80" height="4" rx="1.6" fill="#a9743f"/>
+  ${[[30, "#f2b318"], [38, "#7cc35f"], [46, "#e4572e"], [74, "#4a8f9c"], [82, "#b23a9b"], [90, "#f2b318"]].map(([x, c]) => `<path d="M${x - 3.4},52 v-7 q3.4,-3 6.8,0 v7z" fill="#e8d6ae"/><circle cx="${x}" cy="46" r="2" fill="${c}"/>`).join("")}
+  <path d="M2,10 Q60,-2 118,10 L118,30 H2Z" fill="#c4643f"/>${stripes}${scallop}
+  <path d="M2,10 Q60,-2 118,10" fill="none" stroke="#9a4630" stroke-width="2"/>`;
+  const front = `
+  <rect x="6" y="80" width="108" height="38" rx="3" fill="#b98652"/><rect x="6" y="80" width="108" height="7" rx="2.4" fill="#d7a970"/>
+  <path d="M10,96 h100 M10,107 h100" stroke="#a9743f" stroke-width="1.6"/><path d="M33,87 v31 M87,87 v31" stroke="#a9743f" stroke-width="1.2" opacity=".7"/>
+  <path d="M14,80 q14,-16 30,0z" fill="#c9a66b"/><path d="M14,80 q14,-16 30,0" fill="none" stroke="#a5824c" stroke-width="1.2"/>
+  ${[19, 25, 31, 37, 22, 28, 34].map((x, i) => `<ellipse cx="${x}" cy="${i < 4 ? 76 : 71}" rx="3.4" ry="4.2" fill="${["#f6f0e4", "#e8c9a0", "#b5dccd", "#f6f0e4"][i % 4]}"/>`).join("")}
+  <path d="M84,80 q-3,-17 9,-19 q13,-2 13,11 q0,6 -2,8z" fill="#d4ac72"/><path d="M88,63 q6,-4 12,0" stroke="#7d5a2e" stroke-width="1.6" fill="none"/><circle cx="92" cy="62" r="2" fill="#e3b23c"/><circle cx="97" cy="61" r="2" fill="#4f8f97"/>
+  <rect x="40" y="96" width="40" height="15" rx="2.4" fill="#fffdf6" stroke="#8d5f33" stroke-width="1.2"/>
+  <text x="60" y="107" text-anchor="middle" font-size="8.4" font-weight="800" font-family="system-ui,sans-serif" fill="#8a3414">${sign}</text>`;
+  const body = part === "back" ? back : part === "front" ? front : back + front;
+  return svg("0 0 120 124", body, `decor-stall stall-${part}`, part === "front" ? "" : tr("Gian hàng bên đường"));
 };
 
-const LOOK = {
-  seller: ["#b23a9b", "#f2b318", "cone"], trader: ["#4a8f9c", "#8d5f33", "flat"], collector: ["#3f7a2c", "#2c2620", "top"],
-  reader: ["#5b7bd5", "#fffdf6", "none"], haggler: ["#e4572e", "#7d5a2e", "flat"], artisan: ["#e98a2c", "#b23a9b", "beret"], stranger: ["#3b3554", "#3b3554", "hood"],
+// Khách qua đường (v9 vẽ lại): mỗi loại khách một nhân vật riêng. Khung 90×104, chân chạm đất ở y≈100;
+// đứng sau quầy thì quầy che nửa dưới — phần nhận diện (mũ, mặt, đồ cầm tay) đều ở nửa trên.
+const eyes = (y = 33, c = "#3d2a17", dx = 5) => `<circle cx="${45 - dx}" cy="${y}" r="1.8" fill="${c}"/><circle cx="${45 + dx}" cy="${y}" r="1.8" fill="${c}"/><circle cx="${45.6 - dx}" cy="${y - 0.6}" r=".6" fill="#fff"/><circle cx="${45.6 + dx}" cy="${y - 0.6}" r=".6" fill="#fff"/>`;
+const smile = (y = 40, w = 5) => `<path d="M${45 - w},${y} q${w},${w * 0.7} ${w * 2},0" stroke="#3d2a17" stroke-width="1.5" fill="none" stroke-linecap="round"/>`;
+const blush = (y = 38, c = "#f29a8a") => `<ellipse cx="36" cy="${y}" rx="3" ry="1.8" fill="${c}" opacity=".55"/><ellipse cx="54" cy="${y}" rx="3" ry="1.8" fill="${c}" opacity=".55"/>`;
+const head = (skin, y = 34, r = 13) => `<ellipse cx="45" cy="${y}" rx="${r}" ry="${r * 1.02}" fill="${skin}"/><ellipse cx="${45 - r}" cy="${y + 1}" rx="2.4" ry="3.4" fill="${skin}"/><ellipse cx="${45 + r}" cy="${y + 1}" rx="2.4" ry="3.4" fill="${skin}"/>`;
+const body = (c, cD, { top = 50, hem = 98, w = 22 } = {}) => `<path d="M${45 - w},${hem} Q${45 - w - 3},${top + 8} 45,${top} Q${45 + w + 3},${top + 8} ${45 + w},${hem}Z" fill="${c}"/><path d="M${45 - w + 4},${hem} Q${45 - w + 2},${top + 14} ${45 - w * 0.45},${top + 4}" stroke="${cD}" stroke-width="2" fill="none" opacity=".5"/>`;
+const arm = (x0, y0, x1, y1, c, hand) => `<path d="M${x0},${y0} Q${(x0 + x1) / 2 + (x1 > x0 ? -2 : 2)},${(y0 + y1) / 2 + 6} ${x1},${y1}" stroke="${c}" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="${x1}" cy="${y1}" r="3.6" fill="${hand}"/>`;
+const VISITOR_ART = {
+  // Bà hàng hạt: nón lá, búi tóc bạc, áo bà ba nâu, rổ hạt trước ngực
+  seller: () => `
+    ${body("#8a5a3c", "#5e3a22")}<path d="M40,52 L45,62 L50,52" stroke="#5e3a22" stroke-width="1.4" fill="none"/>
+    ${head("#efc39a")}<path d="M33,28 q12,-8 24,0 v-4 q-12,-6 -24,0z" fill="#d6d2cc"/><circle cx="58" cy="24" r="4.4" fill="#d6d2cc"/>
+    ${eyes(34)}<path d="M38,31 q2,-1 4,0 M48,31 q2,-1 4,0" stroke="#3d2a17" stroke-width=".9" fill="none"/>${smile(40, 4.4)}${blush(38)}
+    <path d="M11,25 L45,3 L79,25 Q45,31 11,25Z" fill="#e8cf8a"/><path d="M11,25 Q45,31 79,25" stroke="#b8974e" stroke-width="1.4" fill="none"/>
+    ${[18, 26, 34, 42].map((t) => `<path d="M${45 - t * 0.78},${25 - t * 0.02 - (42 - t) * 0.47} L${45 + t * 0.78},${25 - t * 0.02 - (42 - t) * 0.47}" stroke="#c9ad66" stroke-width=".8" opacity=".8"/>`).join("")}
+    <path d="M36,27 Q34,40 37,46 M54,27 Q56,40 53,46" stroke="#c9ad66" stroke-width=".8" fill="none"/>
+    ${arm(26, 60, 32, 74, "#8a5a3c", "#efc39a")}${arm(64, 60, 58, 74, "#8a5a3c", "#efc39a")}
+    <path d="M25,72 Q45,88 65,72 L62,70 Q45,78 28,70Z" fill="#b98652"/><ellipse cx="45" cy="71" rx="19" ry="5" fill="#c99a52"/>
+    ${[[35, 70, "#f2b318"], [40, 69, "#e4572e"], [45, 70, "#7cc35f"], [50, 69, "#4a8f9c"], [55, 70, "#b23a9b"], [42, 72, "#f2b318"], [48, 72, "#e0a43c"]].map(([x, y, c]) => `<ellipse cx="${x}" cy="${y}" rx="2.2" ry="1.6" fill="${c}"/>`).join("")}
+    <path d="M27,74 q18,8 36,0" stroke="#8d5f33" stroke-width="1.2" fill="none"/>`,
+  // Người đổi chác: khăn đỏ buộc trán, bọc đồ to sau lưng, giơ túi hạt ra đổi
+  trader: () => `
+    <ellipse cx="45" cy="48" rx="28" ry="24" fill="#c9a66b"/><path d="M22,40 q23,-14 46,0" stroke="#a5824c" stroke-width="2" fill="none"/><path d="M45,24 l-6,-6 m6,6 l6,-7" stroke="#a5824c" stroke-width="2.4" stroke-linecap="round"/>
+    ${body("#4a8f9c", "#2f6670")}<path d="M30,54 L58,86 M60,54 L32,86" stroke="#8d5f33" stroke-width="3" opacity=".9"/>
+    ${head("#d9a273")}<path d="M32,30 Q34,18 45,18 Q56,18 58,30 Q52,24 45,25 Q38,24 32,30Z" fill="#3d2a17"/>
+    <path d="M31,29 Q45,24 59,29 L59,33 Q45,28 31,33Z" fill="#e4572e"/><path d="M59,31 l7,-3 -2,6z" fill="#e4572e"/>
+    ${eyes(36)}${smile(42, 4.6)}${blush(40, "#e07a5f")}
+    ${arm(26, 60, 22, 72, "#4a8f9c", "#d9a273")}${arm(64, 60, 74, 50, "#4a8f9c", "#d9a273")}
+    <path d="M69,46 q5,-8 11,0 q2,8 -5,10 q-7,-2 -6,-10z" fill="#e8c9a0"/><path d="M70,45 q4,-3 9,0" stroke="#8d5f33" stroke-width="1.4" fill="none"/><circle cx="74" cy="50" r="1.4" fill="#f2b318"/><circle cx="77" cy="51" r="1.4" fill="#7cc35f"/>`,
+  // Người sưu tầm: mũ quả dưa, kính một mắt có dây, ria, áo gi-lê xanh, nơ đỏ, kính lúp
+  collector: () => `
+    ${body("#2f5a22", "#1e3d16")}<path d="M38,51 L45,72 L52,51Z" fill="#fffdf6"/><path d="M40,53 l5,3 5,-3 -5,3z" fill="#e4572e"/><path d="M41,52 l4,4 4,-4 -4,4z" fill="#c13d22"/>
+    ${[60, 66, 72].map((y) => `<circle cx="45" cy="${y}" r="1.1" fill="#f2b318"/>`).join("")}
+    ${head("#f2d0b0")}${eyes(34)}<circle cx="51" cy="34" r="4.4" fill="none" stroke="#e9b922" stroke-width="1.4"/><path d="M55,35 q3,8 -2,16" stroke="#e9b922" stroke-width=".8" fill="none"/>
+    <path d="M37,40 q4,-3 8,0 q4,-3 8,0 q-4,3 -8,1 q-4,2 -8,-1z" fill="#6b4a2e"/>${blush(38)}
+    <path d="M29,24 Q45,20 61,24 L61,27 Q45,23 29,27Z" fill="#2c2620"/><path d="M33,24 Q33,8 45,8 Q57,8 57,24Z" fill="#2c2620"/><path d="M33,21 Q45,18 57,21" stroke="#6b4a2e" stroke-width="2"/>
+    ${arm(26, 60, 30, 74, "#2f5a22", "#f2d0b0")}${arm(64, 60, 70, 52, "#2f5a22", "#f2d0b0")}
+    <path d="M70,52 L76,42" stroke="#8d5f33" stroke-width="2.6" stroke-linecap="round"/><circle cx="78" cy="38" r="6" fill="#cfe8f2" opacity=".75" stroke="#8a8f94" stroke-width="1.6"/><path d="M75,36 q2,-2 4,-1" stroke="#fff" stroke-width="1" fill="none"/>`,
+  // Thầy soi trứng: hói, râu trắng dài, kính tròn, áo xanh lấm tấm sao, cầm nến soi quả trứng
+  reader: () => `
+    ${body("#4c66b8", "#334985")}${[[34, 66], [56, 74], [40, 86], [58, 58], [48, 92]].map(([x, y]) => `<path d="M${x},${y - 2.4} l.8,1.6 1.6,.8 -1.6,.8 -.8,1.6 -.8,-1.6 -1.6,-.8 1.6,-.8z" fill="#ffd95a"/>`).join("")}
+    ${head("#f0c9a0")}<path d="M31,32 q-2,-8 4,-11 M59,32 q2,-8 -4,-11" stroke="#f4f1ea" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <path d="M34,40 Q36,62 45,70 Q54,62 56,40 Q50,46 45,45 Q40,46 34,40Z" fill="#f4f1ea"/><path d="M41,48 q4,10 4,18 M49,48 q-2,8 -4,18" stroke="#d9d4c8" stroke-width="1" fill="none"/>
+    ${eyes(33)}<circle cx="40" cy="33" r="4" fill="none" stroke="#6b4a2e" stroke-width="1.2"/><circle cx="50" cy="33" r="4" fill="none" stroke="#6b4a2e" stroke-width="1.2"/><path d="M44,33 h2" stroke="#6b4a2e" stroke-width="1.2"/>
+    <path d="M37,28 q3,-2 6,0 M47,28 q3,-2 6,0" stroke="#f4f1ea" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    ${arm(26, 60, 22, 70, "#4c66b8", "#f0c9a0")}${arm(64, 60, 68, 62, "#4c66b8", "#f0c9a0")}
+    <circle cx="70" cy="50" r="11" fill="#ffe9a8" opacity=".35" class="glow"/><rect x="66" y="52" width="8" height="10" rx="1.6" fill="#fffdf6"/><path d="M70,52 v-3" stroke="#3d2a17" stroke-width="1"/><path d="M70,48 q-3,-4 0,-8 q3,4 0,8z" fill="#f2b318"/><path d="M70,47 q-1.4,-2 0,-4 q1.4,2 0,4z" fill="#fff6c4"/>
+    <ellipse cx="20" cy="66" rx="5" ry="6.4" fill="#f6f0e4" stroke="#e0cfa8" stroke-width=".8"/>`,
+  // Lái buôn: người tròn, mũ nồi, ria vểnh, gi-lê đỏ, túi tiền leng keng, nháy mắt
+  haggler: () => `
+    ${body("#f3e6c8", "#cdb98c", { w: 26 })}<path d="M22,98 Q18,60 32,52 L40,98Z M68,98 Q72,60 58,52 L50,98Z" fill="#d1452a"/>${[62, 70, 78].map((y) => `<circle cx="39" cy="${y}" r="1.2" fill="#f2b318"/>`).join("")}
+    ${head("#e8b48a", 34, 14)}<path d="M31,27 Q31,14 45,14 Q61,14 60,27 Q46,20 31,27Z" fill="#7d5a2e"/><path d="M30,26 Q45,20 62,25 L66,27 Q46,22 30,29Z" fill="#6b4a2e"/>
+    <circle cx="40" cy="33" r="1.8" fill="#3d2a17"/><path d="M48,33 q2.4,-2 5,0" stroke="#3d2a17" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <path d="M34,40 q5,-4 11,-1 q6,-3 11,1 q-2,3 -6,2 q-3,-1 -5,0 q-2,-1 -5,0 q-4,1 -6,-2z" fill="#5e3a22"/><path d="M40,44 q5,3 10,0" stroke="#3d2a17" stroke-width="1.3" fill="none"/>${blush(39, "#e07a5f")}
+    ${arm(22, 60, 26, 74, "#d1452a", "#e8b48a")}${arm(68, 60, 72, 70, "#d1452a", "#e8b48a")}
+    <path d="M66,72 q8,-6 14,2 q2,10 -7,11 q-9,-1 -7,-13z" fill="#b98652"/><path d="M68,71 q6,-3 11,1" stroke="#7d5a2e" stroke-width="1.6" fill="none"/>
+    <circle cx="71" cy="66" r="2.6" fill="#f2b318" stroke="#d99a00" stroke-width=".6"/><circle cx="76" cy="64" r="2.4" fill="#f2b318" stroke="#d99a00" stroke-width=".6"/>`,
+  // Nghệ nhân: khăn tím buộc đầu, tạp dề cam có túi đồ nghề, má lem sơn, cầm búa gỗ
+  artisan: () => `
+    ${body("#efe4cf", "#cdb98c")}<path d="M31,98 L33,58 Q45,54 57,58 L59,98Z" fill="#e98a2c"/><path d="M37,58 q8,-10 16,0" stroke="#c4691a" stroke-width="1.6" fill="none"/>
+    <rect x="37" y="72" width="16" height="10" rx="2" fill="#c4691a"/><path d="M41,72 v-7 M45,72 v-9 M49,72 v-6" stroke="#8d5f33" stroke-width="1.6" stroke-linecap="round"/><path d="M44,63 h2" stroke="#8a8f94" stroke-width="2"/>
+    ${head("#efc39a")}<path d="M31,34 Q29,18 45,16 Q61,18 59,34 Q56,22 45,22 Q34,22 31,34Z" fill="#5e3a22"/>
+    <path d="M30,28 Q30,13 45,12 Q60,13 60,28 Q45,20 30,28Z" fill="#b23a9b"/><path d="M58,22 q8,0 9,6 q-5,-1 -8,1z" fill="#b23a9b"/>${[[38, 18], [46, 16], [53, 20]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.2" fill="#ffd1e8"/>`).join("")}
+    ${eyes(34)}${smile(40, 4.4)}${blush(38)}<circle cx="55" cy="40" r="1.6" fill="#5b9bd5" opacity=".85"/><circle cx="53" cy="42" r="1" fill="#7cc35f" opacity=".85"/>
+    ${arm(26, 60, 22, 72, "#efe4cf", "#efc39a")}${arm(64, 60, 70, 50, "#efe4cf", "#efc39a")}
+    <path d="M70,50 L76,38" stroke="#a5713e" stroke-width="2.8" stroke-linecap="round"/><rect x="70" y="32" width="12" height="6" rx="1.6" fill="#8d5f33" transform="rotate(25 76 35)"/>`,
+  // Khách lạ đêm khuya: áo choàng trùm đầu, mặt chìm trong bóng tối, mắt vàng sáng, xách đèn lồng
+  stranger: () => `
+    <path d="M18,98 Q16,46 45,44 Q74,46 72,98Z" fill="#3b3554"/><path d="M45,46 L42,98 M45,46 L50,98" stroke="#2a2540" stroke-width="1.6" opacity=".7"/>
+    <path d="M25,46 Q20,8 45,6 Q70,8 65,46 Q58,52 45,52 Q32,52 25,46Z" fill="#433c60"/><path d="M31,42 Q30,20 45,19 Q60,20 59,42 Q52,46 45,46 Q38,46 31,42Z" fill="#1d1a2c"/>
+    <ellipse cx="40" cy="34" rx="2.4" ry="1.6" fill="#ffd95a" class="glint"/><ellipse cx="50" cy="34" rx="2.4" ry="1.6" fill="#ffd95a" class="glint"/>
+    <path d="M28,18 Q45,4 62,18" stroke="#5a5280" stroke-width="2" fill="none" opacity=".7"/>
+    <path d="M66,58 Q72,62 72,66" stroke="#3b3554" stroke-width="7" fill="none" stroke-linecap="round"/>
+    <circle cx="73" cy="78" r="15" fill="#ffd95a" opacity=".22" class="glow"/><path d="M73,66 v4" stroke="#8a8f94" stroke-width="1.4"/><path d="M67,70 h12 l-2,4 h-8z" fill="#5a4028"/>
+    <rect x="67" y="74" width="12" height="12" rx="2" fill="#ffe08a" stroke="#5a4028" stroke-width="1.4"/><path d="M73,74 v12 M67,80 h12" stroke="#5a4028" stroke-width=".9"/><path d="M73,83 q-2,-3 0,-6 q2,3 0,6z" fill="#e4572e"/>
+    ${[[20, 30], [70, 24], [16, 60]].map(([x, y]) => `<path d="M${x},${y - 2.4} l.7,1.7 1.7,.7 -1.7,.7 -.7,1.7 -.7,-1.7 -1.7,-.7 1.7,-.7z" fill="#e6dcff" opacity=".8" class="glint"/>`).join("")}`,
 };
 export function visitorSvg(who) {
-  const [robe, hatC, hat] = LOOK[who] ?? LOOK.seller;
-  const hats = {
-    cone: `<path d="M22,26 L45,8 L68,26 Q45,31 22,26Z" fill="${hatC}"/>`,
-    flat: `<ellipse cx="45" cy="22" rx="20" ry="4.5" fill="${hatC}"/><path d="M33,22 q12,-14 24,0z" fill="${hatC}"/>`,
-    top: `<rect x="35" y="5" width="20" height="16" rx="2" fill="${hatC}"/><rect x="28" y="19" width="34" height="4" rx="2" fill="${hatC}"/>`,
-    beret: `<path d="M29,22 q4,-13 20,-11 q14,2 12,11z" fill="${hatC}"/>`,
-    hood: `<path d="M26,44 Q22,8 45,7 Q68,8 64,44 Q56,26 45,26 Q34,26 26,44Z" fill="${hatC}"/>`,
-    none: `<path d="M32,24 q13,-13 26,0" stroke="#d9d4c8" stroke-width="5" fill="none" stroke-linecap="round"/>`,
-  };
-  return svg("0 0 90 104", `
-    <ellipse cx="45" cy="100" rx="24" ry="3.4" fill="#000" opacity=".12"/>
-    <path d="M24,98 Q20,54 45,50 Q70,54 66,98Z" fill="${robe}"/><path d="M40,52 h10 v46 h-10z" fill="#000" opacity=".12"/>
-    <circle cx="45" cy="34" r="14" fill="${who === "stranger" ? "#55506e" : "#f0c9a0"}"/>
-    ${who === "stranger" ? `<circle cx="40" cy="34" r="2" fill="#ffd95a"/><circle cx="50" cy="34" r="2" fill="#ffd95a"/>` : `<circle cx="40" cy="33" r="1.7" fill="#3d2a17"/><circle cx="50" cy="33" r="1.7" fill="#3d2a17"/><path d="M40,40 q5,3.4 10,0" stroke="#3d2a17" stroke-width="1.6" fill="none" stroke-linecap="round"/>`}
-    ${hats[hat]}`, "visitor", tr("Khách qua đường"));
+  const art = (VISITOR_ART[who] ?? VISITOR_ART.seller)();
+  return svg("0 0 90 104", `<ellipse cx="45" cy="100" rx="24" ry="3.4" fill="#000" opacity=".12"/><g class="v-body">${art}</g>`, `visitor visitor-${who}`, tr("Khách qua đường"));
 }
+
 // Sân chơi (v9 vẽ lại): bãi cát viền gỗ, cầu trượt nhỏ, lốp xe, bập bênh, dây cờ — chỗ để kéo gà vào chơi.
 export const playgroundSvg = () => svg("0 0 140 84", `
   <ellipse cx="70" cy="74" rx="66" ry="10" fill="#000" opacity=".08"/>
