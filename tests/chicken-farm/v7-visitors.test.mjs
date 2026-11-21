@@ -1,5 +1,4 @@
 // Luật v7 — khách qua đường. Thiết kế: docs/chicken-farm/ideas.md mục 15.
-// CHƯA có test (để lại): nghệ nhân, người đổi chác bằng trứng, kho đầy khi mua, khách hết giờ giữa chừng.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { CONFIG, TIME, NUTRIENTS, VISITORS, VISIT_CONFIG, MYSTERY, newGame, advance, incubate, visitorsOfDay, visitorView, buy, barter, deliver, candle, haggle, matchesOrder, dexKeysOf, dayIndex } from "../../public/apps/chicken-farm/js/game/rules.js";
@@ -176,4 +175,76 @@ test("người đổi chác: đưa đủ hạt thì nhận món kia; thiếu th�
   assert.equal(s.inventory[o.give.seed], 0);
   assert.equal(s.inventory.premium, 1);
   assert.equal(barter(s, slot, t).code, "sold");
+});
+
+// Lượt ghé đầu tiên (trong 60 ngày, các seed 1..30) của khách `who` thoả `ok(view)`; trả về { s, v, t, view }.
+function findVisit(who, ok = () => true) {
+  for (let seed = 1; seed <= 30; seed++) {
+    const s = newGame(seed, T0);
+    s.tickets = 60;
+    for (let d = dayIndex(T0); d < dayIndex(T0) + 60; d++) {
+      for (const v of visitorsOfDay(seed, d)) {
+        if (v.who !== who) continue;
+        const view = visitorView(s, v.from + 1000);
+        if (ok(view)) return { s, v, t: v.from + 1000, view };
+      }
+    }
+  }
+  return null;
+}
+
+test("nghệ nhân: mua đồ trang trí bằng vé, vào decorOwned; mua lại món đã có → owned", () => {
+  const { s, t, view } = findVisit("artisan");
+  const item = view.stock[0];
+  const before = s.tickets;
+  const r = buy(s, 0, t);
+  assert.equal(r.ok, true);
+  assert.deepEqual(s.decorOwned, [item.decor]);
+  assert.equal(s.tickets, before - item.price);
+  assert.equal(buy(s, 0, t).code, "sold");
+  // lượt ghé sau mang lại đúng món đó → owned, không trừ vé
+  const again = findVisit("artisan", (v) => v.from !== view.from && v.stock.some((x) => x.decor === item.decor));
+  if (again) {
+    again.s.decorOwned = [item.decor];
+    const slot = again.view.stock.findIndex((x) => x.decor === item.decor);
+    const tk = again.s.tickets;
+    assert.equal(buy(again.s, slot, again.t).code, "owned");
+    assert.equal(again.s.tickets, tk);
+  }
+});
+
+test("người đổi chác: đổi 2 trứng không phôi lấy túi quà; sai số trứng / trứng có phôi → bad_give", () => {
+  const hit = findVisit("trader", (v) => v.stock.some((o) => o.give.eggs));
+  assert.ok(hit, "có lượt ghé đổi trứng");
+  const { s, t, view } = hit;
+  const slot = view.stock.findIndex((o) => o.give.eggs);
+  const mk = (id, fertile) => ({ id, code: s.eggs[0].code, shell: "#fff", shellName: "x", fertile, motherId: null, fatherId: null, laidAt: T0, mutations: 0, hatchAt: null });
+  s.eggs.push(mk("x1", false), mk("x2", false), mk("x3", true));
+  assert.equal(barter(s, slot, t, { eggs: ["x1"] }).code, "bad_give");
+  assert.equal(barter(s, slot, t, { eggs: ["x1", "x3"] }).code, "bad_give");
+  const bags = s.bags.length;
+  const r = barter(s, slot, t, { eggs: ["x1", "x2"] });
+  assert.equal(r.ok, true);
+  assert.equal(s.bags.length, bags + 1);
+  assert.ok(!s.eggs.some((e) => e.id === "x1" || e.id === "x2"));
+  assert.ok(s.eggs.some((e) => e.id === "x3"));
+});
+
+test("kho đầy khi mua → từ chối, không trừ vé, món vẫn còn", () => {
+  const { s, t, view } = findVisit("seller", (v) => v.stock.some((x) => x.seeds));
+  const slot = view.stock.findIndex((x) => x.seeds);
+  s.inventory.common = CONFIG.storage.seeds;
+  const tk = s.tickets;
+  assert.equal(buy(s, slot, t).code, "seeds_full");
+  assert.equal(s.tickets, tk);
+  s.inventory.common = 0;
+  assert.equal(buy(s, slot, t).ok, true);
+});
+
+test("khách hết giờ giữa chừng: tới đúng `until` là đi, mua / mặc cả đều no_visitor", () => {
+  const { s, v } = findVisit("seller");
+  assert.equal(buy(s, 0, v.until - 1).ok, true);
+  assert.equal(buy(s, 1, v.until).code, "no_visitor");
+  const h = findVisit("haggler");
+  assert.equal(haggle(h.s, 1, h.v.until).code, "no_visitor");
 });

@@ -7,7 +7,7 @@
 // giữa hai lần mổ của luật chơi). Hai con cùng nhắm một hạt: con tới trước được ăn.
 
 import { mulberry32, lerp, clamp } from "../genome.js";
-import { rollSeed, CONFIG as RULES } from "./rules.js";
+import { rollSeed, fieldSpawnMul, CONFIG as RULES } from "./rules.js";
 
 export const FIELD = {
   width: 800,
@@ -36,8 +36,8 @@ export function fieldTraits(ph) {
 }
 
 // Tuỳ chọn theo từng cánh đồng (sân trại: không mọc hạt; cánh đồng lớn ở M3: mọc nhiều hơn).
-export function createField({ seed = 1, width = FIELD.width, height = FIELD.height, spawnPerSec = FIELD.spawnPerSec, maxSeeds = FIELD.maxSeeds, margin = FIELD.margin, top = 40 } = {}) {
-  return { w: width, h: height, t: 0, seq: 0, rng: mulberry32(seed >>> 0), chickens: new Map(), seeds: new Map(), spawnAcc: 0, opts: { spawnPerSec, maxSeeds, margin, top } };
+export function createField({ seed = 1, width = FIELD.width, height = FIELD.height, spawnPerSec = FIELD.spawnPerSec, maxSeeds = FIELD.maxSeeds, margin = FIELD.margin, top = 40, clock = null } = {}) {
+  return { w: width, h: height, t: 0, seq: 0, rng: mulberry32(seed >>> 0), chickens: new Map(), seeds: new Map(), spawnAcc: 0, clock, opts: { spawnPerSec, maxSeeds, margin, top } };
 }
 
 const randIn = (f, lo, hi) => lo + f.rng() * (hi - lo);
@@ -82,7 +82,7 @@ function spawn(f) {
   if (f.seeds.size >= f.opts.maxSeeds) return;
   const p = randPoint(f);
   const id = `s${(++f.seq).toString(36)}`;
-  f.seeds.set(id, { id, x: p.x, y: p.y, kind: rollSeed("field", f.rng), born: f.t, claimedBy: null });
+  f.seeds.set(id, { id, x: p.x, y: p.y, kind: rollSeed("field", f.rng, f.clock?.() ?? null), born: f.t, claimedBy: null });
 }
 
 function nearestSeed(f, c) {
@@ -112,7 +112,7 @@ export function tickField(f, dt = FIELD.tickMs) {
   const events = [];
   f.t += dt;
   // hạt mọc ngẫu nhiên, để lâu thì mất
-  f.spawnAcc += (f.opts.spawnPerSec * dt) / 1000;
+  f.spawnAcc += (f.opts.spawnPerSec * (f.clock ? fieldSpawnMul(f.clock()) : 1) * dt) / 1000; // v9: mùa khô ít hạt
   while (f.spawnAcc >= 1) { spawn(f); f.spawnAcc -= 1; }
   if (f.rng() < f.spawnAcc) { spawn(f); f.spawnAcc = 0; }
   for (const s of f.seeds.values()) if (f.t - s.born > FIELD.seedTtlMs && !s.claimedBy) f.seeds.delete(s.id);

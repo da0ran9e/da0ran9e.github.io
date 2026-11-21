@@ -10,6 +10,15 @@
 > - Mỗi lần phát hành tăng cùng một số `v=` trong `game.html` (css, importmap, main.js).
 > - Test: `node --test tests/chicken-farm/*.test.mjs` và `node --test server/test/`. Test mới phải thấy đỏ một lần (phá luật tạm) rồi mới tin.
 
+## Trạng thái 21/11 (tối) — ĐỌC TRƯỚC
+
+- **Chủ dự án: hoàn thiện chơi đơn trước, đợt E (bạn bè) TẠM DỪNG.** Phần đã viết của đợt E (bảng `friends` / `mail` trong `store.mjs`, `server/src/social.mjs` — dịch vụ mã bạn bè, mời / nhận / chặn, thư mẫu, bưu thiếp, lời chúc kèm quà, thăm trại, dọn khách) nằm trong `git stash` "batch E WIP" (chưa có route, client, test). Lấy lại bằng `git stash list` → `git stash apply`.
+- **Luật v9 — mùa theo tuần + đêm trăng tròn (ideas 7, 9) ĐÃ CÀI:** `CONFIG.season`, `CONFIG.moon`; `seasonOf`, `weekIndex`, `calendarView`, `fullMoonAt`, `moonPhase`, `luckyCooldownMs`, `fieldSpawnMul`; `rollSeed(table, rng, now)` nhân trọng số theo mùa (server tung hạt ngoài đồng với `now`); mùa khô giảm giá khách bên đường (`stockOf`, thầy soi trứng); trứng có phôi đẻ đêm trăng tròn mang `egg.moon` và tỉ lệ biến dị ×3. Giao diện: chip mùa trên thanh trên (chạm để đọc), mưa / cánh hoa / màu trời theo mùa, trăng tròn trên trời đêm, vầng trăng nhỏ trên trứng. Test: `tests/chicken-farm/v9-calendar.test.mjs`.
+- **Kỳ vật đã vẽ thành bộ phận thật** (`opts.relic` của `renderChickenFlat`: đuôi công thay đuôi, cánh bướm thay cánh, chân + móng vàng lấp lánh, đầu cún thay đầu); biểu tượng nổi trên đầu gà đã bỏ. Mục kỷ niệm giữ `relic`.
+- Đã dịch nhãn SVG (`icons.js`, `decor.js`, `chicken-flat.js`) và tên màu vỏ trứng. **Còn tiếng Việt: trang Phòng gen (`index.html`, `app.js`, tên gen trong `genome.js`, ~215 chuỗi) — trang thử nghiệm, chỉ mở từ bảng Dev.**
+- Đã kiểm tra online với server cục bộ: trứng không gửi `code` về client vẫn sưởi, nở, hiện màn chào gà bình thường.
+- Đã viết các test còn để lại ở đầu `v7-tower`, `v7-play`, `v7-visitors`, `v7-brood-knock-timed`.
+
 ## Quyết định mới của chủ dự án (2026-11-17) — CHƯA CÀI, thay cho thiết kế cũ ở những chỗ ghi dưới đây
 
 Chủ dự án chốt năm điểm. Mã hiện tại **chưa** theo các điểm này; phiên sau cài theo đúng mục này, không theo phần cũ.

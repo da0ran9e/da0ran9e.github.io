@@ -171,9 +171,15 @@ function seedSummary(kind) {
 }
 function eggArt(egg) {
   const ph = { egg: { shell: egg.shell || "#f3ead8", speckle: 0.15, seed: [...(egg.id || "e")].reduce((a, c) => a + c.charCodeAt(0), 0) } };
-  return renderEggFlat(ph, { label: egg.fertile ? tr("Trứng có phôi") : tr("Trứng không phôi") });
+  return moonMark(renderEggFlat(ph, { label: egg.fertile ? tr("Trứng có phôi") : tr("Trứng không phôi") }), egg, 152, 50, 17);
 }
-const yardEggArt = (egg) => (ICONS?.nestEggSvg ? ICONS.nestEggSvg(egg.shell || "#f3ead8", 40, "grass") : eggArt(egg));
+const yardEggArt = (egg) => (ICONS?.nestEggSvg ? moonMark(ICONS.nestEggSvg(egg.shell || "#f3ead8", 40, "grass"), egg, 33, 7, 3.6) : eggArt(egg));
+// v9: trứng đẻ đêm trăng tròn mang một vầng trăng nhỏ (dễ biến dị hơn)
+function moonMark(svg, egg, x, y, r) {
+  if (!egg.moon) return svg;
+  const m = `<g class="moon-mark"><title>${tr("Đẻ đêm trăng tròn — dễ biến dị hơn")}</title><circle cx="${x}" cy="${y}" r="${r * 1.6}" fill="#fff6c4" opacity=".35"/><circle cx="${x}" cy="${y}" r="${r}" fill="#fff3b0" stroke="#c9a640" stroke-width="${r / 6}"/><circle cx="${x - r * 0.3}" cy="${y + r * 0.2}" r="${r * 0.22}" fill="#e8d68a"/></g>`;
+  return svg.replace(/<\/svg>$/, `${m}</svg>`);
+}
 
 /* ---------- hình con gà (có bộ nhớ đệm) ---------- */
 
@@ -185,13 +191,13 @@ function chickenSvg(ch, { pose = "stand", phase = 0, detail = "low" } = {}) {
   let svg = artCache.get(key);
   if (!svg) {
     const ph = express(decodeGenome(ch.code), v.care);
-    svg = renderChickenFlat(ph, { growth: v.growth01, pose, walkPhase: phase, detail, label: ch.name });
+    svg = renderChickenFlat(ph, { growth: v.growth01, pose, walkPhase: phase, detail, label: ch.name, relic: ch.relic ?? null });
     if (artCache.size > 500) artCache.delete(artCache.keys().next().value);
     artCache.set(key, svg);
   }
   return { svg, key };
 }
-const memorialSvg = (m) => renderChickenFlat(express(decodeGenome(m.code), { dev: m.dev, gloss: 0.4 }), { growth: 1, detail: "low", label: m.name });
+const memorialSvg = (m) => renderChickenFlat(express(decodeGenome(m.code), { dev: m.dev, gloss: 0.4 }), { growth: 1, detail: "low", label: m.name, relic: m.relic ?? null });
 
 /* ---------- thông báo, nhật ký ---------- */
 
@@ -654,6 +660,7 @@ function renderRes() {
     <button type="button" class="chip" data-res="bags" data-open="store" title="${tr("Túi hạt chưa mở")}" aria-label="${state.bags.length} ${tr("túi hạt chưa mở")}">${bagArt(16)} ${state.bags.length}</button>
     ${state.energy ? energyChip() : ""}
     ${hasV7() ? `<span class="chip" data-res="tickets" title="${tr("Vé — vào sân chơi, mua ở gian hàng")}" aria-label="${state.tickets} ${tr("vé")}">${ticketSvg(16)} ${state.tickets}</span>` : ""}
+    ${seasonChip()}
     <span class="chip" data-res="chickens" title="${tr("Gà trong trại")}" aria-label="${state.chickens.length}/${state.coopCap} ${tr("gà trong trại")}">🐔 ${state.chickens.length}/${state.coopCap}</span>`);
   $("#clock").textContent = `${tr("Giờ trong game:")} ${new Date(now()).toLocaleString(LOCALE, { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`;
   // số vừa tăng thì nảy lên một cái
@@ -662,7 +669,28 @@ function renderRes() {
   if (resPrev && cur.tickets > resPrev.tickets) sfx("ticket", 0.2);
   resPrev = cur;
 }
+// v9 — mùa theo tuần + đêm trăng tròn: một chip nhỏ, chi tiết trong chú thích (chạm để đọc trên điện thoại)
+const SEASON_ICON = { harvest: "🌾", rain: "🌧️", bloom: "🌸", dry: "☀️" };
+const seasonName = (k) => ({ harvest: tr("Mùa gặt"), rain: tr("Mùa mưa"), bloom: tr("Mùa hoa"), dry: tr("Mùa khô") })[k];
+const seasonFx = (k) => ({
+  harvest: tr("ngoài đồng nhiều hạt đạm, hạt mẩy và hạt quý"),
+  rain: tr("đốm sáng hiện dày hơn, ngoài đồng nhiều hạt khoáng"),
+  bloom: tr("ngoài đồng và đốm sáng nhiều hạt màu"),
+  dry: tr("ngoài đồng ít hạt, khách bên đường bán rẻ hơn"),
+})[k];
+function seasonText() {
+  const c = R.calendarView(now());
+  const lines = [`${SEASON_ICON[c.season]} ${seasonName(c.season)}: ${seasonFx(c.season)}.`, `${tr("Sang")} ${seasonName(c.next)} ${tr("sau")} ${fmtDur(c.ends - now())}.`];
+  lines.push(c.fullMoon ? `🌕 ${tr("Đêm trăng tròn: trứng có phôi đẻ đêm nay dễ biến dị gấp 3.")}` : c.nextFull ? `🌕 ${tr("Đêm trăng tròn sau")} ${fmtDur(c.nextFull - now())}.` : "");
+  return { c, text: lines.filter(Boolean).join("\n") };
+}
+function seasonChip() {
+  if (!R.calendarView) return "";
+  const { c, text } = seasonText();
+  return `<button type="button" class="chip season" data-res="season" title="${text}" aria-label="${text}">${SEASON_ICON[c.season]}${c.fullMoon ? " 🌕" : ""}</button>`;
+}
 $("#res").addEventListener("click", (ev) => {
+  if (ev.target.closest("[data-res=season]")) toast(seasonText().text);
   if (ev.target.closest("[data-open=store]")) openStore();
 });
 
@@ -996,7 +1024,6 @@ function drawChickens(list, layer, els, poseOf) {
       layer.append(el);
     }
     el.querySelector(".tag").textContent = ch.name;
-    if (ch.relic && !el.querySelector(".relic-float")) el.insertAdjacentHTML("beforeend", `<span class="relic-float" title="${esc(relicName(ch.relic))}">${relicSvg(ch.relic, 22)}</span>`);
     el.style.left = `${(c.x / W) * 100}%`;
     el.style.top = `${(c.y / H) * 100}%`;
     el.style.zIndex = String(Math.round(c.y));
@@ -1586,7 +1613,7 @@ async function sendToField(id) {
 }
 function ensureField() {
   if (field) return;
-  field = createField({ seed: (sceneSeed() ^ 0x5eed) >>> 0 });
+  field = createField({ seed: (sceneSeed() ^ 0x5eed) >>> 0, clock: () => now() });
   if (ICONS?.fieldBackdrop) $("#field-bg").innerHTML = ICONS.fieldBackdrop(W, H, sceneSeed()) + fieldHorizon(sceneSeed());
 }
 function startObserving() {
@@ -1625,7 +1652,7 @@ function stepLucky() {
     }
     return;
   }
-  if (t < luckyNextAt || t - (state.luckyAt ?? -1e15) < R.CONFIG.lucky.cooldownMs) return;
+  if (t < luckyNextAt || t - (state.luckyAt ?? -1e15) < R.luckyCooldownMs(now())) return;
   const x = 90 + Math.random() * (W - 180), y = 130 + Math.random() * (H - 200);
   const el = document.createElement("button");
   el.type = "button";
@@ -1660,7 +1687,7 @@ async function resolveLucky(e) {
   if (!r.ok) {
     if (r.code === "seeds_full") popIn("#field-pops", e.x, e.y, tr("Kho đầy"));
     else if (r.code === "not_watching" || r.code === "not_in_field") syncField();
-    return scheduleLucky(R.CONFIG.lucky.cooldownMs);
+    return scheduleLucky(R.luckyCooldownMs(now()));
   }
   buzz(16);
   if (r.bagId) {
@@ -1673,7 +1700,7 @@ async function resolveLucky(e) {
     burst($("#field-pops"), at, top, { kind: "star", n: 8, colors: [...kinds.map((k) => SEED_COLOR[k]), "#fff"] });
     sfx(kinds.some((k) => k !== "common") ? "good" : "coin");
   }
-  scheduleLucky(R.CONFIG.lucky.cooldownMs + (luckyQuest() ? 1200 : 2000 + Math.random() * 16000));
+  scheduleLucky(R.luckyCooldownMs(now()) + (luckyQuest() ? 1200 : 2000 + Math.random() * 16000));
   save();
   renderAll();
 }
@@ -1960,6 +1987,11 @@ function renderSky() {
   const h = new Date(now()).getHours();
   const sky = h < 5 || h >= 19 ? "night" : h < 7 ? "dawn" : h >= 17 ? "dusk" : "day";
   music.scene(sky === "night" ? "night" : view === "field" ? "field" : "yard");
+  const cal = R.calendarView?.(now());
+  if (cal) {
+    if (document.body.dataset.season !== cal.season) document.body.dataset.season = cal.season;
+    document.body.classList.toggle("fullmoon", cal.fullMoon);
+  }
   if (document.body.dataset.sky !== sky) {
     if (sky === "dawn" && document.body.dataset.sky && state.chickens.some((c) => c.sex === "rooster" && c.adultAt != null)) sfx("crow");
     document.body.dataset.sky = sky;
@@ -1968,6 +2000,9 @@ function renderSky() {
 for (const amb of document.querySelectorAll(".amb")) {
   let h = '<i class="cloud"></i>';
   for (let i = 0; i < 7; i++) h += `<i class="ff" style="left:${(8 + Math.random() * 84).toFixed(1)}%;top:${(22 + Math.random() * 68).toFixed(1)}%;animation-delay:${(-Math.random() * 7).toFixed(1)}s,${(-Math.random() * 2).toFixed(1)}s"></i>`;
+  for (let i = 0; i < 26; i++) h += `<i class="rd" style="left:${(Math.random() * 100).toFixed(1)}%;animation-delay:${(-Math.random() * 1.2).toFixed(2)}s;animation-duration:${(0.7 + Math.random() * 0.5).toFixed(2)}s"></i>`;
+  for (let i = 0; i < 14; i++) h += `<i class="pt" style="left:${(Math.random() * 100).toFixed(1)}%;--c:${["#ff9fc0", "#ffd1e0", "#ffb4a8"][i % 3]};animation-delay:${(-Math.random() * 12).toFixed(1)}s;animation-duration:${(9 + Math.random() * 6).toFixed(1)}s"></i>`;
+  h += '<i class="moon"></i>';
   for (let i = 0; i < 2; i++) h += `<i class="bf" style="left:${18 + i * 38}%;top:${44 + i * 20}%;--c:${["#fff6f0", "#ffd95a"][i]};animation-delay:${-i * 8}s"></i>`;
   amb.innerHTML = h;
 }
@@ -2370,7 +2405,7 @@ async function showStarterOnline() {
   const r = await net.starters();
   if (!r.ok) return toast(r.ok === false && r.code ? errText(r) : tr("Không lấy được trứng khởi đầu"));
   const eggs = r.choices ?? [];
-  $("#starter-eggs").innerHTML = eggs.map((e, i) => `<button type="button" data-pick="${e.choice ?? i}">${eggArt({ ...e, id: `s${i}`, fertile: true })}<span>${esc(e.shellName)}</span></button>`).join("");
+  $("#starter-eggs").innerHTML = eggs.map((e, i) => `<button type="button" data-pick="${e.choice ?? i}">${eggArt({ ...e, id: `s${i}`, fertile: true })}<span>${esc(tr(e.shellName))}</span></button>`).join("");
   $("#starter-eggs").onclick = async (ev) => {
     const i = ev.target.closest("[data-pick]")?.dataset.pick;
     if (i == null) return;
@@ -2406,7 +2441,7 @@ async function showStarter() {
   if (online) return showStarterOnline();
   const seed = (Math.random() * 2 ** 32) >>> 0;
   const eggs = R.starterEggs(seed);
-  $("#starter-eggs").innerHTML = eggs.map((e, i) => `<button type="button" data-pick="${i}">${eggArt({ ...e, id: `s${i}${seed}`, fertile: true })}<span>${esc(e.shellName)}</span></button>`).join("");
+  $("#starter-eggs").innerHTML = eggs.map((e, i) => `<button type="button" data-pick="${i}">${eggArt({ ...e, id: `s${i}${seed}`, fertile: true })}<span>${esc(tr(e.shellName))}</span></button>`).join("");
   $("#starter-eggs").onclick = (ev) => {
     const i = ev.target.closest("[data-pick]")?.dataset.pick;
     if (i == null) return;

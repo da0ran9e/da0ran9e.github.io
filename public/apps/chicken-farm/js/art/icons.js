@@ -10,6 +10,7 @@
 
 import { blob, tongue, brushStroke } from "../chicken-flat.js";
 import { clamp, lerp, mix, shade, tint, mulberry32 } from "../genome.js";
+import { t as tr } from "../game/i18n.js";
 
 const RAD = Math.PI / 180;
 const TAU = Math.PI * 2;
@@ -31,10 +32,10 @@ export const NUTRIENT_COLORS = {
   pigment: "#b23a9b", // tím hồng
 };
 
-const NUTRIENT_NAMES = { protein: "Đạm", energy: "Năng lượng", mineral: "Khoáng", pigment: "Sắc tố" };
+const NUTRIENT_NAMES = { protein: tr("Đạm"), energy: tr("Năng lượng"), mineral: tr("Khoáng"), pigment: tr("Sắc tố") };
 const SEED_NAMES = {
-  common: "Hạt thường", protein: "Hạt đạm", energy: "Hạt mẩy", mineral: "Hạt khoáng",
-  pigment: "Hạt màu", premium: "Hạt quý", odd: "Hạt lạ",
+  common: tr("Hạt thường"), protein: tr("Hạt đạm"), energy: tr("Hạt mẩy"), mineral: tr("Hạt khoáng"),
+  pigment: tr("Hạt màu"), premium: tr("Hạt quý"), odd: tr("Hạt lạ"),
 };
 // màu chính / màu bóng / màu sẫm cho từng loại hạt
 const SEED_COLORS = {
@@ -229,14 +230,14 @@ export function bagIcon(size = 40, seedsCount) {
   o += path(brushStroke(rng, [[13, 14.2], [20, 15.8], [27.2, 14.2]], 1.6), "#7d5a2e");
   o += path(tongue(rng, [21, 15.2], 70, 5.5, 1.1, { tip: "round", base: 1, bend: 0.2 }).d, "#7d5a2e");
   o += path(tongue(rng, [21, 15.2], 115, 4.6, 1.1, { tip: "round", base: 1, bend: -0.2 }).d, "#7d5a2e");
-  let label = "Túi hạt";
+  let label = tr("Túi hạt");
   if (seedsCount != null && Number.isFinite(+seedsCount)) {
     const n = Math.max(0, Math.round(+seedsCount));
     const txt = n > 99 ? "99+" : String(n);
     const w = 5 + txt.length * 4.2;
     o += `<rect x="${f(38 - w)}" y="25" width="${f(w)}" height="11" rx="5.5" fill="#3d2a17"/>`;
     o += `<text x="${f(38 - w / 2)}" y="33.4" text-anchor="middle" font-size="8.4" font-weight="700" font-family="system-ui,sans-serif" fill="#fff">${txt}</text>`;
-    label = `Túi hạt: ${n} hạt`;
+    label = `${tr("Túi hạt")}: ${n} ${tr("hạt")}`;
   }
   return svg("0 0 40 40", size, label, o, "bag-icon");
 }
@@ -284,7 +285,7 @@ export function incubatorIcon({ egg = null, progress = 0 } = {}, size = 96) {
   for (const [x, deg] of [[16, 200], [80, -20], [24, 235], [73, -55]]) {
     o += path(tongue(rng, [x, 66], deg, 7 + rng() * 4, 1, { tip: "point", bend: (rng() - 0.5) * 0.4 }).d, strawL);
   }
-  const label = egg ? `Ổ ấp: trứng đang ấp, ${Math.round(p * 100)}%` : "Ổ ấp trống";
+  const label = egg ? `${tr("Ổ ấp: trứng đang ấp")}, ${Math.round(p * 100)}%` : tr("Ổ ấp trống");
   return svg("0 0 96 96", size, label, o, `incubator-icon${egg ? " has-egg" : ""}`);
 }
 
@@ -332,7 +333,7 @@ export function fieldBackdrop(width = 360, height = 240, seed = 1) {
     }
     o += path(pd, col) + path(blob(rng, c, 1.4 * s, 1.4 * s, 0, 0.1, 7), "#f2b318");
   }
-  return `<svg class="field-backdrop" viewBox="0 0 ${f(W)} ${f(H)}" width="${f(W)}" height="${f(H)}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bãi cỏ">${o}</svg>`;
+  return `<svg class="field-backdrop" viewBox="0 0 ${f(W)} ${f(H)}" width="${f(W)}" height="${f(H)}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${tr("Bãi cỏ")}">${o}</svg>`;
 }
 
 /* ---------- hạt rải trên bãi (≈8px, khung 12×12, tâm hạt ở giữa) ---------- */
@@ -374,7 +375,7 @@ export const STAT_COLORS = {
   growth: "#4f9e3a", // xanh mầm
   lay: "#e9a23b", // vàng trứng
 };
-const STAT_NAMES = { speed: "Tốc độ", life: "Tuổi thọ", satiety: "Độ no", growth: "Tăng trưởng", lay: "Đẻ trứng" };
+const STAT_NAMES = { speed: tr("Tốc độ"), life: tr("Tuổi thọ"), satiety: tr("Độ no"), growth: tr("Tăng trưởng"), lay: tr("Đẻ trứng") };
 const STAT_RNG = { speed: 401, life: 419, satiety: 433, growth: 449, lay: 461 };
 
 export function statIcon(key, size = 20, label) {
@@ -684,7 +685,7 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
     }
     o += path(pd, col) + path(blob(rng, c, 1.4 * s, 1.4 * s, 0, 0.1, 7), "#f2b318");
   }
-  return `<svg class="yard-backdrop" viewBox="0 0 ${f(W)} ${f(H)}" width="${f(W)}" height="${f(H)}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sân trại gà">${o}</svg>`;
+  return `<svg class="yard-backdrop" viewBox="0 0 ${f(W)} ${f(H)}" width="${f(W)}" height="${f(H)}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${tr("Sân trại gà")}">${o}</svg>`;
 }
 
 /* ---------- trứng nằm trên ổ rơm / bãi cỏ (khung 40×32, đáy ở y≈26) ---------- */
@@ -716,5 +717,5 @@ export function nestEggSvg(shellHex, size = 40, bed = "straw") {
   o += path(sl, strawL, ` opacity=".9"`);
   o += path(tongue(rng, [5, 24], 200, 4.5, 0.6, { tip: "point" }).d + tongue(rng, [35, 24], -22, 4.5, 0.6, { tip: "point" }).d, strawL);
   const W = Math.max(1, +size || 40);
-  return `<svg class="nest-egg${grass ? " on-grass" : ""}" viewBox="0 0 40 32" width="${f(W)}" height="${f(W * 0.8)}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${grass ? "Trứng trên bãi cỏ" : "Trứng trong ổ rơm"}">${o}</svg>`;
+  return `<svg class="nest-egg${grass ? " on-grass" : ""}" viewBox="0 0 40 32" width="${f(W)}" height="${f(W * 0.8)}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${grass ? tr("Trứng trên bãi cỏ") : tr("Trứng trong ổ rơm")}">${o}</svg>`;
 }

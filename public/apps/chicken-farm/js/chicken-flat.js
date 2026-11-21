@@ -9,6 +9,7 @@
 //   walkPhase 0..1 (chỉ cho "walk": vẽ lại ở vài pha, vd 0 / .25 / .5 / .75, là thành hoạt hình bước),
 //   facing "right" (mặc định) | "left" (lật ngang toàn hình quanh x = 100),
 //   eyeLid 0..1 (mí mắt khép: 0 mở, 1 nhắm; mặc định .5 khi "sit", 0 khi khác).
+//   relic null | "peacockTail" | "butterflyWings" | "goldenClaws" | "dogHead" (kỳ vật của trứng bí ẩn — vẽ đè lên thân).
 // Mọi tư thế giữ bàn chân trên cùng một đường đất; khung canh theo dáng đứng nên
 // đổi tư thế (và đổi pha bước) không làm con gà nhảy cỡ, trừ khi dáng mới vượt khung.
 // "sit": gà nằm ổ nghỉ — chân giấu dưới bụng (chỉ ló mũi ngón), thân hạ xuống, bụng
@@ -16,6 +17,7 @@
 
 import { clamp, lerp, mix, shade, tint, luminance, mulberry32 } from "./genome.js";
 import { smoothClosed, cubicPoints, markColor } from "./chicken-svg.js";
+import { t as tr } from "./game/i18n.js";
 
 const RAD = Math.PI / 180;
 const TAU = Math.PI * 2;
@@ -474,6 +476,9 @@ export function renderChickenFlat(ph, opts = {}) {
   /* chân: ống chân thuôn, bàn chân dẹt như mái chèo */
   const rl = R(9);
   let legs = "";
+  const gold = opts.relic === "goldenClaws"; // kỳ vật: móng vàng
+  const toeCol = (col, back) => (gold ? (back ? "#d49a12" : "#f6c623") : col);
+  const feetAt = [];
   if (sit) {
     // chân giấu dưới bụng: chỉ ló mũi ngón trước ở mép bụng (toạ độ thật: thân đã hạ `drop`)
     // mép trước của bụng ở độ cao mũi ngón (dò theo viền thân đã ép bẹt)
@@ -484,7 +489,8 @@ export function renderChickenFlat(ph, opts = {}) {
       const col = back ? shade(K.leg, 0.15) : K.leg;
       const foot = [frontX - tl * (back ? 0.75 : 0.45), ground - lw * 0.9];
       let s = "";
-      for (const deg of [-3, 9]) s += fill(tongue(rl, foot, deg + (rl() - 0.5) * 6, tl * 0.95, lw * 1.05, { tip: "round", base: 0.95, irr: 0.08 }).d, col);
+      for (const deg of [-3, 9]) s += fill(tongue(rl, foot, deg + (rl() - 0.5) * 6, tl * (gold ? 1.1 : 0.95), lw * 1.05, { tip: gold ? "point" : "round", base: 0.95, irr: 0.08 }).d, toeCol(col, back));
+      feetAt.push([foot[0] + tl * 0.8, foot[1]]);
       if (S.feetFeather === 2) s += fill(tongue(rl, add(foot, [1, -2]), 4, tl * 0.75, 2.2, { tip: "round" }).d, bodyC);
       legs += s;
     }
@@ -496,13 +502,14 @@ export function renderChickenFlat(ph, opts = {}) {
     const foot = [top[0] - 2.5 + st.sx, footY - st.lift];
     const shankLen = Math.hypot(foot[0] - top[0], foot[1] - top[1]);
     const shankDeg = Math.atan2(foot[1] - top[1], foot[0] - top[0]) / RAD;
-    let s = fill(tongue(rl, top, shankDeg, shankLen + lw * 0.6, lw, { tip: "round", base: 1, irr: 0.05 }).d, col);
+    let s = fill(tongue(rl, top, shankDeg, shankLen + lw * 0.6, lw, { tip: "round", base: 1, irr: 0.05 }).d, toeCol(col, back));
     const tl = lerp(5, 12, adult);
     const toes = [[2, tl], [16, tl * 0.82], [178, tl * 0.5]];
     if (S.toes > 4) toes.push([196, tl * 0.45]);
     for (const [deg, l] of toes) {
-      s += fill(tongue(rl, add(foot, [0, -lw * 0.4]), deg + (rl() - 0.5) * 6 + (deg < 90 ? 55 : -40) * st.curl, l * (1 - 0.3 * st.curl), lw * 1.05, { tip: "round", base: 0.95, irr: 0.08 }).d, col);
+      s += fill(tongue(rl, add(foot, [0, -lw * 0.4]), deg + (rl() - 0.5) * 6 + (deg < 90 ? 55 : -40) * st.curl, l * (1 - 0.3 * st.curl) * (gold ? 1.15 : 1), lw * 1.05, { tip: gold ? "point" : "round", base: 0.95, irr: 0.08 }).d, toeCol(col, back));
     }
+    feetAt.push([foot[0] + tl * 0.6, foot[1] - lw]);
     if (rooster && mature > 0.3) {
       s += fill(tongue(rl, [foot[0] + lw * 0.2, foot[1] - legLen * 0.38], 192, 5 * mature, lw * 0.75, { tip: "point", base: 1 }).d, col);
     }
@@ -619,6 +626,73 @@ export function renderChickenFlat(ph, opts = {}) {
     headStripe = fill(brushStroke(rs, [add(head, [-r * 0.8, -r * 0.1]), add(head, [-r * 0.35, -r * 0.75]), add(head, [r * 0.3, -r * 0.72])], 2), col, op);
   }
 
+  /* v8 — KỲ VẬT (trứng bí ẩn của khách lạ): bộ phận độc nhất, không theo gen — vẽ đè lên thân gà.
+     relicBack: sau thân (đuôi công, cánh bướm) · relicHead: thay đầu (đầu cún) · relicFeet: lấp lánh quanh móng vàng */
+  const relic = opts.relic ?? null;
+  let relicBack = "", relicFront = "", relicFeet = "", relicHeadBack = "", relicHead = "";
+  const dog = relic === "dogHead";
+  if (relic === "peacockTail") {
+    const rp = R(41), fan = lerp(0.35, 1, smooth(0.1, 1, g));
+    const root = rot(-22 * L, -12 * H);
+    const n = 11;
+    for (let i = 0; i < n; i++) {
+      const u = i / (n - 1);
+      const deg = lerp(160, 296, u) + tiltDeg * 0.5 + (rp() - 0.5) * 4;
+      const len = (58 + 26 * Math.sin(Math.PI * u)) * fan * (0.92 + rp() * 0.16);
+      const tg = tongue(rp, root, deg, len, 8 * fan, { tip: "round", bend: (u - 0.5) * 0.14, irr: 0.05, base: 0.2 });
+      relicBack += fill(tg.d, i % 2 ? "#1c8468" : "#26a183");
+      relicBack += fill(brushStroke(rp, [tg.P(len * 0.1, 0), tg.P(len * 0.55, 0), tg.P(len * 0.8, 0)], 0.7), "#7fd9b5", ' opacity=".7"');
+      const e = tg.P(len * 0.8, 0), er = 5.4 * fan;
+      relicBack += `<circle cx="${f(e[0])}" cy="${f(e[1])}" r="${f(er)}" fill="#e9c449"/><circle cx="${f(e[0])}" cy="${f(e[1])}" r="${f(er * 0.68)}" fill="#1fa9a2"/><circle cx="${f(e[0])}" cy="${f(e[1])}" r="${f(er * 0.4)}" fill="#14306e"/>`;
+      track(tg.end);
+      keep("t", tg.end);
+    }
+  } else if (relic === "butterflyWings") {
+    const rp = R(43), sw = lerp(0.8, 1.45, adult);
+    const A = rot(-4 * L, -16 * H);
+    const W = (pts, k = 1) => {
+      const c = pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length], [0, 0]);
+      return smoothClosed(pts.map(([x, y]) => {
+        const q = [c[0] + (x - c[0]) * k, c[1] + (y - c[1]) * k];
+        return add(A, turn([q[0] * sw, q[1] * sw], [0, 0], tiltDeg));
+      }));
+    };
+    const fore = [[2, -2], [-4, -30], [-18, -50], [-38, -48], [-44, -34], [-24, -10]];
+    const hind = [[0, 2], [-22, -4], [-40, 6], [-36, 22], [-18, 20], [-4, 10]];
+    let wingsHtml = "";
+    for (const [pts, j] of [[hind, 0], [fore, 1]]) {
+      wingsHtml += fill(W(pts), "#1b2c57") + fill(W(pts, 0.8), j ? "#5cb8ff" : "#4aa4f0") + fill(W(pts, 0.42), j ? "#2b74db" : "#2765c4");
+    }
+    for (const [x, y] of [[-36, -44], [-42, -36], [-27, -49], [-36, 17], [-39, 9]]) {
+      const q = add(A, turn([x * sw, y * sw], [0, 0], tiltDeg));
+      wingsHtml += `<circle cx="${f(q[0])}" cy="${f(q[1])}" r="${f(1.5 * sw + rp() * 0.6)}" fill="#fff" opacity=".9"/>`;
+    }
+    relicFront = `<g class="relic-wings" style="transform-origin:${f(A[0])}px ${f(A[1])}px">${wingsHtml}</g>`;
+    for (const [x, y] of [[-18, -50], [-44, -34], [-40, 6], [-36, 22]]) {
+      const q = add(A, turn([x * sw, y * sw], [0, 0], tiltDeg));
+      track(q);
+      keep("b", q);
+    }
+  } else if (gold) {
+    const star = (p, k) => `<path d="M${f(p[0])} ${f(p[1] - 3.4 * k)}L${f(p[0] + 0.9 * k)} ${f(p[1] - 0.9 * k)}L${f(p[0] + 3.4 * k)} ${f(p[1])}L${f(p[0] + 0.9 * k)} ${f(p[1] + 0.9 * k)}L${f(p[0])} ${f(p[1] + 3.4 * k)}L${f(p[0] - 0.9 * k)} ${f(p[1] + 0.9 * k)}L${f(p[0] - 3.4 * k)} ${f(p[1])}L${f(p[0] - 0.9 * k)} ${f(p[1] - 0.9 * k)}Z" fill="#fff6c4"/>`;
+    relicFeet = `<g class="relic-glint" stroke="#d99a00" stroke-width=".5">${feetAt.map((p, i) => star(add(p, [i ? 3 : -2, i ? -9 : -5]), i ? 1.2 : 0.9)).join("")}</g>`;
+  } else if (dog) {
+    // đầu cún: to hơn đầu gà, tai cụp, mõm dài, mũi đen, mắt tròn đen, lưỡi hồng
+    const rd = R(47), fur = "#c98d5a", furD = "#6e4026", cream = "#f3dcbc";
+    const hr = r * 1.22, hc = add(head, [r * 0.05, -r * 0.02]);
+    const at = (x, y) => add(hc, [hr * x, hr * y]);
+    relicHeadBack = fill(tongue(rd, at(-0.3, -0.75), 170, hr * 1.05, hr * 0.42, { tip: "round", bend: -0.3, base: 0.6 }).d, shade(furD, 0.2));
+    relicHead = fill(blob(rd, hc, hr * 1.02, hr * 0.95, -4, 0.04), fur);
+    relicHead += fill(blob(rd, at(0.78, 0.34), hr * 0.66, hr * 0.48, 6, 0.04), cream); // mõm
+    relicHead += fill(blob(rd, at(0.25, -0.62), hr * 0.32, hr * 0.2, -10, 0.05), tint(fur, 0.25)); // đốm sáng trên trán
+    relicHead += fill(brushStroke(rd, [at(1.2, 0.3), at(1.12, 0.6), at(0.88, 0.66), at(0.7, 0.56)], 1.1), "#4a2a18"); // miệng
+    relicHead += fill(blob(rd, at(1.0, 0.86), hr * 0.15, hr * 0.2, 0, 0.05), "#f07a8a"); // lưỡi
+    relicHead += fill(blob(rd, at(1.32, 0.18), hr * 0.25, hr * 0.2, 0, 0.04), "#241812") + `<circle cx="${f(at(1.26, 0.1)[0])}" cy="${f(at(1.26, 0.1)[1])}" r="${f(hr * 0.07)}" fill="#fff" opacity=".75"/>`; // mũi
+    relicHead += `<circle cx="${f(at(0.42, -0.2)[0])}" cy="${f(at(0.42, -0.2)[1])}" r="${f(hr * 0.17)}" fill="#241812"/><circle cx="${f(at(0.47, -0.27)[0])}" cy="${f(at(0.47, -0.27)[1])}" r="${f(hr * 0.06)}" fill="#fff"/>`; // mắt
+    relicHead += fill(tongue(rd, at(-0.12, -0.82), 104, hr * 1.35, hr * 0.5, { tip: "round", bend: 0.22, base: 0.62 }).d, furD); // tai gần, rủ xuống
+    trackH(at(1.6, 0.1), at(-0.5, 0.8), at(0, -1.05));
+  }
+
   /* tư thế: gộp dáng thật vào khung (đầu khi bước tính ở vị trí giữa nhịp gật, bỏ nhún) để
      các pha bước cùng một cỡ; đuôi vểnh thêm khi mổ */
   const tailRoot = rot(-28 * L, -12 * H);
@@ -655,34 +729,36 @@ export function renderChickenFlat(ph, opts = {}) {
   ];
 
   return [
-    `<svg class="chicken is-flat${posed ? ` pose-${pose}` : ""}${flip ? " face-left" : ""}" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${opts.label ?? "Gà"}">`,
+    `<svg class="chicken is-flat${posed ? ` pose-${pose}` : ""}${flip ? " face-left" : ""}" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${opts.label ?? tr("Gà")}">`,
     `<defs>${defs.join("")}</defs>`,
     `<g transform="translate(${f(flip ? 200 - tx : tx)} ${f(ty)}) scale(${flip ? `${(-s).toFixed(3)} ${s.toFixed(3)}` : s.toFixed(3)})">`,
     `<ellipse cx="${f(belly[0] - 2)}" cy="${f(ground)}" rx="${f((sit ? 36 : 32) * L)}" ry="${sit ? 5 : 4.5}" fill="#000" opacity="${sit ? ".1" : ".08"}"/>`,
     `<g class="ck-bob" filter="url(#${id}-r)">`,
     leanOpen,
-    part("tail", tailHtml),
+    part("relic", relicBack),
+    relic === "peacockTail" ? "" : part("tail", tailHtml),
     leanClose,
     part("legs", legs),
+    part("relic", relicFeet),
     leanOpen,
     `<g class="ck-head" style="transform-origin:${f(pivot[0])}px ${f(pivot[1])}px">`,
     part("hackle", fill(neckD, neckC)),
     `</g>`,
     part("body", fill(bodyD, bodyC) + pattern + bodyStripe),
     part("hackle", cape),
-    part("wing", wing),
+    relicFront ? part("relic", relicFront) : part("wing", wing),
     part("saddle", saddle),
     `<g class="ck-head" style="transform-origin:${f(pivot[0])}px ${f(pivot[1])}px">`,
     hrot ? `<g transform="rotate(${f(hrot)} ${f(head[0])} ${f(head[1])})">` : "",
-    part("comb", combHtml),
-    part("head", fill(headD, neckC) + headStripe),
-    part("crest", crestHtml),
-    part("face", faceHtml),
-    part("earlobe", earHtml),
-    part("wattle", wattleHtml),
-    part("muff", muffHtml),
-    part("eye", eyeHtml),
-    part("beak", beakHtml),
+    dog ? part("relic", relicHeadBack) : part("comb", combHtml),
+    dog ? part("relic", relicHead) : part("head", fill(headD, neckC) + headStripe),
+    dog ? "" : part("crest", crestHtml),
+    dog ? "" : part("face", faceHtml),
+    dog ? "" : part("earlobe", earHtml),
+    dog ? "" : part("wattle", wattleHtml),
+    dog ? "" : part("muff", muffHtml),
+    dog ? "" : part("eye", eyeHtml),
+    dog ? "" : part("beak", beakHtml),
     hrot ? `</g>` : "",
     `</g>`,
     leanClose,
@@ -708,7 +784,7 @@ export function renderEggFlat(ph, opts = {}) {
   const crackHtml = crack > 0
     ? `<path d="M70,118${[...Array(Math.round(3 + crack * 7)).keys()].map((i) => `L${70 + (i + 1) * 6},${118 + (i % 2 ? -5 : 5)}`).join("")}" fill="none" stroke="${shade(shell, 0.6)}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`
     : "";
-  return `<svg class="egg is-flat${opts.wobble ? " is-wobble" : ""}" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${opts.label ?? "Trứng"}"><defs>${paintFilter(`${id}-r`, ph.egg.seed, true, 2)}</defs><ellipse cx="100" cy="171" rx="28" ry="4.5" fill="#000" opacity=".08"/><g class="egg-shell" data-part="egg" filter="url(#${id}-r)"><path d="${smoothClosed(pts)}" fill="${shell}"/><path d="${brushStroke(rng, [[80, 104], [84, 94], [94, 86]], 1.8)}" fill="#fff" opacity=".45"/><g fill="${shade(shell, 0.5)}" opacity=".75">${dots}</g>${crackHtml}</g></svg>`;
+  return `<svg class="egg is-flat${opts.wobble ? " is-wobble" : ""}" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${opts.label ?? tr("Trứng")}"><defs>${paintFilter(`${id}-r`, ph.egg.seed, true, 2)}</defs><ellipse cx="100" cy="171" rx="28" ry="4.5" fill="#000" opacity=".08"/><g class="egg-shell" data-part="egg" filter="url(#${id}-r)"><path d="${smoothClosed(pts)}" fill="${shell}"/><path d="${brushStroke(rng, [[80, 104], [84, 94], [94, 86]], 1.8)}" fill="#fff" opacity=".45"/><g fill="${shade(shell, 0.5)}" opacity=".75">${dots}</g>${crackHtml}</g></svg>`;
 }
 const fillDot = (d) => `<path d="${d}"/>`;
 

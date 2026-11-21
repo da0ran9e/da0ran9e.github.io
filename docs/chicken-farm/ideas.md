@@ -53,7 +53,7 @@ Game hiện có vòng ngắn tốt (ấp, nuôi, kiếm hạt, nhận thưởng)
 
 ## Nhóm 3 — thứ thay đổi theo thời gian
 
-### 7. Mùa theo tuần và thời tiết
+### 7. Mùa theo tuần và thời tiết — ĐÃ CÀI (luật v9, 21/11)
 
 - **Luật:** mỗi tuần thật là một "mùa" tất định theo lịch: mùa gặt (cánh đồng nhiều hạt mẩy), mùa mưa (đốm sáng xuất hiện dày hơn), mùa hoa (nhiều hạt màu), mùa khô (ít hạt, nhưng thương nhân giảm giá). Chỉ đổi **bảng rơi** và tần suất đã có trong `CONFIG`, không thêm vật phẩm.
 - Kết hợp được với đợt D (cánh đồng treo máy): mỗi mùa một bảng màu.
@@ -64,7 +64,7 @@ Game hiện có vòng ngắn tốt (ấp, nuôi, kiếm hạt, nhận thưởng)
 - **Luật:** ngoài đồng cỏ còn bờ suối (nhiều hạt khoáng), ruộng lúa (hạt mẩy), đồi hoa (hạt màu); mở dần theo mốc sổ. Mỗi nơi một bảng rơi và một kiểu "đốm sáng". Người chơi chọn nơi thả theo chất đang thiếu → quyết định có nghĩa, đúng trụ cột 2.
 - **Công sức:** vừa (3 nền mới là phần nặng). **Rủi ro:** thấp về luật.
 
-### 9. Đêm trăng tròn
+### 9. Đêm trăng tròn — ĐÃ CÀI (luật v9, 21/11)
 
 - **Luật:** mỗi tháng âm lịch vài đêm: trứng đẻ trong đêm đó có tỉ lệ biến dị cao hơn (nhân với `mutationRate` sẵn có). Một sự kiện hiếm, đoán trước được, tạo cớ hẹn giờ vào game.
 - **Công sức:** rất nhỏ. **Rủi ro:** thấp.

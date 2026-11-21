@@ -1,8 +1,7 @@
 // Luật v7 — gà mái ấp giúp, gõ trứng, rương theo giờ. Thiết kế: docs/chicken-farm/next-rounds.md đợt B.
-// CHƯA có test (để lại): mái đang ấp thì không đẻ; mái ra đồng thì thôi ấp; rương khi kho túi đầy.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CONFIG, TIME, newGame, advance, incubate, knockEgg, claim, questView } from "../../public/apps/chicken-farm/js/game/rules.js";
+import { CONFIG, TIME, newGame, advance, incubate, knockEgg, claim, questView, release } from "../../public/apps/chicken-farm/js/game/rules.js";
 
 const { MIN, HOUR, DAY } = TIME;
 const T0 = Date.UTC(2026, 10, 16, 2, 0, 0);
@@ -91,4 +90,47 @@ test("rương theo giờ: mốc TÍCH LUỸ từ đầu vòng (5′, 15′, 1h, 
   advance(old, T0 + MIN);
   assert.equal(old.timed.claimed, 0);
   assert.equal(typeof old.timed.start, "number");
+});
+
+// đặt mái vào ổ ấp quả e2 ngay (không chờ xác suất)
+const sitOn = (a, t) => Object.assign(a.hen, { broodEgg: "e2", broodUntil: t + CONFIG.brood.minutes * MIN }) && (a.s.eggs.find((e) => e.id === "e2").broodBy = a.hen.id);
+
+test("mái đang ấp thì không đẻ; thôi ấp thì đẻ lại", () => {
+  const run = (brooding) => {
+    const a = broodFarm(7);
+    a.hen.layMeanMs = 2 * MIN; // đẻ rất sai để thấy khác biệt
+    if (brooding) sitOn(a, a.t);
+    else a.s.eggs.find((e) => e.id === "e2").broodBy = "khac"; // đối chứng: trứng đã có gà khác ấp → mái này không vào ổ
+    let laid = 0;
+    for (let i = 1; i <= 15; i++) { a.hen.satiety = CONFIG.satietyMax; laid += advance(a.s, a.t + i * MIN, { present: false }).filter((e) => e.type === "laid").length; }
+    return laid;
+  };
+  assert.equal(run(true), 0, "15 phút đang ấp: không đẻ");
+  assert.ok(run(false) > 0, "không ấp: có đẻ");
+});
+
+test("mái ra đồng thì thôi ấp: trứng không còn ai ấp, giờ nở không rút thêm", () => {
+  const a = broodFarm(7);
+  sitOn(a, a.t);
+  advance(a.s, a.t + 2 * MIN, { present: false });
+  const egg = a.s.eggs.find((e) => e.id === "e2");
+  assert.equal(release(a.s, a.hen.id, a.t + 2 * MIN).ok, true);
+  advance(a.s, a.t + 3 * MIN);
+  assert.equal(a.hen.broodEgg, undefined);
+  assert.equal(egg.broodBy, undefined);
+  const at = egg.hatchAt;
+  advance(a.s, a.t + 6 * MIN);
+  assert.equal(egg.hatchAt, at, "không ai ấp: giờ nở đứng yên");
+});
+
+test("rương theo giờ khi kho túi đầy → bags_full, rương vẫn chờ (không mất lượt)", () => {
+  const s = newGame(3, T0);
+  const t = T0 + CONFIG.timed[0].at + 1000;
+  s.bags = Array.from({ length: CONFIG.storage.bags }, (_, i) => ({ id: `b${i}`, size: 2, from: "gift", at: T0 }));
+  const r = claim(s, "timed", t);
+  assert.equal(r.code, "bags_full");
+  assert.equal(s.timed.claimed, 0);
+  s.bags.pop();
+  assert.equal(claim(s, "timed", t).ok, true);
+  assert.equal(s.timed.claimed, 1);
 });

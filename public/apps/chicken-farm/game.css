@@ -271,7 +271,7 @@ dialog.sheet { width: min(760px, calc(100vw - 24px)); max-width: none; max-heigh
 .trade-options { display: grid; gap: 8px; margin-top: 12px; }
 
 .toasts { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); display: grid; gap: 6px; z-index: 50; width: min(420px, calc(100vw - 32px)); pointer-events: none; }
-.toast { background: var(--ink); color: var(--card); border-radius: 12px; padding: 9px 14px; font-size: 14px; box-shadow: 0 8px 24px rgb(0 0 0 / .2); animation: toast-in .2s ease-out; }
+.toast { white-space: pre-line; background: var(--ink); color: var(--card); border-radius: 12px; padding: 9px 14px; font-size: 14px; box-shadow: 0 8px 24px rgb(0 0 0 / .2); animation: toast-in .2s ease-out; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 @media (max-width: 640px) {
@@ -447,6 +447,22 @@ dialog.reveal::backdrop { background: radial-gradient(circle at 50% 38%, rgb(74 
 [data-sky="day"] .amb .cloud { display: block; width: 46%; height: 34%; border-radius: 50%; background: radial-gradient(closest-side, rgb(40 70 30 / .13), transparent); left: -50%; top: 30%; animation: cloud 70s linear infinite; }
 @keyframes cloud { to { translate: 340% 0; } }
 
+/* v9 — mùa theo tuần, đêm trăng tròn */
+.chip.season { font-size: 15px; padding-inline: 8px; cursor: help; }
+.amb .rd { top: -12%; width: 1.5px; height: 14%; background: linear-gradient(transparent, rgb(225 240 255 / .75)); transform: rotate(10deg); animation: rd-fall linear infinite; }
+[data-season="rain"] .amb .rd { display: block; }
+@keyframes rd-fall { to { translate: -24px 820%; } }
+.amb .pt { top: -6%; width: 12px; height: 8px; filter: drop-shadow(0 1px 1px rgb(120 40 60 / .25)); border-radius: 70% 10% 70% 10%; background: var(--c); opacity: .9; animation: pt-fall linear infinite; }
+[data-season="bloom"]:not([data-sky="night"]) .amb .pt { display: block; }
+@keyframes pt-fall { 25% { translate: 30px 260%; rotate: 120deg; } 50% { translate: -10px 700%; rotate: 220deg; } 75% { translate: 40px 1150%; rotate: 330deg; } 100% { translate: 0 1700%; rotate: 420deg; } }
+[data-season="rain"][data-sky="day"] .sky { background: linear-gradient(#dfe6ef, #eef2f6 75%); }
+[data-season="dry"][data-sky="day"] .sky { background: linear-gradient(#fff0d2, #fff6e6 75%); }
+[data-season="harvest"][data-sky="day"] .sky { background: linear-gradient(#fff6dc, #fffaf0 75%); }
+.amb .moon { right: 9%; top: 7%; width: 54px; height: 54px; border-radius: 50%; background: radial-gradient(circle at 40% 38%, #fffdf0, #fff1b8 60%, #f1dc8c); box-shadow: 0 0 30px 12px rgb(255 246 196 / .55), 0 0 90px 40px rgb(255 246 196 / .18); }
+.fullmoon[data-sky="night"] .amb .moon { display: block; animation: moon-glow 6s ease-in-out infinite; }
+@keyframes moon-glow { 50% { box-shadow: 0 0 36px 16px rgb(255 246 196 / .7), 0 0 110px 50px rgb(255 246 196 / .22); } }
+@media (prefers-reduced-motion: reduce) { .amb .rd, .amb .pt { animation: none; display: none !important; } }
+
 /* sổ: sao thứ ba + giống */
 .dex-item .stars .s3 { color: var(--accent); }
 .breeds { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-top: 8px; }
@@ -618,8 +634,12 @@ body.v7 .hud { justify-content: flex-end; }
 /* v8: kỳ vật, đoạn mở đầu, con đường */
 .rv-relic { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 10px auto 0; max-width: 340px; padding: 8px 12px; border-radius: 14px; background: rgb(255 217 90 / .22); box-shadow: 0 0 0 2px #ffd95a inset, 0 0 24px rgb(255 217 90 / .5); text-align: left; font-size: 14px; }
 .rv-relic small { color: rgb(255 255 255 / .8); }
-.fc .relic-float { position: absolute; left: 50%; top: -14%; transform: translateX(-50%); width: 26%; filter: drop-shadow(0 0 6px #ffd95a); animation: bob 1.6s ease-in-out infinite; pointer-events: none; }
-.fc .relic-float svg { width: 100%; height: auto; display: block; }
+/* kỳ vật vẽ trên thân gà (chicken-flat.js): cánh bướm vỗ nhẹ, móng vàng lấp lánh */
+.chicken .relic-wings { animation: relic-flap 1.8s ease-in-out infinite; }
+@keyframes relic-flap { 50% { transform: scaleX(.82) skewY(-5deg); } }
+.chicken .relic-glint { animation: relic-glint 1.4s ease-in-out infinite; }
+@keyframes relic-glint { 50% { opacity: .15; } }
+@media (prefers-reduced-motion: reduce) { .chicken .relic-wings, .chicken .relic-glint { animation: none; } }
 .breed .relic-icon { display: block; }
 .intro { display: grid; justify-items: center; gap: 6px; }
 .intro-art { width: min(380px, 86vw); aspect-ratio: 800 / 480; border-radius: 16px; overflow: hidden; animation: rv-in .5s ease-out both; }

@@ -1,8 +1,7 @@
 // Luật v7 — tháp hạt: gà chỉ tự ăn ở những phút người chơi đang mở game. Thiết kế: docs/chicken-farm/design-hard-parts.md §H1.
-// Các tình huống T4, T6, T10–T12 trong bảng thiết kế CHƯA có test ở đây (để lại cho đợt sau).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CONFIG, TIME, NUTRIENTS, newGame, advance, incubate, fillTower, takeFromTower, bestSeedFor } from "../../public/apps/chicken-farm/js/game/rules.js";
+import { CONFIG, TIME, NUTRIENTS, newGame, advance, incubate, fillTower, takeFromTower, bestSeedFor, release } from "../../public/apps/chicken-farm/js/game/rules.js";
 
 const T0 = Date.UTC(2026, 10, 16, 2, 0, 0);
 const { MIN, HOUR } = TIME;
@@ -111,4 +110,60 @@ test("đổ / lấy lại hạt: đủ kho, không quá sức chứa tháp, hạ
   assert.equal(s.tower.common, CONFIG.tower.cap - 5);
   assert.equal(s.inventory.common, 60 - CONFIG.tower.cap + 5);
   assert.equal(takeFromTower(s, "protein", 1, T0).code, "no_seed");
+});
+
+test("T4 hai lần gọi cách đúng hatchPresenceGraceMs → cùng phiên; cách thêm 1 ms → phiên mới", () => {
+  const G = CONFIG.hatchPresenceGraceMs;
+  const a = hungryFarm(10);
+  advance(a.s, a.t + 1000);
+  const from = a.s.watchFrom;
+  advance(a.s, a.t + 1000 + G);
+  assert.equal(a.s.watchFrom, from, "đúng bằng grace: vẫn liên tục");
+  const b = hungryFarm(10);
+  advance(b.s, b.t + 1000);
+  advance(b.s, b.t + 1000 + G + 1);
+  assert.equal(b.s.watchFrom, b.t + 1000 + G + 1, "quá grace 1 ms: phiên mới");
+});
+
+test("T6 gà đang ở ngoài đồng không ăn từ tháp", () => {
+  const { s, ch, t } = hungryFarm(10);
+  ch.satiety = 20;
+  assert.equal(release(s, ch.id, t).ok, true);
+  for (let i = 1; i <= 20; i++) advance(s, t + i * 30_000);
+  assert.equal(ch.location, "field");
+  assert.equal(towerTotal(s), 10);
+});
+
+test("T10 watchFrom sớm hơn lần mô phỏng trước → không ăn bù bước đã tính", () => {
+  const a = hungryFarm(10), b = hungryFarm(10);
+  for (let i = 1; i <= 20; i++) {
+    advance(a.s, a.t + i * 30_000);
+    advance(b.s, b.t + i * 30_000, { watchFrom: b.t - 10 * HOUR }); // server báo phiên bắt đầu từ rất lâu
+  }
+  // b được tính là có mặt từ đầu nên ăn ít nhất như a, nhưng không ăn lại các bước đã mô phỏng
+  assert.ok(towerTotal(b.s) <= towerTotal(a.s));
+  const once = JSON.stringify(b.s);
+  advance(b.s, b.t + 20 * 30_000, { watchFrom: b.t - 10 * HOUR });
+  assert.equal(JSON.stringify(b.s), once, "gọi lại cùng thời điểm không đổi gì");
+});
+
+test("T11 continuous: true — hai lần gọi cách 30 phút vẫn coi như có mặt suốt", () => {
+  const a = hungryFarm(10);
+  advance(a.s, a.t + 30 * MIN, { continuous: true });
+  assert.ok(towerTotal(a.s) < 10, "ăn trong 30 phút");
+  const b = hungryFarm(10);
+  advance(b.s, b.t + 30 * MIN);
+  assert.equal(towerTotal(b.s), 10, "không continuous: phiên mới, không ăn");
+});
+
+test("T12 bản lưu v6 chưa có tower / watchFrom → ensure bổ sung, không đổi phần khác", () => {
+  const { s, t } = hungryFarm(1);
+  delete s.tower;
+  delete s.watchFrom;
+  const before = JSON.parse(JSON.stringify(s));
+  advance(s, t);
+  assert.deepEqual(Object.keys(s.tower).sort(), Object.keys(before.inventory).sort());
+  assert.ok(Object.values(s.tower).every((n) => n === 0));
+  assert.equal(typeof s.watchFrom, "number");
+  for (const k of ["chickens", "eggs", "inventory", "bags", "seed", "tickets"]) assert.deepEqual(s[k], before[k], k);
 });

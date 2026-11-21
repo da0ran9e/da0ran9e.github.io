@@ -27,8 +27,9 @@ export function serverRoll(secret, purpose, playerId, counter) {
 //   fieldBonus  → seed riêng cho lần bới đốm sáng (số hạt, loại hạt, hay cả túi)
 //   claim       → seed riêng cho phần thưởng nhiệm vụ (trứng quà)
 const SEEDED = new Set(["openBag", "tradeForEgg", "fieldBonus", "claim", "buy", "barter", "candle", "haggle"]);
-export function rollFor(type, secret, playerId, counter) {
-  if (type === "fieldFind") return { kind: R.rollSeed("field", mulberry32(serverRoll(secret, "field", playerId, counter))) };
+// now: bảng rơi ngoài đồng theo mùa (luật v9) — loại hạt đã tung ghi vào nhật ký nên phát lại không cần biết mùa
+export function rollFor(type, secret, playerId, counter, now = null) {
+  if (type === "fieldFind") return { kind: R.rollSeed("field", mulberry32(serverRoll(secret, "field", playerId, counter)), now) };
   if (SEEDED.has(type)) return { seed: serverRoll(secret, type, playerId, counter) };
   return null;
 }

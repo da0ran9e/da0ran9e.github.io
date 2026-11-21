@@ -191,7 +191,7 @@ export class FarmService {
     if ((type === "fieldFind" || type === "fieldBonus") && !this.presence.isWatching(pid, now)) return fail(409, "not_watching", "Bạn không còn xem cánh đồng — gà đã về chuồng");
 
     let rolls = entry.rolls;
-    const rolled = { ...(NEEDS_ROLL.has(type) ? rollFor(type, this.secret, pid, rolls++) : {}), w: this.seen(pid, now) };
+    const rolled = { ...(NEEDS_ROLL.has(type) ? rollFor(type, this.secret, pid, rolls++, now) : {}), w: this.seen(pid, now) };
     const draft = structuredClone(entry.state);
     let out;
     try {

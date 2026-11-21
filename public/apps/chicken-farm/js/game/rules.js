@@ -33,7 +33,7 @@ export const SEEDS = {
 };
 
 export const CONFIG = {
-  version: 8,
+  version: 9,
   stepMs: MIN,
   // Ấp 5–30 phút theo gen "thời gian ấp" của chính quả trứng (genome.express).
   // Lớn: chất lượng dinh dưỡng 1 → 20 phút, 0 → 24 giờ (thang lũy thừa), nhân gen "tốc độ lớn".
@@ -104,6 +104,20 @@ export const CONFIG = {
   // v6 — GIỐNG: một con gà trưởng thành mang đủ tổ hợp đặc điểm, nuôi đủ chất → ghi tên giống, tặng túi quà;
   // đủ `incubatorAt` giống tặng thêm 1 ổ ấp.
   breed: { bag: 8, incubatorAt: 3 },
+  // v9 — MÙA THEO TUẦN (ideas 7, chủ dự án chọn 21/11): mỗi tuần thật (từ thứ Hai 0:00 giờ Việt Nam) là một mùa, bốn mùa xoay vòng,
+  // CHUNG cho mọi trại. Chỉ nhân trọng số bảng rơi và tần suất đã có — không thêm vật phẩm.
+  //   field / lucky: hệ số nhân trọng số từng loại hạt · luckyCooldown: hệ số thời gian chờ đốm sáng
+  //   spawn: hệ số mật độ hạt trên cánh đồng (chỉ hình, phía client) · price: hệ số giá vé của khách qua đường
+  season: {
+    order: ["harvest", "rain", "bloom", "dry"],
+    harvest: { field: { protein: 3, energy: 3, premium: 1.5 } }, // mùa gặt: hạt mẩy
+    rain: { field: { mineral: 3 }, luckyCooldown: 0.6 }, // mùa mưa: đốm sáng dày hơn
+    bloom: { field: { pigment: 4 }, lucky: { pigment: 2 } }, // mùa hoa: hạt màu
+    dry: { spawn: 0.7, price: 0.8 }, // mùa khô: ít hạt, khách bán rẻ hơn
+  },
+  // v9 — ĐÊM TRĂNG TRÒN (ideas 9): ±1 ngày quanh lúc trăng tròn thiên văn, từ 18:00 tới 6:00 giờ Việt Nam. Trứng có phôi đẻ lúc đó
+  // có tỉ lệ biến dị ×mutationMul (nhân với phần tăng của hạt lạ). Tính từ chu kỳ trăng trung bình — lệch vài giờ so với lịch, đủ dùng.
+  moon: { newRef: Date.UTC(2000, 0, 6, 18, 14), synodicMs: 29.530588853 * DAY, halfWidth: 0.034, night: [18, 6], mutationMul: 3 },
   // Q14 (chủ dự án chốt 12/11): trứng ấp xong lúc người chơi vắng thì CHỜ trong ổ, nở khi người chơi
   // quay lại. Vắng ≤ khoảng này (đang mở game, chỉ giữa hai lần đồng bộ) thì vẫn nở đúng giờ.
   hatchPresenceGraceMs: 2 * MIN,
@@ -136,8 +150,10 @@ const err = (code, message) => ({ ok: false, code, message });
 const seedCount = (state) => Object.values(state.inventory).reduce((a, b) => a + b, 0);
 const storedEggs = (state) => state.eggs.filter((e) => e.hatchAt === null).length;
 
-export function rollSeed(table, rng) {
-  const entries = Object.entries(CONFIG.drops[table]);
+// now (tuỳ chọn): áp hệ số của mùa lúc đó lên bảng rơi
+export function rollSeed(table, rng, now = null) {
+  const mul = now == null ? null : CONFIG.season[seasonOf(now)][table];
+  const entries = Object.entries(CONFIG.drops[table]).map(([k, w]) => [k, w * (mul?.[k] ?? 1)]);
   let r = rng() * entries.reduce((s, [, w]) => s + w, 0);
   for (const [k, w] of entries) if ((r -= w) <= 0) return k;
   return entries[0][0];
@@ -171,6 +187,42 @@ const isNight = (t) => {
   const h = new Date(t + CONFIG.daily.tzOffsetMs).getUTCHours(), [a, b] = CONFIG.stamina.night;
   return h >= a || h < b;
 };
+
+/* ---------- mùa theo tuần, đêm trăng tròn (v9) ---------- */
+
+// Tuần thứ mấy kể từ 1/1/1970 (thứ Năm), đổi tuần lúc thứ Hai 0:00 giờ Việt Nam.
+export const weekIndex = (now) => Math.floor((dayIndex(now) + 3) / 7);
+export const seasonOf = (now) => CONFIG.season.order[((weekIndex(now) % 4) + 4) % 4];
+const seasonFx = (now) => CONFIG.season[seasonOf(now)];
+export const luckyCooldownMs = (now) => Math.round(CONFIG.lucky.cooldownMs * (seasonFx(now).luckyCooldown ?? 1));
+export const fieldSpawnMul = (now) => seasonFx(now).spawn ?? 1;
+const seasonPrice = (now, price) => (seasonFx(now).price ? Math.max(1, Math.round(price * seasonFx(now).price)) : price);
+// pha trăng 0..1 (0 = trăng non, 0,5 = trăng tròn)
+export const moonPhase = (t) => {
+  const M = CONFIG.moon, p = ((t - M.newRef) / M.synodicMs) % 1;
+  return p < 0 ? p + 1 : p;
+};
+const hourVN = (t) => new Date(t + CONFIG.daily.tzOffsetMs).getUTCHours();
+export const fullMoonAt = (t) => {
+  const M = CONFIG.moon, h = hourVN(t);
+  return Math.abs(moonPhase(t) - 0.5) <= M.halfWidth && (h >= M.night[0] || h < M.night[1]);
+};
+// Bản xem cho giao diện: mùa này (hết lúc nào, mùa sau), trăng (đang tròn? đêm trăng tròn kế tiếp bắt đầu lúc nào).
+export function calendarView(now) {
+  const M = CONFIG.moon, wk = weekIndex(now), order = CONFIG.season.order;
+  const ends = (wk + 1) * 7 * DAY - 3 * DAY - CONFIG.daily.tzOffsetMs;
+  // mốc 18:00 đầu tiên trong cửa sổ trăng tròn sắp tới (hoặc đang diễn ra)
+  let k = Math.floor((now - M.newRef) / M.synodicMs - 0.5 + M.halfWidth);
+  let nextFull = null;
+  for (let tries = 0; tries < 3 && nextFull == null; tries++, k++) {
+    const mid = M.newRef + (k + 0.5) * M.synodicMs, a = mid - M.halfWidth * M.synodicMs, b = mid + M.halfWidth * M.synodicMs;
+    for (let t = Math.max(a, now - HOUR); t < b; t += HOUR) {
+      const h0 = Math.floor((t + CONFIG.daily.tzOffsetMs) / HOUR) * HOUR - CONFIG.daily.tzOffsetMs; // đầu giờ
+      if (h0 + HOUR > now && fullMoonAt(Math.max(h0, a))) { nextFull = Math.max(h0, a, Math.min(now, h0 + HOUR)); break; }
+    }
+  }
+  return { season: seasonOf(now), ends, next: order[(((wk + 1) % 4) + 4) % 4], fullMoon: fullMoonAt(now), nextFull, phase: moonPhase(now) };
+}
 
 export const incubateMsOf = (code) => express(decodeGenome(code)).egg.incubateMin * MIN;
 
@@ -431,7 +483,7 @@ export function advance(state, now, { present = true, watchFrom, continuous = fa
   const order = [...state.chickens].sort((a, b) => (a.sex === b.sex ? 0 : a.sex === "rooster" ? -1 : 1));
   for (const ch of order) advanceChicken(state, ch, now, events, watchedFrom);
   for (const ch of state.chickens.filter((c) => c.diedAt != null)) {
-    state.memorial.push({ id: ch.id, name: ch.name, code: ch.code, hatchedAt: ch.hatchedAt, diedAt: ch.diedAt, dev: ch.dev, starvedMs: ch.starvedMs });
+    state.memorial.push({ id: ch.id, name: ch.name, code: ch.code, hatchedAt: ch.hatchedAt, diedAt: ch.diedAt, dev: ch.dev, starvedMs: ch.starvedMs, ...(ch.relic ? { relic: ch.relic } : {}) });
     state.stats.died++;
   }
   state.chickens = state.chickens.filter((c) => c.diedAt == null);
@@ -605,10 +657,11 @@ function stepChicken(state, ch, t, dt, events, watchedFrom = Infinity) {
 function layEgg(state, hen, at, events) {
   const rng = rngFor(state, "egg", hen.id, at);
   const roosters = state.chickens.filter((c) => c.sex === "rooster" && c.adultAt != null && c.adultAt <= at && (c.diedAt == null || c.diedAt > at));
-  let code = hen.code, fertile = false, fatherId = null, mutations = 0, line = [];
+  let code = hen.code, fertile = false, fatherId = null, mutations = 0, line = [], moon = false;
   if (roosters.length) {
     const father = roosters[Math.floor(rng() * roosters.length)];
-    const r = breed(decodeGenome(father.code), decodeGenome(hen.code), rng, { mutationRate: 1 + hen.mutationBoost });
+    moon = fullMoonAt(at); // v9: đêm trăng tròn
+    const r = breed(decodeGenome(father.code), decodeGenome(hen.code), rng, { mutationRate: (1 + hen.mutationBoost) * (moon ? CONFIG.moon.mutationMul : 1) });
     code = encodeGenome(r.genome);
     mutations = r.mutations.length;
     fertile = true;
@@ -619,7 +672,7 @@ function layEgg(state, hen, at, events) {
   }
   // id gắn với (mẹ, thời điểm) để không phụ thuộc thứ tự mô phỏng
   // trứng mới đẻ nằm ngoài SÂN; người chơi nhặt (collectEgg) mới vào kho
-  const egg = { id: `e-${hen.id}-${at.toString(36)}`, code, shell: hen.shell, shellName: hen.shellName, fertile, motherId: hen.id, fatherId, laidAt: at, mutations, hatchAt: null, inYard: true, ...(line.length ? { line } : {}) };
+  const egg = { id: `e-${hen.id}-${at.toString(36)}`, code, shell: hen.shell, shellName: hen.shellName, fertile, motherId: hen.id, fatherId, laidAt: at, mutations, hatchAt: null, inYard: true, ...(line.length ? { line } : {}), ...(moon ? { moon: true } : {}) };
   state.eggs.push(egg);
   state.stats.laid++;
   events.push({ type: "laid", at, chickenId: hen.id, eggId: egg.id, fertile });
@@ -802,7 +855,7 @@ export function fieldBonus(state, chickenId, now, opts = {}) {
     const ch = state.chickens.find((c) => c.id === chickenId);
     if (!ch) return err("no_chicken", "Không tìm thấy gà");
     if (ch.location !== "field") return err("not_in_field", `${ch.name} không ở ngoài đồng`);
-    if (now - (state.luckyAt ?? -1e15) < CONFIG.lucky.cooldownMs) return err("too_fast", "Chưa có đốm sáng mới");
+    if (now - (state.luckyAt ?? -1e15) < luckyCooldownMs(now)) return err("too_fast", "Chưa có đốm sáng mới");
     const room = CONFIG.storage.seeds - seedCount(state);
     if (room <= 0) return err("seeds_full", "Kho hạt đầy");
     const rng = opts.rng ?? rngFor(state, "lucky", now);
@@ -818,7 +871,7 @@ export function fieldBonus(state, chickenId, now, opts = {}) {
     const n = Math.min(room, table.find(([p]) => r < p)?.[1] ?? table[table.length - 1][1]);
     const got = {};
     for (let i = 0; i < n; i++) {
-      const k = rollSeed("lucky", rng);
+      const k = rollSeed("lucky", rng, now);
       got[k] = (got[k] ?? 0) + 1;
       state.inventory[k]++;
     }
@@ -1210,6 +1263,10 @@ const visitNow = (state, now) => visitorsOfDay(state.seed, dayIndex(now)).find((
 
 // Hàng của một lượt ghé — tất định theo (seed, lúc tới) và, với người sưu tầm, theo sổ của trại lúc đó.
 function stockOf(state, v) {
+  const items = stockRaw(state, v);
+  return items.map((it) => (it.price ? { ...it, price: seasonPrice(v.from, it.price) } : it)); // v9: mùa khô bán rẻ
+}
+function stockRaw(state, v) {
   const rng = rngFor(state, "stock", v.who, v.from);
   const pickN = (list, n) => { const a = [...list], o = []; while (o.length < n && a.length) o.push(a.splice(Math.floor(rng() * a.length), 1)[0]); return o; };
   if (v.who === "seller") return pickN(VISIT.seller, 3);
@@ -1382,7 +1439,7 @@ export function candle(state, eggId, what, now, opts = {}) {
   return act(state, now, () => {
     const ctx = visiting(state, now, "reader");
     if (ctx.ok === false) return ctx;
-    const price = VISIT.reader[what];
+    const price = VISIT.reader[what] && seasonPrice(ctx.v.from, VISIT.reader[what]);
     if (!price) return err("bad_deal", "Thầy không soi được điều đó");
     const egg = state.eggs.find((e) => e.id === eggId);
     if (!egg) return err("no_egg", "Không tìm thấy trứng");

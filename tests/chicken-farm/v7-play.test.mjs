@@ -1,8 +1,7 @@
 // Luật v7 — vé, thể lực, sân chơi (minigame). Thiết kế: docs/chicken-farm/design-hard-parts.md §H2, §H3 và ideas.md mục 12.
-// CHƯA có test ở đây (để lại): P6 lượt dở quá hạn, P11 gà bị đổi giữa lượt, P13 kiểu trò theo tuổi, thể lực ngoài đồng / ban đêm.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CONFIG, TIME, NUTRIENTS, newGame, advance, incubate, startPlay as startPlayAny, endPlay, tradeToShop, staminaOf, staminaMaxOf, energyOf, energyNextAt } from "../../public/apps/chicken-farm/js/game/rules.js";
+import { CONFIG, TIME, NUTRIENTS, newGame, advance, incubate, release, startPlay as startPlayAny, endPlay, tradeToShop, staminaOf, staminaMaxOf, energyOf, energyNextAt } from "../../public/apps/chicken-farm/js/game/rules.js";
 
 const T0 = Date.UTC(2026, 10, 16, 3, 0, 0); // 10:00 giờ Việt Nam (ban ngày)
 const { MIN, HOUR, DAY } = TIME;
@@ -170,4 +169,60 @@ test("đổi lấy vé: chỉ trứng có phôi và gà trưởng thành, có tr
   assert.equal(tradeToShop(s, { eggs: ["f3"] }, t).ok, true, "túi hạt không bị trần vé chặn");
   assert.equal(tradeToShop(s, { eggs: ["f4"] }, t + DAY, { want: "tickets" }).ok, true);
   assert.equal(s.tickets, 4);
+});
+
+test("P6 lượt dở: còn trong hạn → play_busy; quá maxMs thì lượt mới thay lượt cũ (không hoàn vé)", () => {
+  const { s, ch, t } = farm(3);
+  assert.equal(startPlay(s, ch.id, t).ok, true);
+  assert.equal(startPlay(s, ch.id, t + P.maxMs).code, "play_busy");
+  assert.equal(startPlay(s, ch.id, t + P.maxMs + 1).ok, true);
+  assert.equal(s.tickets, 1, "hai lượt, mỗi lượt 1 vé");
+  assert.equal(s.play.at, t + P.maxMs + 1);
+});
+
+test("P11 gà rời trại giữa lượt (đổi ở chợ) → kết thúc trả gone, điểm 0, không lỗi", () => {
+  const { s, ch, t } = farm(3);
+  assert.equal(startPlay(s, ch.id, t).ok, true);
+  s.chickens = s.chickens.filter((c) => c.id !== ch.id);
+  const r = endPlay(s, 1, t + P.minMs + 1000);
+  assert.equal(r.ok, true);
+  assert.equal(r.gone, true);
+  assert.equal(r.score, 0);
+  assert.equal(s.play, null);
+});
+
+test("P13 kiểu trò theo tuổi: gà con nhảy, gà giò chạy, gà lớn mổ, trứng lăn", () => {
+  const { s, ch, t } = farm(10);
+  const kinds = [];
+  for (const g of [0, CONFIG.stages.juvenile, CONFIG.stages.adult]) {
+    ch.growth = g;
+    if (g >= CONFIG.stages.adult) ch.adultAt = t;
+    ch.satiety = CONFIG.satietyMax;
+    kinds.push(startPlay(s, ch.id, t + kinds.length * (P.maxMs + 1)).kind);
+  }
+  s.eggs.push({ id: "eg", code: ch.code, shell: "#fff", shellName: "", fertile: true, motherId: null, fatherId: null, laidAt: t, mutations: 0, hatchAt: t + 10 * HOUR });
+  kinds.push(startPlay(s, "eg", t + 3 * (P.maxMs + 1)).kind);
+  assert.deepEqual(kinds, ["hop", "dash", "peck", "roll"]);
+});
+
+test("thể lực: ngoài đồng tiêu dần; về chuồng no bụng thì hồi, ban đêm hồi gấp đôi", () => {
+  const S = CONFIG.stamina;
+  const { s, ch, t } = farm(0);
+  ch.stamina = staminaMaxOf(ch);
+  assert.equal(release(s, ch.id, t).ok, true);
+  advance(s, t + HOUR, { continuous: true });
+  assert.ok(Math.abs(staminaOf(ch) - (staminaMaxOf(ch) - S.fieldPerHour)) <= 1, "1 giờ ngoài đồng mất ~fieldPerHour");
+  // hồi: so một giờ ban ngày với một giờ ban đêm (giờ Việt Nam)
+  const regen = (startUtcHour) => {
+    const f = farm(0);
+    const at = Date.UTC(2026, 10, 17, startUtcHour, 0, 0);
+    advance(f.s, at);
+    f.ch.satiety = CONFIG.satietyMax;
+    f.ch.stamina = 0;
+    advance(f.s, at + 30 * MIN, { continuous: true });
+    return staminaOf(f.ch);
+  };
+  const day = regen(3), night = regen(17); // 10:00 và 0:00 giờ VN
+  assert.ok(day > 0);
+  assert.ok(Math.abs(night - day * S.nightMul) <= 1, `đêm ${night} ≈ ${S.nightMul} × ngày ${day}`);
 });
