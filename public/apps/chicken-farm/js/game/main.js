@@ -7,7 +7,7 @@
 // Hai chế độ: OFFLINE (luật chạy ngay trong trình duyệt, lưu localStorage) và ONLINE (server M2 có
 // thẩm quyền: client chỉ gửi ý định qua act(), hiển thị trại server trả về). Bật online bằng
 // ?server=https://… hoặc ô "Máy chủ" trong bảng Dev.
-import { express, decodeGenome } from "../genome.js";
+import { express, decodeGenome, randomGenome, mulberry32 } from "../genome.js";
 import { createNet } from "./net.js";
 import { renderChickenFlat, renderEggFlat } from "../chicken-flat.js";
 import * as R from "./rules.js";
@@ -661,7 +661,7 @@ const DEFAULT_SPOTS = {
   nest: { x: 610, y: 95, r: 60 },
   gate: { x: 765, y: 210, r: 55 },
   market: { x: 110, y: 415, r: 58 },
-  stall: { x: 668, y: 330, r: 50 },
+  stall: { x: 752, y: 392, r: 46 }, // ngoài hàng rào, bên đường
   play: { x: 430, y: 404, r: 52 },
 };
 const SPOTS = {};
@@ -891,7 +891,8 @@ let held = null; // gà đang bị kéo
 const sceneSeed = () => (state.seed ?? Math.floor((state.createdAt ?? 1) / 1000)) >>> 0;
 function ensureYard() {
   if (yard) return;
-  yard = createField({ seed: (sceneSeed() ^ 0x7a2d) >>> 0, spawnPerSec: 0, maxSeeds: 0, top: 110, margin: 60 });
+  // gà chỉ đi lại TRONG hàng rào (rào phải ở x ≈ 700; ngoài đó là con đường)
+  yard = createField({ seed: (sceneSeed() ^ 0x7a2d) >>> 0, spawnPerSec: 0, maxSeeds: 0, top: 110, margin: 60, width: 700 });
   $("#yard-bg").innerHTML = ICONS?.yardBackdrop ? ICONS.yardBackdrop(W, H, sceneSeed()) : ICONS?.fieldBackdrop ? ICONS.fieldBackdrop(W, H, sceneSeed() + 1) : "";
   renderZones();
 }
@@ -1181,7 +1182,7 @@ async function onDrop(d, cx, cy) {
     // thả xuống chỗ khác trong sân
     const a = yard?.chickens.get(ch.id);
     if (a) {
-      a.x = clampN(p.x, 60, W - 60);
+      a.x = clampN(p.x, 60, 640);
       a.y = clampN(p.y + 30, 120, H - 50);
       a.mode = "rest";
       a.timer = 800;
@@ -1905,7 +1906,6 @@ function renderDecor() {
   if (hasV7()) {
     const vis = R.visitorView(state, now());
     const here = vis?.who && !vis.gone;
-    extra.unshift({ key: "road", x: 400, y: 480, w: 800, html: roadSvg() }); // vẽ trước mọi thứ khác
     extra.push(...ownedDecor(state.decorOwned));
     extra.push({ key: "stall", x: SPOTS.stall.x, y: SPOTS.stall.y + 34, w: 96, html: stallSvg() }, { key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 30, w: 96, html: playgroundSvg() });
     if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.stall.x - 46, y: SPOTS.stall.y + 40, w: 62, html: visitorSvg(vis.who) });
@@ -2343,11 +2343,14 @@ async function playIntro(force = false) {
   const yard = ICONS?.yardBackdrop ? ICONS.yardBackdrop(800, 480, 7) : "";
   const egg = (shell, i) => renderEggFlat({ egg: { shell, speckle: 0.2, seed: 11 + i } }, { label: "Trứng" });
   const letter = `<svg viewBox="0 0 120 90"><rect x="14" y="8" width="92" height="74" rx="6" fill="#fffdf6" stroke="#d6ccb4" stroke-width="2"/>${[24, 36, 48, 60].map((y, i) => `<path d="M28,${y} h${i === 3 ? 40 : 64}" stroke="#b9ad94" stroke-width="3" stroke-linecap="round"/>`).join("")}<path d="M80,68 q8,-10 16,0" stroke="#e4572e" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`;
+  const night = `<svg viewBox="0 0 400 240"><defs><linearGradient id="nsky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c2452"/><stop offset="1" stop-color="#4a3f7a"/></linearGradient></defs><rect width="400" height="240" fill="url(#nsky)"/>${Array.from({ length: 34 }, (_, i) => `<circle cx="${(i * 97) % 400}" cy="${(i * 53) % 150}" r="${i % 3 ? 1 : 1.8}" fill="#fff" opacity="${0.5 + (i % 4) / 8}"/>`).join("")}<path d="M300,30 L150,150" stroke="#fff6c4" stroke-width="3" stroke-linecap="round" opacity=".9" class="shoot"/><circle cx="150" cy="150" r="6" fill="#ffd95a"/><path d="M0,200 Q100,170 200,195 T400,185 V240 H0Z" fill="#253a2a"/></svg>`;
+  const glow = `<div class="intro-eggs glow">${["#f3ead8", "#b5dccd", "#c69a72"].map(egg).join("")}</div>`;
+  const rooster = renderChickenFlat(express(randomGenome(mulberry32(2026), { sex: "rooster" }), { nutrition: 0.95, gloss: 0.6 }), { growth: 1, detail: "high", label: "Gà trống già" });
   const frames = [
-    { art: `<div class="intro-art old">${yard}</div>`, text: "Trại gà cũ bỏ hoang đã lâu. Cỏ mọc kín sân, chuồng không còn tiếng gà." },
-    { art: `<div class="intro-eggs">${["#f3ead8", "#b5dccd", "#c69a72"].map(egg).join("")}</div>`, text: "Nhưng trong ổ rơm vẫn còn sót lại ba quả trứng." },
-    { art: `<div class="intro-letter">${letter}</div>`, text: "Kèm một lá thư: “Mỗi quả mang một dòng giống riêng. Hãy chọn một quả và sưởi ấm nó…”" },
-    { art: `<div class="intro-art">${yard}</div>`, text: "…rồi cùng dựng lại trại gà nhé!", last: true },
+    { art: `<div class="intro-art">${night}</div>`, text: "Một đêm nọ, một ngôi sao băng rơi xuống trại gà bỏ hoang…" },
+    { art: glow, text: "Sáng hôm sau, giữa ổ rơm cũ có ba quả trứng phát sáng lấp lánh." },
+    { art: `<div class="intro-rooster">${rooster}</div>`, text: "Một chú gà trống già bỗng cất tiếng nói: “Mỗi quả mang một dòng giống từ trên trời. Chọn một quả và sưởi ấm nó nhé!”" },
+    { art: `<div class="intro-art">${yard}</div>`, text: "Ấp nở chúng, và trại gà sẽ hồi sinh!", last: true },
   ];
   revealBusy = true;
   try {

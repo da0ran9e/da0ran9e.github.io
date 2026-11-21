@@ -440,7 +440,7 @@ export const YARD_SPOTS = Object.freeze({
   feeder: Object.freeze({ x: 300, y: 138, r: 52 }), // trước máng thóc
   water: Object.freeze({ x: 452, y: 136, r: 40 }), // cạnh đĩa nước
   nest: Object.freeze({ x: 700, y: 104, r: 70 }), // giữa ổ rơm (trứng / ổ ấp đặt ở đây)
-  gate: Object.freeze({ x: 762, y: 208, r: 50 }), // cổng ra đồng ở hàng rào phải
+  gate: Object.freeze({ x: 680, y: 248, r: 50 }), // cổng ra đồng ở hàng rào phải (dời vào trong: ngoài rào là con đường + gian hàng)
   market: Object.freeze({ x: 114, y: 414, r: 58 }), // quầy chợ góc dưới trái
 });
 
@@ -621,10 +621,16 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   let peb = "";
   for (let i = 0; i < 7; i++) peb += blob(rng, P(60 + rng() * 680, 170 + rng() * 290), (1.6 + rng() * 2) * S, (1.2 + rng() * 1.2) * S, rng() * 180, 0.15, 7);
   o += path(peb, "#c9bfa6", ` opacity=".8"`);
-  // hàng rào bên phải (từ góc ổ xuống đáy) + cổng ra đồng
+  // NGOÀI hàng rào phải: dải cỏ + con đường đất chạy dọc, rẽ vào cổng (gian hàng của khách đứng bên đường)
+  const road = "M800,236 C760,240 724,246 700,250 M756,166 C752,240 760,330 754,480";
+  let out = `<path d="M702,166 H800 V480 H702Z" fill="#b5dc86"/>`;
+  out += `<path d="${road}" fill="none" stroke="${earthD}" stroke-width="30" stroke-linecap="round"/><path d="${road}" fill="none" stroke="${earth}" stroke-width="22" stroke-linecap="round"/>`;
+  out += `<path d="M756,180 C753,240 760,330 755,470" fill="none" stroke="${earthL}" stroke-width="3" stroke-dasharray="3 14" stroke-linecap="round" opacity=".8"/>`;
+  o += T(out, 752, 320);
+  // hàng rào bên phải (từ góc ổ xuống đáy) + cổng ra đồng — vẽ ở x 782 rồi dời cả khối vào trong (−82, +40)
   const fx = 782;
   // đồng cỏ xanh bên ngoài cổng + lối đất mòn dẫn ra
-  let gt = path(blob(rng, [806, 206], 30, 70, 0, 0.1, 10), light) + path(blob(rng, [810, 200], 18, 46, 0, 0.12, 9), "#b8e07e");
+  let gt = ""; // (mảng cỏ ngoài cổng cũ bỏ đi: ngoài rào giờ là dải cỏ + con đường vẽ ở trên)
   gt += path(brushStroke(rng, [[690, 214], [730, 210], [768, 207], [806, 204]], 15), earth, ` opacity=".75"`);
   gt += path(brushStroke(rng, [[704, 216], [744, 211], [804, 206]], 7), earthL, ` opacity=".6"`);
   const sidePosts = [118, 150, 262, 304, 348, 392, 436, 480];
@@ -652,7 +658,7 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   gt += path(plank(rng, 749, 206, 769, 224, 0.4), woodL);
   gt += path(plank(rng, 757, 222, 761, 228, 0.2), woodD);
   gt += path(tongue(rng, [759, 222], -122, 8, 2.6, { tip: "point", bend: 0.2, base: 0.6 }).d + tongue(rng, [759, 222], -62, 9, 2.8, { tip: "point", bend: -0.2, base: 0.6 }).d, "#4f9e3a");
-  o += T(gt, 762, 208);
+  o += T(`<g transform="translate(-82 40)">${gt}</g>`, 680, 248);
 
   // quầy chợ có mái bạt sọc (góc dưới trái)
   let mk = "";
