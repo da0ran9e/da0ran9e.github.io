@@ -842,3 +842,5 @@ body.idle { cursor: none; }
   .res .chip { font-size: 12px; padding: 2px 8px; }
   .dev summary { min-height: 28px; padding: 2px 8px; }
 }
+/* dòng "trống" trong lưới kho / kỷ niệm: chiếm cả hàng, không bị ép thành cột hẹp */
+.bags > p, .eggs > p, .memorial > p { grid-column: 1 / -1; margin: 4px 0; }

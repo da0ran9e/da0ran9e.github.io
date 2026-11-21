@@ -1250,8 +1250,28 @@ document.addEventListener("pointerdown", (ev) => {
   drag = { kind: t.dataset.drag, id: t.dataset.id, el: t, x0: ev.clientX, y0: ev.clientY, active: false };
   try { t.setPointerCapture(ev.pointerId); } catch {}
 });
-document.addEventListener("pointermove", (ev) => {
+// Điện thoại dọc: kéo tới sát mép cảnh thì cảnh tự cuộn (cổng, chợ, ổ ấp có thể đang khuất).
+let edgeRaf = 0;
+function edgeScroll() {
+  edgeRaf = 0;
+  if (!drag?.active || drag.cx == null) return;
+  const pan = $(view === "field" ? "#field-pan" : "#yard-pan");
+  if (!pan || pan.scrollWidth <= pan.clientWidth + 2) return;
+  const r = pan.getBoundingClientRect(), edge = Math.min(56, r.width * 0.16);
+  const dl = drag.cx - r.left, dr = r.right - drag.cx;
+  const v = dl < edge ? -(1 - dl / edge) : dr < edge ? 1 - dr / edge : 0;
+  if (!v) return;
+  const before = pan.scrollLeft;
+  pan.scrollLeft += Math.round(v * 14);
+  if (pan.scrollLeft !== before) dragMove({ clientX: drag.cx, clientY: drag.cy });
+  edgeRaf = requestAnimationFrame(edgeScroll);
+}
+document.addEventListener("pointermove", dragMove);
+function dragMove(ev) {
   if (!drag) return;
+  drag.cx = ev.clientX;
+  drag.cy = ev.clientY;
+  if (drag.active && !edgeRaf) edgeRaf = requestAnimationFrame(edgeScroll);
   if (!drag.active) {
     if (Math.hypot(ev.clientX - drag.x0, ev.clientY - drag.y0) < 7) return;
     drag.active = true;
@@ -1306,7 +1326,7 @@ document.addEventListener("pointermove", (ev) => {
       label.style.marginLeft = `${Math.round(cx - ev.clientX)}px`;
     }
   }
-});
+}
 function endDrag(ev, cancelled = false) {
   if (!drag) return;
   const d = drag;
