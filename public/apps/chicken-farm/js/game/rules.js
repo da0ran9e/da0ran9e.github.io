@@ -22,18 +22,37 @@ export const NUTRIENT_INFO = {
 };
 
 // Các loại hạt (một loại thức ăn duy nhất, khác nhau ở dinh dưỡng).
+// v11 — HẠT LÀ GIỐNG CÂY THẬT (chủ dự án duyệt 22/11): tên theo loài, không theo chất. Mỗi loài có đủ 4 chất với tỉ lệ riêng
+// (thiên về một hoặc hai chất). `form` = dáng cây trong vườn (thiếu → suy từ chất trội); `staple` = hạt rẻ, hoà điểm thì
+// dùng trước; `mutation` = tăng biến dị lứa sau (không trồng, không bỏ tháp). Thêm loài mới: thêm một dòng ở đây
+// (và trọng số trong drops / garden.growMs nếu muốn nó rơi hay trồng được).
 export const SEEDS = {
-  common: { name: "Hạt thường", satiety: 12, n: { protein: 4, energy: 6, mineral: 3, pigment: 3 } },
-  protein: { name: "Hạt đạm", satiety: 12, n: { protein: 26, energy: 4, mineral: 2, pigment: 1 } },
-  energy: { name: "Hạt mẩy", satiety: 14, n: { protein: 3, energy: 26, mineral: 2, pigment: 1 } },
-  mineral: { name: "Hạt khoáng", satiety: 10, n: { protein: 3, energy: 3, mineral: 26, pigment: 1 } },
-  pigment: { name: "Hạt màu", satiety: 10, n: { protein: 1, energy: 4, mineral: 1, pigment: 26 } },
-  premium: { name: "Hạt quý", satiety: 12, n: { protein: 16, energy: 16, mineral: 16, pigment: 16 } },
+  rice: { name: "Lúa", satiety: 12, n: { protein: 4, energy: 6, mineral: 3, pigment: 3 }, form: "grass", staple: true },
+  mung: { name: "Đậu xanh", satiety: 12, n: { protein: 24, energy: 5, mineral: 3, pigment: 1 }, form: "vine" },
+  millet: { name: "Kê", satiety: 14, n: { protein: 3, energy: 24, mineral: 4, pigment: 2 }, form: "grass" },
+  sesame: { name: "Vừng", satiety: 10, n: { protein: 4, energy: 5, mineral: 23, pigment: 1 }, form: "bush" },
+  marigold: { name: "Vạn thọ", satiety: 10, n: { protein: 1, energy: 4, mineral: 2, pigment: 26 }, form: "flower" },
+  sunflower: { name: "Hướng dương", satiety: 13, n: { protein: 14, energy: 14, mineral: 3, pigment: 2 }, form: "tall" },
+  corn: { name: "Ngô", satiety: 14, n: { protein: 2, energy: 17, mineral: 1, pigment: 13 }, form: "stalk" },
+  pumpkin: { name: "Bí đỏ", satiety: 11, n: { protein: 5, energy: 3, mineral: 13, pigment: 12 }, form: "creeper" },
+  peanut: { name: "Đậu phộng", satiety: 12, n: { protein: 14, energy: 4, mineral: 13, pigment: 2 }, form: "low" },
+  lotus: { name: "Sen", satiety: 12, n: { protein: 16, energy: 16, mineral: 16, pigment: 16 }, form: "pond" },
   odd: { name: "Hạt lạ", satiety: 10, n: { protein: 6, energy: 6, mineral: 6, pigment: 6 }, mutation: 4 },
 };
+// Tên hạt trước v11 → loài tương ứng (đổi kho cũ, nhật ký server cũ, lời gọi cũ)
+export const SEED_ALIAS = { common: "rice", protein: "mung", energy: "millet", mineral: "sesame", pigment: "marigold", premium: "lotus" };
+export const seedKey = (k) => (typeof k === "string" && Object.hasOwn(SEED_ALIAS, k) ? SEED_ALIAS[k] : k);
+// Dáng cây suy từ chất trội khi loài không ghi `form`
+export function formOf(seed) {
+  const s = SEEDS[seedKey(seed)];
+  if (!s) return "grass";
+  if (s.form) return s.form;
+  const top = Object.entries(s.n).sort((a, b) => b[1] - a[1])[0][0];
+  return { protein: "vine", energy: "grass", mineral: "bush", pigment: "flower" }[top];
+}
 
 export const CONFIG = {
-  version: 10,
+  version: 11,
   stepMs: MIN,
   // Ấp 5–30 phút theo gen "thời gian ấp" của chính quả trứng (genome.express).
   // Lớn: chất lượng dinh dưỡng 1 → 20 phút, 0 → 24 giờ (thang lũy thừa), nhân gen "tốc độ lớn".
@@ -56,18 +75,19 @@ export const CONFIG = {
   storage: { eggs: 12, seeds: 120, bags: 20 },
   // Q5: ngoài đồng chủ yếu là hạt thường; túi đổi ở cửa hàng có tỉ lệ hạt tốt cao hơn
   drops: {
-    field: { common: 92, protein: 1.5, energy: 1.5, mineral: 1.5, pigment: 1.5, premium: 0.8, odd: 1.2 },
-    shop: { common: 40, protein: 12, energy: 12, mineral: 12, pigment: 12, premium: 9, odd: 3 },
+    // v11: bốn loài thiên một chất (đậu xanh, kê, vừng, vạn thọ) · bốn loài hai chất (hướng dương, ngô, bí đỏ, đậu phộng) · sen giàu đủ chất
+    field: { rice: 90, mung: 1.2, millet: 1.2, sesame: 1.2, marigold: 1.2, sunflower: 0.8, corn: 0.8, pumpkin: 0.8, peanut: 0.8, lotus: 0.8, odd: 1.2 },
+    shop: { rice: 40, mung: 9, millet: 9, sesame: 9, marigold: 9, sunflower: 4, corn: 4, pumpkin: 4, peanut: 4, lotus: 6, odd: 2 },
     // v6 — đốm sáng ngoài đồng (người chơi chỉ cho gà) và túi quà nhiệm vụ: hạt tốt nhiều hơn
-    lucky: { common: 50, protein: 10, energy: 10, mineral: 10, pigment: 10, premium: 7, odd: 3 },
-    gift: { common: 25, protein: 15, energy: 15, mineral: 15, pigment: 15, premium: 12, odd: 3 },
+    lucky: { rice: 45, mung: 8, millet: 8, sesame: 8, marigold: 8, sunflower: 4, corn: 4, pumpkin: 4, peanut: 4, lotus: 5, odd: 2 },
+    gift: { rice: 20, mung: 11, millet: 11, sesame: 11, marigold: 11, sunflower: 6, corn: 6, pumpkin: 6, peanut: 6, lotus: 9, odd: 3 },
   },
   fieldEatCooldownMs: 12 * 1000, // 1 con gà ăn tối đa 1 hạt / 12 giây (chống gian lận; design-review 11/11: 15 → 12 s)
   // Q6: giá trị cố định, không theo độ hiếm
   trade: { egg: 2, chicken: [4, 9], eggsPerChicken: 2 }, // túi hạt: trứng 2, gà 4 (mới nở) → 9 (trưởng thành); đổi gà lớn lấy 2 trứng có phôi
   // quickHatchMs: quả trứng đầu tiên (và trứng quà của bước mở đầu) nở sau 1 phút — phiên chơi đầu
   // không phải ngồi chờ 5–30 phút mới có con gà đầu tiên.
-  start: { incubators: 1, coopCap: 6, starterChoices: 3, seeds: { common: 12 }, quickHatchMs: MIN },
+  start: { incubators: 1, coopCap: 6, starterChoices: 3, seeds: { rice: 12 }, quickHatchMs: MIN },
   // v6 — SƯỞI TRỨNG: chạm trứng đang ấp, mỗi lần bớt cutPct thời gian ấp của quả đó; tối đa `max` lần
   // (bớt tối đa 40%), cách nhau ≥ cooldownMs. Việc để làm trong lúc chờ, và có giới hạn nên không spam.
   warm: { cooldownMs: 2500, cutPct: 0.04, max: 10 },
@@ -110,9 +130,9 @@ export const CONFIG = {
   //   spawn: hệ số mật độ hạt trên cánh đồng (chỉ hình, phía client) · price: hệ số giá vé của khách qua đường
   season: {
     order: ["harvest", "rain", "bloom", "dry"],
-    harvest: { field: { protein: 3, energy: 3, premium: 1.5 } }, // mùa gặt: hạt mẩy
-    rain: { field: { mineral: 3 }, luckyCooldown: 0.6 }, // mùa mưa: đốm sáng dày hơn
-    bloom: { field: { pigment: 4 }, lucky: { pigment: 2 } }, // mùa hoa: hạt màu
+    harvest: { field: { millet: 3, corn: 3, mung: 2, sunflower: 2, lotus: 1.5 } }, // mùa gặt: ngũ cốc, đậu
+    rain: { field: { sesame: 3, pumpkin: 2, peanut: 2 }, luckyCooldown: 0.6 }, // mùa mưa: đốm sáng dày hơn
+    bloom: { field: { marigold: 4, sunflower: 2 }, lucky: { marigold: 2, sunflower: 1.5 } }, // mùa hoa
     dry: { spawn: 0.7, price: 0.8 }, // mùa khô: ít hạt, khách bán rẻ hơn
   },
   // v9 — ĐÊM TRĂNG TRÒN (ideas 9): ±1 ngày quanh lúc trăng tròn thiên văn, từ 18:00 tới 6:00 giờ Việt Nam. Trứng có phôi đẻ lúc đó
@@ -123,7 +143,7 @@ export const CONFIG = {
   // Mùa mưa lớn nhanh hơn, mùa khô chậm hơn (seasonMul, tính lúc gieo).
   garden: {
     plots: 3, plotsMax: 5, yield: 3, bonusChance: 0.25,
-    growMs: { common: HOUR, protein: 3 * HOUR, energy: 3 * HOUR, mineral: 3 * HOUR, pigment: 3 * HOUR, premium: 8 * HOUR },
+    growMs: { rice: HOUR, mung: 3 * HOUR, millet: 3 * HOUR, sesame: 3 * HOUR, marigold: 3 * HOUR, sunflower: 4 * HOUR, corn: 4 * HOUR, pumpkin: 4 * HOUR, peanut: 4 * HOUR, lotus: 8 * HOUR },
     water: { cutPct: 0.05, max: 6, cooldownMs: 3000 },
     seasonMul: { rain: 0.8, dry: 1.25 },
   },
@@ -305,11 +325,11 @@ export const breedsOf = (code) => {
 // Phần thưởng: { bag: cỡ túi, table } | { seeds: {loại: n} } | { egg: { quick, pair } }. Chỉ THÊM vào cuối.
 export const TUTORIAL = [
   { key: "warm", count: "warm", goal: 5, text: "Sưởi ấm quả trứng: chạm vào trứng trong ổ 5 lần", reward: { bag: 3 } },
-  { key: "hatch", count: "hatch", goal: 1, text: "Đón gà con đầu tiên chào đời", reward: { seeds: { premium: 4 } } },
+  { key: "hatch", count: "hatch", goal: 1, text: "Đón gà con đầu tiên chào đời", reward: { seeds: { lotus: 4 } } },
   { key: "feed", count: "feed", goal: 3, text: "Cho gà ăn 3 hạt (kéo hạt thả lên gà)", reward: { bag: 4 } },
   { key: "forage", count: "forage", goal: 5, text: "Thả gà ra đồng và để gà kiếm 5 hạt", reward: { egg: { quick: true, pair: true } } },
   { key: "lucky", count: "lucky", goal: 2, text: "Ngoài đồng: chạm 2 đốm sáng để chỉ cho gà", reward: { bag: 4, table: "gift" } },
-  { key: "hatch2", count: "hatch", goal: 2, text: "Ấp nở quả trứng thứ hai", reward: { seeds: { protein: 2, energy: 2, mineral: 2, pigment: 2 } } },
+  { key: "hatch2", count: "hatch", goal: 2, text: "Ấp nở quả trứng thứ hai", reward: { seeds: { mung: 2, millet: 2, sesame: 2, marigold: 2 } } },
   { key: "juvenile", count: "juvenile", goal: 1, text: "Nuôi một con thành gà giò", reward: { bag: 5, table: "gift" } },
   { key: "adult", count: "adult", goal: 1, text: "Nuôi một con tới trưởng thành", reward: { bag: 6, table: "gift" } },
   { key: "collect", count: "collect", goal: 1, text: "Nhặt quả trứng đầu tiên gà mái đẻ ngoài sân", reward: { egg: {} } },
@@ -332,14 +352,36 @@ export const COUNTERS = ["warm", "hatch", "feed", "forage", "lucky", "juvenile",
 const bump = (state, key, n = 1) => { state.count[key] = (state.count[key] ?? 0) + n; };
 export const dayIndex = (now) => Math.floor((now + CONFIG.daily.tzOffsetMs) / DAY);
 
+// v11: đổi tên hạt cũ sang loài (kho, tháp, luống) và thêm ô 0 cho loài mới
+function migrateSeeds(state) {
+  const remap = (bag) => {
+    if (!bag) return bag;
+    const out = Object.fromEntries(Object.keys(SEEDS).map((k) => [k, 0]));
+    for (const [k, n] of Object.entries(bag)) { const kk = seedKey(k); if (Object.hasOwn(out, kk)) out[kk] += n; }
+    return out;
+  };
+  state.inventory = remap(state.inventory);
+  if (state.tower) state.tower = remap(state.tower);
+  for (const p of state.garden ?? []) if (p) p.seed = seedKey(p.seed);
+}
+// Thêm loài sau v11: bù ô 0 (không cần đổi phiên bản)
+function padSeeds(state) {
+  for (const k of Object.keys(SEEDS)) {
+    if (!(k in state.inventory)) state.inventory[k] = 0;
+    if (state.tower && !(k in state.tower)) state.tower[k] = 0;
+  }
+}
+
 // Trại từ bản cũ: bổ sung phần còn thiếu từ đàn hiện có (không đổi gì khác).
 function ensure(state) {
+  if (state.inventory && !Object.hasOwn(state.inventory, "rice")) migrateSeeds(state); // v11
   if (!state.tower) state.tower = Object.fromEntries(Object.keys(SEEDS).map((k) => [k, 0])); // v7
   if (state.watchFrom == null) state.watchFrom = state.seenAt ?? state.updatedAt;
   if (state.tickets == null) { state.tickets = 0; state.play = null; } // v7
   if (state.timed?.start == null) state.timed = { start: state.updatedAt ?? 0, claimed: 0 }; // v8: bản v7 lưu {step, readyAt}
   if (!state.energy) state.energy = { n: CONFIG.energy.max, at: state.updatedAt ?? 0 };
   if (!state.feathers) { state.feathers = []; state.family = {}; } // v9
+  padSeeds(state);
   if (!state.garden) state.garden = []; // v10 (độ dài theo gardenSize, bù dần)
   while (state.garden.length < gardenSize(state)) state.garden.push(null);
   if (!state.count) {
@@ -664,8 +706,8 @@ function brood(state, ch, t, dt, events) {
 export function bestSeedFor(ch, counts) {
   let best = null, bestScore = -1;
   for (const k of Object.keys(SEEDS)) {
-    if (k === "odd" || !(counts[k] > 0)) continue;
-    let v = k === "common" ? 0.5 : 0;
+    if (SEEDS[k].mutation || !(counts[k] > 0)) continue;
+    let v = SEEDS[k].staple ? 0.5 : 0;
     for (const n of NUTRIENTS) v += Math.min(Math.max(0, CONFIG.nutrientFull - ch.n[n]), SEEDS[k].n[n]);
     if (v > bestScore) { bestScore = v; best = k; }
   }
@@ -764,6 +806,7 @@ function act(state, now, fn, opts) {
 
 // Cho ăn trong chuồng bằng hạt trong kho.
 export function feed(state, chickenId, seed, now) {
+  seed = seedKey(seed);
   return act(state, now, () => {
     const s = SEEDS[seed];
     if (!s) return err("bad_seed", "Không có loại hạt này");
@@ -815,6 +858,7 @@ export function recallAll(state, now, opts) {
 // ở server từ M3) quyết định loại hạt; hàm này kiểm tra hợp lệ rồi:
 //   còn đói → gà ăn luôn; đã no → hạt mang về kho (Q7).
 export function fieldFind(state, chickenId, seed, now) {
+  seed = seedKey(seed);
   return act(state, now, () => {
     const ch = state.chickens.find((c) => c.id === chickenId);
     if (!ch) return err("no_chicken", "Không tìm thấy gà");
@@ -870,9 +914,9 @@ const towerCount = (state) => Object.values(state.tower).reduce((a, b) => a + b,
 /* ---------- vườn rau (v10) ---------- */
 
 export const gardenSize = (state) => Math.min(CONFIG.garden.plotsMax, CONFIG.garden.plots + (state.milestones ?? 0));
-export const canPlant = (seed) => !!CONFIG.garden.growMs[seed];
+export const canPlant = (seed) => !!CONFIG.garden.growMs[seedKey(seed)];
 // thời gian lớn của một hạt nếu gieo lúc `now` (theo mùa)
-export const growMsOf = (seed, now) => Math.round(CONFIG.garden.growMs[seed] * (CONFIG.garden.seasonMul[seasonOf(now)] ?? 1));
+export const growMsOf = (seed, now) => Math.round(CONFIG.garden.growMs[seedKey(seed)] * (CONFIG.garden.seasonMul[seasonOf(now)] ?? 1));
 // Bản xem một luống: { plot, seed, growth 0..1, ready, readyAt, water, waterLeft } | { plot, empty: true }
 export function plotView(state, i, now) {
   const p = state.garden?.[i];
@@ -883,6 +927,7 @@ export function plotView(state, i, now) {
 const plotOf = (state, plot) => (Number.isInteger(plot) && plot >= 0 && plot < gardenSize(state) ? plot : -1);
 
 export function plant(state, plot, seed, now) {
+  seed = seedKey(seed);
   return act(state, now, () => {
     const i = plotOf(state, plot);
     if (i < 0) return err("no_plot", "Không có luống này");
@@ -926,9 +971,10 @@ export function harvest(state, plot, now, opts = {}) {
 }
 
 export function fillTower(state, seed, n, now) {
+  seed = seedKey(seed);
   return act(state, now, () => {
     if (!SEEDS[seed]) return err("bad_seed", "Không có loại hạt này");
-    if (seed === "odd") return err("bad_seed", "Hạt lạ phải cho ăn riêng từng con");
+    if (SEEDS[seed].mutation) return err("bad_seed", "Hạt lạ phải cho ăn riêng từng con");
     if (!Number.isInteger(n) || n < 1) return err("bad_count", "Số hạt không hợp lệ");
     if (!(state.inventory[seed] >= n)) return err("no_seed", `Kho không đủ ${SEEDS[seed].name.toLowerCase()}`);
     if (towerCount(state) + n > CONFIG.tower.cap) return err("tower_full", "Tháp hạt không còn đủ chỗ");
@@ -939,6 +985,7 @@ export function fillTower(state, seed, n, now) {
   });
 }
 export function takeFromTower(state, seed, n, now) {
+  seed = seedKey(seed);
   return act(state, now, () => {
     if (!SEEDS[seed]) return err("bad_seed", "Không có loại hạt này");
     if (!Number.isInteger(n) || n < 1) return err("bad_count", "Số hạt không hợp lệ");
@@ -1349,8 +1396,8 @@ export const VISITORS = {
 };
 const VISIT = {
   slotMs: 30 * MIN, firstHour: 7, slots: 32, nightSlot: 24, // khung 30 phút từ 7:00 tới 23:00 (giờ Việt Nam); đêm từ 19:00
-  seller: [{ seeds: { protein: 3 }, price: 2 }, { seeds: { energy: 3 }, price: 2 }, { seeds: { mineral: 3 }, price: 2 }, { seeds: { pigment: 3 }, price: 2 }, { seeds: { premium: 2 }, price: 3 }, { bag: 5, price: 3 }],
-  trader: [{ give: { seed: "common", n: 6 }, get: { seeds: { premium: 1 } } }, { give: { seed: "pigment", n: 4 }, get: { seeds: { premium: 1 } } }, { give: { seed: "protein", n: 4 }, get: { seeds: { premium: 1 } } }, { give: { seed: "premium", n: 3 }, get: { seeds: { odd: 1 } } }, { give: { eggs: 2 }, get: { bag: 4, table: "gift" } }],
+  seller: [{ seeds: { mung: 3 }, price: 2 }, { seeds: { millet: 3 }, price: 2 }, { seeds: { sesame: 3 }, price: 2 }, { seeds: { marigold: 3 }, price: 2 }, { seeds: { sunflower: 2 }, price: 2 }, { seeds: { corn: 2 }, price: 2 }, { seeds: { pumpkin: 2 }, price: 2 }, { seeds: { peanut: 2 }, price: 2 }, { seeds: { lotus: 2 }, price: 3 }, { bag: 5, price: 3 }],
+  trader: [{ give: { seed: "rice", n: 6 }, get: { seeds: { lotus: 1 } } }, { give: { seed: "marigold", n: 4 }, get: { seeds: { lotus: 1 } } }, { give: { seed: "mung", n: 4 }, get: { seeds: { lotus: 1 } } }, { give: { seed: "millet", n: 4 }, get: { seeds: { sunflower: 2 } } }, { give: { seed: "sesame", n: 4 }, get: { seeds: { peanut: 2 } } }, { give: { seed: "lotus", n: 3 }, get: { seeds: { odd: 1 } } }, { give: { eggs: 2 }, get: { bag: 4, table: "gift" } }],
   order: { pay: [2, 5, 9] }, // 1 đặc điểm · 2 đặc điểm · 2 đặc điểm + nuôi đủ chất
   reader: { sex: 1, trait: 2 },
   haggler: [{ seeds: { odd: 2 }, price: 8 }, { bag: 8, table: "gift", price: 7 }, { egg: "common", price: 18 }],

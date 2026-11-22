@@ -29,10 +29,10 @@ test("mùa chỉ nhân trọng số bảng rơi và tần suất: gặt nhiều 
     for (let i = 0; i < 20000; i++) if (rollSeed(table, rng, t) === kind) n++;
     return n;
   };
-  assert.ok(count(at("harvest"), "energy") > 2 * count(at("dry"), "energy"), "mùa gặt: hạt mẩy");
-  assert.ok(count(at("rain"), "mineral") > 2 * count(at("dry"), "mineral"), "mùa mưa: hạt khoáng");
-  assert.ok(count(at("bloom"), "pigment") > 3 * count(at("dry"), "pigment"), "mùa hoa: hạt màu");
-  assert.ok(count(at("bloom"), "pigment", "lucky") > 1.5 * count(at("dry"), "pigment", "lucky"), "mùa hoa: đốm sáng");
+  assert.ok(count(at("harvest"), "millet") > 2 * count(at("dry"), "millet"), "mùa gặt: hạt mẩy");
+  assert.ok(count(at("rain"), "sesame") > 2 * count(at("dry"), "sesame"), "mùa mưa: hạt khoáng");
+  assert.ok(count(at("bloom"), "marigold") > 3 * count(at("dry"), "marigold"), "mùa hoa: hạt màu");
+  assert.ok(count(at("bloom"), "marigold", "lucky") > 1.5 * count(at("dry"), "marigold", "lucky"), "mùa hoa: đốm sáng");
   // không có `now` → bảng gốc, như trước v9
   const rng1 = mulberry32(3), rng2 = mulberry32(3);
   for (let i = 0; i < 50; i++) assert.equal(rollSeed("field", rng1), rollSeed("field", rng2, at("dry")), "mùa khô không đổi bảng rơi");
@@ -95,7 +95,7 @@ function layBetween(from, until, seed = 1) {
   s.chickens.forEach((c) => { c.growth = 100; c.adultAt = from; });
   for (let t = from; t < until; ) {
     t = Math.min(until, t + 15 * MIN);
-    for (const c of s.chickens) for (const k of ["protein", "energy", "mineral", "pigment"]) { s.inventory[k] = 9; feed(s, c.id, k, t); }
+    for (const c of s.chickens) for (const k of ["mung", "millet", "sesame", "marigold"]) { s.inventory[k] = 9; feed(s, c.id, k, t); }
   }
   return s.eggs.filter((e) => e.fertile && e.motherId);
 }

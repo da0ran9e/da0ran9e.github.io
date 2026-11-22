@@ -67,7 +67,7 @@ test("v6: đốm sáng cần đang xem cánh đồng; phần thưởng do server
   assert.equal(nw.body.code, "not_watching");
   await s.act(token, "release", { chickenId });
   const before = Object.values((await s.farm(token)).inventory).reduce((a, b) => a + b, 0);
-  const r = await s.act(token, "fieldBonus", { chickenId, got: { premium: 99 } });
+  const r = await s.act(token, "fieldBonus", { chickenId, got: { lotus: 99 } });
   assert.equal(r.status, 200);
   const f = r.body.farm;
   const after = Object.values(f.inventory).reduce((a, b) => a + b, 0);
@@ -102,7 +102,7 @@ test("v6: phát lại đúng cả chuỗi mở đầu, kể cả khi hệ thốn
   s.clock.t = Math.ceil(p.hatchAt) + 1000;
   const chickenId = (await s.farm(token)).chickens[0].id;
   assert.equal((await s.act(token, "claim", { id: "tutorial" })).status, 200); // "hatch" → hạt quý
-  for (let i = 0; i < 3; i++) assert.equal((await s.act(token, "feed", { chickenId, seed: "common" })).status, 200);
+  for (let i = 0; i < 3; i++) assert.equal((await s.act(token, "feed", { chickenId, seed: "rice" })).status, 200);
   assert.equal((await s.act(token, "claim", { id: "tutorial" })).status, 200); // "feed"
   await s.act(token, "release", { chickenId });
   for (let i = 0; i < 5; i++) {
@@ -141,14 +141,14 @@ test("v7 T13: người chơi chỉ XEM (GET mỗi vài giây, không ghi) rồi 
   const { token, chickenId } = await s.hatched();
   s.patchless = true;
   // đổ tháp; gà con mới nở có độ no 50/200 < ngưỡng 100 nên sẽ ăn
-  const fill = await s.act(token, "fillTower", { seed: "common", n: 10 });
+  const fill = await s.act(token, "fillTower", { seed: "rice", n: 10 });
   assert.equal(fill.status, 200, JSON.stringify(fill.body));
   for (let i = 0; i < 75; i++) { s.clock.t += 4000; await s.api("GET", "/api/farm", { token }); } // 5 phút chỉ xem
-  const act = await s.act(token, "feed", { chickenId, seed: "common" });
+  const act = await s.act(token, "feed", { chickenId, seed: "rice" });
   assert.equal(act.status, 200);
   const tower = Object.values(act.body.farm.tower).reduce((a, b) => a + b, 0);
   assert.ok(tower < 10, `gà phải ăn từ tháp trong lúc người chơi xem (tháp còn ${tower})`);
-  for (const bad of [0, 41, 1.5, "3"]) assert.equal((await s.act(token, "fillTower", { seed: "common", n: bad })).status, 400, String(bad));
+  for (const bad of [0, 41, 1.5, "3"]) assert.equal((await s.act(token, "fillTower", { seed: "rice", n: bad })).status, 400, String(bad));
   const rep = replayFarm(s.app.store.db, s.playerIdOf(token));
   assert.equal(rep.ok, true, rep.error ?? "lệch");
 });

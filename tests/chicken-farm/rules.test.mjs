@@ -32,7 +32,7 @@ function feedWell(s, from, until, ids = s.chickens.map((c) => c.id)) {
   let t = from;
   while (t < until) {
     t = Math.min(until, t + 15 * MIN);
-    for (const id of ids) for (const k of ["protein", "energy", "mineral", "pigment"]) { s.inventory[k] = 9; feed(s, id, k, t); }
+    for (const id of ids) for (const k of ["mung", "millet", "sesame", "marigold"]) { s.inventory[k] = 9; feed(s, id, k, t); }
   }
   for (const k of Object.keys(s.inventory)) s.inventory[k] = 0;
   return t;
@@ -45,7 +45,7 @@ test("khởi đầu: 3 trứng để chọn, có phôi, ít hạt thường, 1 �
   assert.equal(s.eggs[0].code, eggs[2].code);
   assert.equal(s.eggs[0].fertile, true);
   assert.equal(s.incubators.length, 1);
-  assert.ok(s.inventory.common > 0);
+  assert.ok(s.inventory.rice > 0);
   assert.equal(Object.keys(s.inventory).length, Object.keys(SEEDS).length);
   assert.equal("coins" in s, false);
 });
@@ -74,7 +74,7 @@ test("lớn: đủ chất ~20 phút, thiếu hết 24 giờ, hạt thường ở
   };
   const best = timeToAdult((s, ch) => { fill(ch, 100); ch.satiety = 100; });
   const worst = timeToAdult((s, ch) => { fill(ch, 0); ch.satiety = 100; });
-  const common = timeToAdult((s, ch, t) => { if ((t - T0) % (5 * MIN) < MIN) { s.inventory.common = 9; feed(s, ch.id, "common", t); } });
+  const common = timeToAdult((s, ch, t) => { if ((t - T0) % (5 * MIN) < MIN) { s.inventory.rice = 9; feed(s, ch.id, "rice", t); } });
   assert.ok(best >= 19 * MIN && best <= 22 * MIN, `best=${best / MIN}`);
   assert.ok(worst >= 23.9 * HOUR && worst <= 24.1 * HOUR, `worst=${worst / HOUR}`);
   assert.ok(common > 3 * best && common < worst, `common=${common / HOUR} giờ`);
@@ -197,28 +197,28 @@ test("Q4: thả đồng chỉ khi quan sát; gà ngoài đồng tự mổ hạt;
   // mỗi người chơi chỉ được thả 1 con ra đồng
   assert.equal(release(s, b.id, T0 + MIN).code, "field_busy");
   assert.equal(b.location, "coop");
-  assert.equal(feed(s, a.id, "common", T0 + MIN).code, "in_field");
+  assert.equal(feed(s, a.id, "rice", T0 + MIN).code, "in_field");
   const before = a.satiety;
-  assert.equal(fieldFind(s, a.id, "common", T0 + 2 * MIN).ok, true);
+  assert.equal(fieldFind(s, a.id, "rice", T0 + 2 * MIN).ok, true);
   assert.ok(a.satiety > before - 1);
-  assert.equal(fieldFind(s, a.id, "common", T0 + 2 * MIN + 1000).code, "too_fast");
+  assert.equal(fieldFind(s, a.id, "rice", T0 + 2 * MIN + 1000).code, "too_fast");
   // Q7: đã no mà vẫn tìm được hạt → hạt về kho
   a.satiety = CONFIG.satietyMax;
-  const stock = s.inventory.premium;
-  const st = fieldFind(s, a.id, "premium", T0 + 2 * MIN + CONFIG.fieldEatCooldownMs + 1000);
+  const stock = s.inventory.lotus;
+  const st = fieldFind(s, a.id, "lotus", T0 + 2 * MIN + CONFIG.fieldEatCooldownMs + 1000);
   assert.equal(st.action, "stored");
-  assert.equal(s.inventory.premium, stock + 1);
+  assert.equal(s.inventory.lotus, stock + 1);
   const r = recallAll(s, T0 + 3 * MIN);
   assert.deepEqual(r.recalled, [a.id]);
   assert.ok(s.chickens.every((c) => c.location === "coop"));
-  assert.equal(fieldFind(s, a.id, "common", T0 + 4 * MIN).code, "not_in_field");
+  assert.equal(fieldFind(s, a.id, "rice", T0 + 4 * MIN).code, "not_in_field");
   release(s, a.id, T0 + 5 * MIN);
   assert.equal(recall(s, a.id, T0 + 6 * MIN).ok, true);
 });
 
 test("Q5: cánh đồng chủ yếu ra hạt thường; túi cửa hàng nhiều hạt tốt hơn", () => {
   const rng = mulberry32(1);
-  const share = (table) => { let c = 0; for (let i = 0; i < 10000; i++) if (rollSeed(table, rng) === "common") c++; return c / 10000; };
+  const share = (table) => { let c = 0; for (let i = 0; i < 10000; i++) if (rollSeed(table, rng) === "rice") c++; return c / 10000; };
   const field = share("field"), shop = share("shop");
   assert.ok(field > 0.75, `field common=${field}`);
   assert.ok(shop < 0.5, `shop common=${shop}`);
@@ -286,7 +286,7 @@ test("trứng đang ấp không đổi được; kho đầy thì không mở tú
   incubate(s, s.eggs[0].id, T0);
   assert.equal(tradeToShop(s, { eggs: [s.eggs[0].id] }, T0).code, "incubating");
   s.bags.push({ id: "big", size: 5, from: "egg", at: T0 });
-  s.inventory.common = CONFIG.storage.seeds;
+  s.inventory.rice = CONFIG.storage.seeds;
   assert.equal(openBag(s, "big", T0).code, "seeds_full");
 });
 
@@ -321,11 +321,11 @@ test("thời gian lùi lại không làm gì; hành động lỗi không đổi 
   advance(s, T0 + HOUR);
   const snap = JSON.stringify(s);
   advance(s, T0);
-  feed(s, "khong-co", "common", T0 + HOUR);
+  feed(s, "khong-co", "rice", T0 + HOUR);
   incubate(s, "khong-co", T0 + HOUR);
   tradeToShop(s, { eggs: ["khong-co"] }, T0 + HOUR);
   openBag(s, "khong-co", T0 + HOUR);
-  fieldFind(s, "khong-co", "common", T0 + HOUR);
+  fieldFind(s, "khong-co", "rice", T0 + HOUR);
   assert.equal(JSON.stringify(s), snap);
 });
 

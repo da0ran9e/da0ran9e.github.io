@@ -24,7 +24,7 @@ const feedAll = (s, from, until) => {
   let t = from;
   while (t < until) {
     t = Math.min(until, t + 30 * MIN);
-    for (const c of s.chickens) for (const k of ["protein", "energy", "mineral", "pigment"]) { s.inventory[k] = 9; feed(s, c.id, k, t); }
+    for (const c of s.chickens) for (const k of ["mung", "millet", "sesame", "marigold"]) { s.inventory[k] = 9; feed(s, c.id, k, t); }
   }
   return t;
 };

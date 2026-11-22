@@ -11,6 +11,7 @@
 import { blob, tongue, brushStroke } from "../chicken-flat.js";
 import { clamp, lerp, mix, shade, tint, mulberry32 } from "../genome.js";
 import { t as tr } from "../game/i18n.js";
+import { SEEDS, seedKey } from "../game/rules.js";
 
 const RAD = Math.PI / 180;
 const TAU = Math.PI * 2;
@@ -33,22 +34,35 @@ export const NUTRIENT_COLORS = {
 };
 
 const NUTRIENT_NAMES = { protein: tr("Đạm"), energy: tr("Năng lượng"), mineral: tr("Khoáng"), pigment: tr("Sắc tố") };
-const SEED_NAMES = {
-  common: tr("Hạt thường"), protein: tr("Hạt đạm"), energy: tr("Hạt mẩy"), mineral: tr("Hạt khoáng"),
-  pigment: tr("Hạt màu"), premium: tr("Hạt quý"), odd: tr("Hạt lạ"),
-};
-// màu chính / màu bóng / màu sẫm cho từng loại hạt
+// v11: hạt là loài cây thật; tên lấy từ luật (SEEDS), màu / hình theo loài. Loài mới chưa có hình riêng → hình theo chất trội,
+// màu pha theo tỉ lệ 4 chất.
+const seedName = (k) => tr(SEEDS[k]?.name ?? "Hạt");
 const SEED_COLORS = {
-  common: { c: "#d8b98a", hi: "#f1dfbd", lo: "#b38f5c" },
-  protein: { c: NUTRIENT_COLORS.protein, hi: "#f7a27e", lo: "#a83a1c" },
-  energy: { c: NUTRIENT_COLORS.energy, hi: "#ffe28a", lo: "#c4860c" },
-  mineral: { c: NUTRIENT_COLORS.mineral, hi: "#a9d3d6", lo: "#2f5f6b" },
-  pigment: { c: NUTRIENT_COLORS.pigment, hi: "#ec93d7", lo: "#6f1f63" },
-  premium: { c: "#e8b72c", hi: "#fff1a8", lo: "#a77712" },
+  rice: { c: "#e2c27a", hi: "#f6e7b8", lo: "#b8913f" },
+  mung: { c: "#6aa443", hi: "#b7dd8a", lo: "#3f7a2a" },
+  millet: { c: "#f0c64a", hi: "#fff0a8", lo: "#c79a22" },
+  sesame: { c: "#efe0b9", hi: "#fffaf0", lo: "#c4a874" },
+  marigold: { c: "#f29a2e", hi: "#ffd166", lo: "#d9621a" },
+  sunflower: { c: "#3b3a40", hi: "#9a98a0", lo: "#e9e4d8" },
+  corn: { c: "#f2ad2e", hi: "#ffe28a", lo: "#c4800c" },
+  pumpkin: { c: "#f1e4bf", hi: "#fffaf0", lo: "#c9b07a" },
+  peanut: { c: "#d9b07a", hi: "#f2d9ac", lo: "#a9824c" },
+  lotus: { c: "#8fb85a", hi: "#d4e9a6", lo: "#5d8436" },
   odd: { c: "#3fb07a", hi: "#9ff0c8", lo: "#25705a" },
 };
-export const SEED_KINDS = Object.keys(SEED_COLORS);
-const kindOf = (k) => (SEED_COLORS[k] ? k : "common");
+// loài chưa có màu riêng: pha màu chất theo tỉ lệ
+function colorsOf(k) {
+  if (SEED_COLORS[k]) return SEED_COLORS[k];
+  const n = SEEDS[k]?.n ?? { protein: 1, energy: 1, mineral: 1, pigment: 1 };
+  let c = null, acc = 0;
+  for (const [nk, v] of Object.entries(n)) { acc += v; c = c ? mix(c, NUTRIENT_COLORS[nk], v / acc) : NUTRIENT_COLORS[nk]; }
+  return { c, hi: tint(c, 0.5), lo: shade(c, 0.35) };
+}
+export const SEED_KINDS = Object.keys(SEEDS);
+export const seedColor = (k) => colorsOf(kindOf(k)).c;
+const kindOf = (k) => { const kk = seedKey(k); return SEEDS[kk] ? kk : "rice"; };
+// hình hạt theo chất trội cho loài chưa có hình riêng
+const topNutrient = (k) => Object.entries(SEEDS[k].n).sort((x, y) => y[1] - x[1])[0][0];
 
 // ngôi sao lấp lánh 4 cánh (lõm vào giữa)
 function sparkle(c, R, col, extra = "") {
@@ -86,41 +100,65 @@ function grain(rng, c, len, w, deg, col, { hi, lo, stripes = 0 } = {}) {
 /* ---------- hạt (biểu tượng 24×24) ---------- */
 
 function seedBody(kind, rng) {
-  const P = SEED_COLORS[kind];
+  const P = colorsOf(kind);
+  const jit = (pts) => smoothPts(pts.map(([x, y]) => [x + (rng() - 0.5) * 0.6, y + (rng() - 0.5) * 0.6]));
   switch (kind) {
-    case "protein": {
-      // hạt đậu: hình quả thận, có rốn hạt
-      const pts = [[4, 13], [5.5, 7.5], [10, 5], [15, 5.5], [19.5, 8], [20.5, 12.5], [18.5, 17], [13.5, 18.5], [10.5, 15.5], [7, 18.5], [4.5, 17]];
-      let o = path(smoothPts(pts.map(([x, y]) => [x + (rng() - 0.5) * 0.6, y + (rng() - 0.5) * 0.6])), P.c);
-      o += path(blob(rng, [10.6, 15.4], 1.5, 0.9, -20, 0.1, 7), P.lo, ` opacity=".7"`);
-      o += path(brushStroke(rng, [[7, 9.5], [10.5, 7.4], [15.5, 7.4]], 1.1), P.hi, ` opacity=".85"`);
+    case "mung": { // ba hạt đậu xanh nhỏ, có rốn trắng
+      let o = "";
+      for (const [x, y, d] of [[8.5, 14.5, -20], [15.5, 12, 25], [12, 18.5, 5]]) {
+        o += path(blob(rng, [x, y], 4.3, 3.2, d, 0.05, 9), P.c) + path(blob(rng, [x + 0.6, y + 0.9], 3, 1.8, d, 0.08, 8), P.lo, ` opacity=".35"`);
+        o += path(brushStroke(rng, [[x - 1.2, y - 0.2], [x + 1.2, y - 0.6]], 0.55), "#f4f0dc") + path(blob(rng, [x - 1.6, y - 1.5], 1.2, 0.6, d - 20, 0.1, 6), P.hi, ` opacity=".85"`);
+      }
       return o;
     }
-    case "energy": {
-      // hạt bắp mẩy: đầu tròn to, thuôn về chân
-      const pts = [[12, 3.5], [16.8, 5], [19, 9.5], [17.5, 15], [14.5, 19.8], [12, 21], [9.5, 19.8], [6.5, 15], [5, 9.5], [7.2, 5]];
-      let o = path(smoothPts(pts.map(([x, y]) => [x + (rng() - 0.5) * 0.6, y + (rng() - 0.5) * 0.6])), P.c);
-      o += path(blob(rng, [12, 16.5], 2.6, 3.4, 0, 0.1, 8), P.lo, ` opacity=".45"`);
-      o += path(blob(rng, [12, 8.5], 4.6, 3, 0, 0.08, 9), P.hi, ` opacity=".7"`);
+    case "millet": { // chùm hạt kê tròn nhỏ
+      let o = "";
+      for (const [x, y] of [[8, 10], [12.5, 8], [17, 10.5], [6.5, 14.5], [11, 13], [15.5, 14.5], [9, 18], [13.5, 18], [18, 18.5]]) {
+        o += path(blob(rng, [x, y], 2.6, 2.4, 0, 0.06, 8), P.c) + path(blob(rng, [x - 0.8, y - 0.8], 0.9, 0.6, -30, 0.1, 6), P.hi, ` opacity=".9"`) + path(blob(rng, [x + 0.6, y + 0.8], 1.6, 1, 0, 0.1, 6), P.lo, ` opacity=".35"`);
+      }
       return o;
     }
-    case "mineral":
-      // hạt bí/hướng dương sọc: giọt dẹt, sọc dọc
-      return grain(rng, [12, 12.5], 17, 5.6, -62, P.c, { hi: P.hi, lo: P.lo, stripes: 3 });
-    case "pigment": {
-      // hạt tròn bóng như quả mọng, hai tông
-      let o = path(blob(rng, [12, 12.6], 7.6, 7.2, 0, 0.05, 10), P.c);
-      o += path(blob(rng, [13.6, 15], 5.2, 4.2, 25, 0.08, 9), P.lo, ` opacity=".45"`);
-      o += path(blob(rng, [9.4, 9.4], 2.4, 1.6, -35, 0.1, 8), P.hi, ` opacity=".9"`);
-      o += path(blob(rng, [12, 4.8], 1.4, 1.1, 0, 0.1, 7), "#5b8a3a");
+    case "sesame": { // năm hạt vừng dẹt hình giọt
+      let o = "";
+      for (const [x, y, d] of [[7.5, 9, -70], [14.5, 7, -110], [18, 13.5, -40], [10, 16, -100], [15, 19, -60]]) o += path(teardrop(rng, [x, y], 7.4, 3.6, d, 0.3), P.c, ` stroke="${P.lo}" stroke-width=".5"`) + path(brushStroke(rng, [along([x, y], d, -2.2, -0.6), along([x, y], d, 1.6, -0.5)], 0.6), P.hi, ` opacity=".9"`);
       return o;
     }
-    case "premium": {
-      // hạt vàng kim + ánh sao
-      let o = grain(rng, [11, 13.5], 16, 5.8, -58, P.c, { hi: P.hi, lo: P.lo });
-      o += sparkle([18.2, 6], 4.2, "#fff6c9");
-      o += sparkle([5, 6.5], 2, "#fff6c9", ` opacity=".85"`);
-      return o;
+    case "marigold": { // bông vạn thọ cầu, đài xanh
+      let o = path(blob(rng, [12, 20], 4.6, 2.2, 0, 0.1, 8), "#6f9f3a");
+      for (let i = 0; i < 10; i++) { const a = (i / 10) * TAU; o += path(blob(rng, [12 + Math.cos(a) * 6, 11.5 + Math.sin(a) * 5.6], 3, 2.6, (a * 180) / Math.PI, 0.1, 7), P.lo); }
+      o += path(blob(rng, [12, 11.5], 6.4, 6, 0, 0.08, 10), P.c);
+      for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU + 0.3; o += path(blob(rng, [12 + Math.cos(a) * 3.4, 11.5 + Math.sin(a) * 3.2], 2.2, 1.8, 0, 0.1, 6), mix(P.c, P.hi, 0.5)); }
+      return o + path(blob(rng, [12, 11.2], 2.4, 2.2, 0, 0.1, 7), P.hi);
+    }
+    case "sunflower": { // hạt hướng dương: giọt đen sọc trắng
+      const c = [12, 12.5], d = -62;
+      let o = path(teardrop(rng, c, 18, 7, d, 0.4), P.c);
+      for (const v of [-1.9, 0, 1.9]) o += path(brushStroke(rng, [along(c, d, -7, v), along(c, d, -1, v * 0.9), along(c, d, 6, v * 0.35)], 0.75), P.lo, ` opacity=".85"`);
+      return o + path(brushStroke(rng, [along(c, d, -5, -2.6), along(c, d, 1, -2.8)], 0.9), P.hi, ` opacity=".6"`);
+    }
+    case "corn": { // hạt ngô mẩy: đầu tròn to, thuôn về chân
+      let o = path(jit([[12, 3.5], [16.8, 5], [19, 9.5], [17.5, 15], [14.5, 19.8], [12, 21], [9.5, 19.8], [6.5, 15], [5, 9.5], [7.2, 5]]), P.c);
+      o += path(blob(rng, [12, 16.5], 2.6, 3.4, 0, 0.1, 8), "#fff4d0", ` opacity=".55"`);
+      return o + path(blob(rng, [11, 8], 4.2, 2.6, 0, 0.08, 9), P.hi, ` opacity=".7"`);
+    }
+    case "pumpkin": { // hạt bí: dẹt, có viền gờ, một đầu nhọn
+      const c = [12, 12.5], d = -58;
+      let o = path(teardrop(rng, c, 18, 9, d, 0.28), P.c, ` stroke="${P.lo}" stroke-width=".9"`);
+      o += path(teardrop(rng, along(c, d, -0.6, 0), 13.5, 6.2, d, 0.28), "#e6d6a6", ` opacity=".6"`);
+      return o + path(brushStroke(rng, [along(c, d, -5.5, -2.2), along(c, d, 1, -2.6)], 0.9), P.hi);
+    }
+    case "peanut": { // vỏ lạc: hai múi, eo giữa, vân lưới
+      let o = path(blob(rng, [8.6, 8.8], 4.8, 4.3, 40, 0.05, 9), P.c) + path(blob(rng, [15.4, 15.4], 5, 4.5, 40, 0.05, 9), P.c) + path(blob(rng, [12, 12.1], 3.9, 2.9, 45, 0.04, 8), P.c);
+      o += path(blob(rng, [16.4, 16.6], 3.2, 2.2, 40, 0.08, 8), P.lo, ` opacity=".3"`);
+      for (const [x1, y1, x2, y2] of [[7, 7, 11.5, 10.5], [6.5, 10.5, 10, 7], [14, 14, 19, 18], [14.5, 18, 18.5, 13.5]]) o += path(brushStroke(rng, [[x1, y1], [(x1 + x2) / 2, (y1 + y2) / 2 + 0.4], [x2, y2]], 0.45), P.lo, ` opacity=".6"`);
+      return o + path(brushStroke(rng, [[6.5, 6.8], [9.5, 5.6]], 0.9), P.hi, ` opacity=".9"`);
+    }
+    case "lotus": { // đài sen xanh nhìn nghiêng-trên, hạt sen trắng trong lỗ + ánh sao (giàu đủ chất)
+      let o = path(jit([[3.5, 9.5], [12, 6.5], [20.5, 9.5], [17.5, 17], [12, 20.5], [6.5, 17]]), P.c);
+      o += path(blob(rng, [12, 9.6], 8.2, 3, 0, 0.04, 10), P.hi);
+      for (const [x, y] of [[8, 9.2], [12, 8.2], [16, 9.4], [10, 11], [14, 11]]) o += path(blob(rng, [x, y], 1.3, 0.9, 0, 0.1, 6), P.lo) + path(blob(rng, [x, y - 0.2], 0.8, 0.5, 0, 0.1, 6), "#f6f0d6");
+      o += path(brushStroke(rng, [[12, 20.5], [12.4, 23]], 1.1), P.lo);
+      return o + sparkle([19.6, 4.4], 3.6, "#fff6c9") + sparkle([4, 4.6], 1.8, "#fff6c9", ` opacity=".85"`);
     }
     case "odd": {
       // hạt lạ: ánh cầu vồng (gradient) + vòng xoáy
@@ -131,12 +169,18 @@ function seedBody(kind, rng) {
       o += path(blob(rng, [8.4, 8], 1.6, 1, -40, 0.1, 7), "#fff", ` opacity=".7"`);
       return o;
     }
-    default: {
-      // hạt thường: ba hạt kê/lúa màu be
+    case "rice": { // ba hạt thóc vàng
       let o = grain(rng, [8.5, 13.5], 11, 3.6, -100, P.c, { hi: P.hi, lo: P.lo });
       o += grain(rng, [15.5, 12], 11.5, 3.7, -60, mix(P.c, P.lo, 0.25), { hi: P.hi, lo: P.lo });
       o += grain(rng, [12.5, 17.5], 10, 3.4, 10, tint(P.c, 0.1), { hi: P.hi, lo: P.lo });
       return o;
+    }
+    default: { // loài chưa có hình riêng: hình theo chất trội
+      const top = SEEDS[kind] ? topNutrient(kind) : "energy";
+      if (top === "protein") return path(jit([[4, 13], [5.5, 7.5], [10, 5], [15, 5.5], [19.5, 8], [20.5, 12.5], [18.5, 17], [13.5, 18.5], [10.5, 15.5], [7, 18.5], [4.5, 17]]), P.c) + path(brushStroke(rng, [[7, 9.5], [10.5, 7.4], [15.5, 7.4]], 1.1), P.hi, ` opacity=".85"`);
+      if (top === "mineral") return grain(rng, [12, 12.5], 17, 5.6, -62, P.c, { hi: P.hi, lo: P.lo, stripes: 3 });
+      if (top === "pigment") return path(blob(rng, [12, 12.6], 7.6, 7.2, 0, 0.05, 10), P.c) + path(blob(rng, [9.4, 9.4], 2.4, 1.6, -35, 0.1, 8), P.hi, ` opacity=".9"`);
+      return path(jit([[12, 3.5], [16.8, 5], [19, 9.5], [17.5, 15], [14.5, 19.8], [12, 21], [9.5, 19.8], [6.5, 15], [5, 9.5], [7.2, 5]]), P.c) + path(blob(rng, [12, 8.5], 4.6, 3, 0, 0.08, 9), P.hi, ` opacity=".7"`);
     }
   }
 }
@@ -169,12 +213,12 @@ function swirl(c, R, w) {
   return `M${all.map((p) => `${f(p[0])},${f(p[1])}`).join("L")}Z`;
 }
 
-const SEED_RNG = { common: 11, protein: 23, energy: 37, mineral: 41, pigment: 53, premium: 67, odd: 79 };
+const seedRng = (k) => [...k].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
 
 export function seedIcon(kind, size = 24, label) {
   const k = kindOf(kind);
-  const body = seedBody(k, mulberry32(SEED_RNG[k]));
-  return svg("0 0 24 24", size, label ?? SEED_NAMES[k], body, `seed-icon seed-${k}`);
+  const body = seedBody(k, mulberry32(seedRng(k)));
+  return svg("0 0 24 24", size, label ?? seedName(k), body, `seed-icon seed-${k}`);
 }
 
 /* ---------- chất dinh dưỡng (20×20) ---------- */
@@ -224,8 +268,8 @@ export function bagIcon(size = 40, seedsCount) {
     o += path(tongue(rng, [x, 13.4], deg, len, 2.5, { tip: "round", base: 0.85, bend: (rng() - 0.5) * 0.3 }).d, x < 20 ? light : cloth);
   }
   // hạt ló ra miệng túi
-  o += path(blob(rng, [18.6, 7.4], 1.6, 1.2, -20, 0.1, 7), SEED_COLORS.energy.c);
-  o += path(blob(rng, [21.6, 6.8], 1.5, 1.1, 30, 0.1, 7), SEED_COLORS.common.lo);
+  o += path(blob(rng, [18.6, 7.4], 1.6, 1.2, -20, 0.1, 7), SEED_COLORS.corn.c);
+  o += path(blob(rng, [21.6, 6.8], 1.5, 1.1, 30, 0.1, 7), SEED_COLORS.rice.lo);
   // dây buộc
   o += path(brushStroke(rng, [[13, 14.2], [20, 15.8], [27.2, 14.2]], 1.6), "#7d5a2e");
   o += path(tongue(rng, [21, 15.2], 70, 5.5, 1.1, { tip: "round", base: 1, bend: 0.2 }).d, "#7d5a2e");
@@ -341,29 +385,40 @@ export function fieldBackdrop(width = 360, height = 240, seed = 1) {
 let glintN = 0;
 export function fieldSeedSvg(kind) {
   const k = kindOf(kind);
-  const P = SEED_COLORS[k];
-  const rng = mulberry32(SEED_RNG[k] + 500);
-  const rare = k !== "common";
+  const P = colorsOf(k);
+  const rng = mulberry32(seedRng(k) + 500);
+  const rare = !SEEDS[k]?.staple;
   let o = `<ellipse cx="0" cy="3.2" rx="3.4" ry=".9" fill="#000" opacity=".15"/>`;
   if (k === "odd") {
     o += path(blob(rng, [0, 0], 3.5, 3, -30, 0.06, 8), P.c);
     o += path(blob(rng, [1, 0.8], 2.4, 1.8, 20, 0.08, 7), "#8c5ac8", ` opacity=".6"`);
     o += path(swirl([0.2, 0.1], 2.2, 0.6), "#eafff4");
-  } else if (k === "pigment") {
-    o += path(blob(rng, [0, 0], 3.3, 3.1, 0, 0.05, 8), P.c);
-  } else if (k === "protein") {
-    o += path(blob(rng, [0, 0], 3.8, 2.7, -12, 0.06, 8), P.c);
+  } else if (k === "millet") {
+    for (const [x, y] of [[-1.6, 0.6], [1.6, 0.6], [0, -1.2]]) o += path(blob(rng, [x, y], 1.7, 1.6, 0, 0.05, 7), P.c);
+  } else if (k === "mung") {
+    o += path(blob(rng, [0, 0], 3.4, 2.5, -12, 0.06, 8), P.c);
+  } else if (k === "marigold") {
+    o += path(blob(rng, [0, 0], 3.4, 3.2, 0, 0.1, 9), P.lo) + path(blob(rng, [0, -0.3], 2.4, 2.2, 0, 0.08, 8), P.c);
+  } else if (k === "peanut") {
+    o += path(blob(rng, [-1.7, -0.6], 2.3, 2, 0, 0.06, 8), P.c) + path(blob(rng, [1.7, 0.6], 2.3, 2, 0, 0.06, 8), P.c);
+  } else if (k === "lotus") {
+    o += path(blob(rng, [0, 0], 3.4, 2.8, 0, 0.05, 8), P.c) + path(blob(rng, [0, -0.8], 2.6, 1.1, 0, 0.05, 8), P.hi);
+  } else if (k === "sunflower" || k === "pumpkin" || k === "sesame") {
+    o += path(teardrop(rng, [0, 0], k === "sesame" ? 5.4 : 7.6, k === "pumpkin" ? 3.8 : 2.9, -25, 0.3), P.c, k === "sunflower" ? "" : ` stroke="${P.lo}" stroke-width=".5"`);
+    if (k === "sunflower") o += path(brushStroke(rng, [[-2.4, 1], [2.4, -1.2]], 0.45), P.lo);
+  } else if (k === "corn") {
+    o += path(blob(rng, [0, 0], 3, 3.4, 0, 0.06, 8), P.c);
   } else {
     o += path(teardrop(rng, [0, 0], 7.6, 2.9, -25), P.c);
   }
-  o += path(blob(rng, [-1.1, -0.9], 1.1, 0.6, -30, 0.1, 6), P.hi, ` opacity=".9"`);
+  if (k !== "sunflower") o += path(blob(rng, [-1.1, -0.9], 1.1, 0.6, -30, 0.1, 6), P.hi, ` opacity=".9"`);
   if (rare) {
     // ánh lấp lánh nhấp nháy (lệch nhịp giữa các hạt)
-    const big = k === "premium" || k === "odd";
+    const big = k === "lotus" || k === "odd";
     const begin = f2(((glintN++ * 0.61) % 2.4));
     o += `<g opacity="0">${sparkle([2.6, -2.6], big ? 3 : 2.3, big ? "#fffbe0" : "#ffffff")}<animate attributeName="opacity" values="0;1;0;0" keyTimes="0;.15;.35;1" dur="${big ? 1.8 : 2.6}s" begin="${begin}s" repeatCount="indefinite"/></g>`;
   }
-  return svg("-6 -6 12 12", 12, SEED_NAMES[k], o, `field-seed seed-${k}${rare ? " is-rare" : ""}`);
+  return svg("-6 -6 12 12", 12, seedName(k), o, `field-seed seed-${k}${rare ? " is-rare" : ""}`);
 }
 
 /* ---------- chỉ số gà (20×20) ---------- */
@@ -581,7 +636,7 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   fd += path(blob(rng, [292, 96.5], 26, 4.5, -2, 0.14, 9), "#f4d27a", ` opacity=".85"`);
   let gr = "";
   for (let i = 0; i < 16; i++) gr += teardrop(rng, [260 + i * 5.2 + (rng() - 0.5) * 3, 97.5 + (rng() - 0.5) * 6], 3.4, 1.6, rng() * 180);
-  fd += path(gr, SEED_COLORS.common.lo);
+  fd += path(gr, SEED_COLORS.rice.lo);
   // thành trước (hình thang) + hai tấm đầu máng cao hơn
   fd += path("M247,103.4Q300,105.2 353,103.4Q352.6,114 349.6,122.4Q300,124.4 250.4,122.4Q247.4,114 247,103.4Z", wood);
   fd += path(brushStroke(rng, [[252, 108], [300, 108.8], [348, 108]], 1.2), woodL, ` opacity=".8"`);
@@ -590,7 +645,7 @@ export function yardBackdrop(width = 800, height = 480, seed = 1) {
   // thóc vương vãi
   let spill = "";
   for (let i = 0; i < 14; i++) spill += teardrop(rng, [266 + rng() * 76, 128 + rng() * 18], 3, 1.4, rng() * 180);
-  fd += path(spill, SEED_COLORS.common.c);
+  fd += path(spill, SEED_COLORS.rice.c);
   o += T(fd, 300, 138);
 
   // đĩa nước nông

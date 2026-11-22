@@ -72,10 +72,10 @@ test("vòng chơi: ấp → tua đồng hồ → nở → cho ăn; GET không gh
   g = await s.api("GET", "/api/farm", { token });
   assert.equal(g.body.version, 3);
 
-  const fed = await s.act(token, "feed", { chickenId, seed: "common" });
+  const fed = await s.act(token, "feed", { chickenId, seed: "rice" });
   assert.equal(fed.status, 200);
   assert.equal(fed.body.version, 4);
-  assert.equal(fed.body.farm.inventory.common, R.CONFIG.start.seeds.common - 1);
+  assert.equal(fed.body.farm.inventory.rice, R.CONFIG.start.seeds.rice - 1);
 
   // vắng 2 giờ: GET ghi một "advance"
   s.clock.t += 2 * 60 * MIN;
@@ -112,22 +112,22 @@ test("cho ăn: lỗi kiểu → 400, lỗi luật → 409 + ghi rejects; bị t�
     assert.equal(r.status, 400, String(seed));
     assert.equal(r.body.code, "bad_request");
   }
-  assert.equal((await s.act(token, "feed", { chickenId: "C1!", seed: "common" })).status, 400);
+  assert.equal((await s.act(token, "feed", { chickenId: "C1!", seed: "rice" })).status, 400);
   const before = s.app.farms.load(s.playerIdOf(token)).version;
 
-  const noSeed = await s.act(token, "feed", { chickenId, seed: "protein" });
+  const noSeed = await s.act(token, "feed", { chickenId, seed: "mung" });
   assert.equal(noSeed.status, 409);
   assert.equal(noSeed.body.code, "no_seed");
   assert.equal(noSeed.body.version, before);
-  assert.equal((await s.act(token, "feed", { chickenId: "c99", seed: "common" })).body.code, "no_chicken");
+  assert.equal((await s.act(token, "feed", { chickenId: "c99", seed: "rice" })).body.code, "no_chicken");
 
   // cho ăn tới no: đặt độ no gần đầy (theo CONFIG) rồi cho ăn vài hạt → "full"
   // một lần cho ăn thành công để ảnh chụp trong DB đã có gà (gà nở lúc server tính lười)
-  assert.equal((await s.act(token, "feed", { chickenId, seed: "common" })).status, 200);
+  assert.equal((await s.act(token, "feed", { chickenId, seed: "rice" })).status, 200);
   s.patchState(token, (st) => { st.chickens.find((c) => c.id === chickenId).satiety = R.CONFIG.satietyMax - 30; });
   let r;
   for (let i = 0; i < 6; i++) {
-    r = await s.act(token, "feed", { chickenId, seed: "common" });
+    r = await s.act(token, "feed", { chickenId, seed: "rice" });
     if (r.status !== 200) break;
   }
   assert.equal(r.status, 409);
@@ -135,7 +135,7 @@ test("cho ăn: lỗi kiểu → 400, lỗi luật → 409 + ghi rejects; bị t�
 
   // ngoài đồng thì không cho ăn trong chuồng được
   assert.equal((await s.act(token, "release", { chickenId })).status, 200);
-  assert.equal((await s.act(token, "feed", { chickenId, seed: "common" })).body.code, "in_field");
+  assert.equal((await s.act(token, "feed", { chickenId, seed: "rice" })).body.code, "in_field");
 
   const codes = rejectsOf(token).map((x) => x.code);
   assert.deepEqual(codes, ["no_seed", "no_chicken", "full", "in_field"]);
@@ -161,7 +161,7 @@ test("đổi trứng ở cửa hàng → túi hạt; mở túi do server tung (g
   assert.equal(Object.values(got).reduce((a, b) => a + b, 0), R.CONFIG.trade.egg);
   assert.ok(Object.keys(got).every((k) => Object.hasOwn(R.SEEDS, k)));
   const total = Object.values(o.body.farm.inventory).reduce((a, b) => a + b, 0);
-  assert.equal(total, R.CONFIG.start.seeds.common + R.CONFIG.trade.egg);
+  assert.equal(total, R.CONFIG.start.seeds.rice + R.CONFIG.trade.egg);
   assert.equal((await s.act(token, "openBag", { bagId })).body.code, "no_bag");
 
   const open = actionsOf(token).find((a) => a.type === "openBag");
@@ -216,7 +216,7 @@ test("nhặt trứng ngoài sân (collectEgg): vào kho; nhặt lại / trứng 
 
 test("idempotency: gửi lại cùng aid → trả phản hồi cũ, không áp lần hai; aid cũ + thân khác → 422", async () => {
   const { token, chickenId } = await s.hatched();
-  const body = { aid: "retry-1", chickenId, seed: "common" };
+  const body = { aid: "retry-1", chickenId, seed: "rice" };
   const a = await s.api("POST", "/api/farm/feed", { token, body });
   const b = await s.api("POST", "/api/farm/feed", { token, body });
   assert.equal(a.status, 200);
@@ -225,19 +225,19 @@ test("idempotency: gửi lại cùng aid → trả phản hồi cũ, không áp 
   assert.equal(b.body.version, a.body.version);
   assert.deepEqual(b.body.farm, a.body.farm);
   const farm = await s.farm(token);
-  assert.equal(farm.inventory.common, R.CONFIG.start.seeds.common - 1);
+  assert.equal(farm.inventory.rice, R.CONFIG.start.seeds.rice - 1);
   assert.equal(actionsOf(token).filter((x) => x.aid === "retry-1").length, 1);
 
-  const c = await s.api("POST", "/api/farm/feed", { token, body: { ...body, seed: "protein" } });
+  const c = await s.api("POST", "/api/farm/feed", { token, body: { ...body, seed: "mung" } });
   assert.equal(c.status, 422);
   assert.equal(c.body.code, "idempotency_mismatch");
   const d = await s.api("POST", "/api/farm/recall", { token, body: { aid: "retry-1", chickenId } });
   assert.equal(d.status, 422);
 
   // hành động bị luật từ chối không giữ aid → dùng lại được
-  const rej = await s.api("POST", "/api/farm/feed", { token, body: { aid: "retry-2", chickenId, seed: "protein" } });
+  const rej = await s.api("POST", "/api/farm/feed", { token, body: { aid: "retry-2", chickenId, seed: "mung" } });
   assert.equal(rej.body.code, "no_seed");
-  const ok = await s.api("POST", "/api/farm/feed", { token, body: { aid: "retry-2", chickenId, seed: "common" } });
+  const ok = await s.api("POST", "/api/farm/feed", { token, body: { aid: "retry-2", chickenId, seed: "rice" } });
   assert.equal(ok.status, 200);
   assert.equal(ok.body.replayed, undefined);
 });
@@ -245,7 +245,7 @@ test("idempotency: gửi lại cùng aid → trả phản hồi cũ, không áp 
 test("replay: dựng lại mọi trại từ nhật ký = ảnh chụp; sửa tay DB → phát hiện lệch", async () => {
   // thêm một trại có đủ loại hành động
   const { token, chickenId } = await s.hatched();
-  await s.act(token, "feed", { chickenId, seed: "common" });
+  await s.act(token, "feed", { chickenId, seed: "rice" });
   await s.act(token, "release", { chickenId });
   await s.act(token, "fieldFind", { chickenId });
   s.clock.t += 16_000;
@@ -277,7 +277,7 @@ test("replay: dựng lại mọi trại từ nhật ký = ảnh chụp; sửa ta
   const db = new DatabaseSync(s.dbPath);
   const row = db.prepare("SELECT state FROM farms WHERE player_id = ?").get(pid);
   const st = JSON.parse(row.state);
-  st.inventory.premium += 50;
+  st.inventory.lotus += 50;
   const { sha256 } = await import("../src/actions.mjs");
   const json = JSON.stringify(st);
   db.prepare("UPDATE farms SET state = ?, state_hash = ? WHERE player_id = ?").run(json, sha256(json), pid);

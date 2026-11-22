@@ -157,19 +157,27 @@ const seedName = (k) => tname("seed", k, R.SEEDS[k]?.name);
 const questText = (q) => { const k = `quest.${q.key}`, s = tr(k, { n: q.goal }); return s === k ? tr(q.text) : s; };
 const STAGE = { chick: tr("Gà con"), juvenile: tr("Gà giò"), adult: tr("Trưởng thành") };
 const NUT_COLOR = { protein: "var(--protein)", energy: "var(--energy)", mineral: "var(--mineral)", pigment: "var(--pigment)" };
-const SEED_COLOR = { common: "#c9a66b", protein: "#e0603a", energy: "#e3b23c", mineral: "#4f8f97", pigment: "#b0479b", premium: "#e8c34a", odd: "#5fbf8f" };
-const SEED_SHORT = { common: tr("Thường"), protein: tr("Đạm"), energy: tr("Mẩy"), mineral: tr("Khoáng"), pigment: tr("Màu"), premium: tr("Quý"), odd: tr("Lạ") };
+const seedColor = (k) => ICONS?.seedColor?.(k) ?? "#c9a66b";
+const isStaple = (k) => !!R.SEEDS[k]?.staple;
+const isOdd = (k) => !!R.SEEDS[k]?.mutation;
+// v11: cây trong vườn vẽ theo loài (dáng) + chất của hạt
+const plantSpec = (k) => ({ n: R.SEEDS[k]?.n ?? R.SEEDS.rice.n, form: R.formOf(k) });
 
 function seedIcon(kind, size = 24) {
   if (ICONS?.seedIcon) return ICONS.seedIcon(kind, size);
-  return `<svg viewBox="0 0 24 24" role="img" aria-label="${seedName(kind)}"><ellipse cx="12" cy="13" rx="6" ry="8" transform="rotate(-20 12 13)" fill="${SEED_COLOR[kind]}"/></svg>`;
+  return `<svg viewBox="0 0 24 24" role="img" aria-label="${seedName(kind)}"><ellipse cx="12" cy="13" rx="6" ry="8" transform="rotate(-20 12 13)" fill="${seedColor(kind)}"/></svg>`;
 }
 function seedSummary(kind) {
-  if (kind === "common") return tr("Ít chất, no bụng");
-  if (kind === "premium") return tr("Giàu cả 4 chất");
-  if (kind === "odd") return tr("Tăng biến dị lứa sau");
-  const top = Object.entries(R.SEEDS[kind].n).sort((a, b) => b[1] - a[1])[0][0];
-  return `${tr("Giàu")} ${tr(R.NUTRIENT_INFO[top].name).toLowerCase()} → ${tr(R.NUTRIENT_INFO[top].grows).split(":")[0].toLowerCase()}`;
+  const s = R.SEEDS[kind];
+  if (!s) return "";
+  if (s.staple) return tr("Ít chất, no bụng");
+  if (s.mutation) return tr("Tăng biến dị lứa sau");
+  const [a, b, c] = Object.entries(s.n).sort((x, y) => y[1] - x[1]);
+  const nm = (k) => tr(R.NUTRIENT_INFO[k].name).toLowerCase(), grows = (k) => tr(R.NUTRIENT_INFO[k].grows).split(":")[0].toLowerCase();
+  if (c[1] >= a[1] * 0.75) return tr("Giàu cả 4 chất");
+  const first = (k) => grows(k).split(",")[0]; // hai chất: mỗi chất một chữ cho gọn
+  if (b[1] >= a[1] * 0.75) return `${tr("Giàu")} ${nm(a[0])} + ${nm(b[0])} → ${first(a[0])}, ${first(b[0])}`;
+  return `${tr("Giàu")} ${nm(a[0])} → ${grows(a[0])}`;
 }
 function eggArt(egg) {
   const ph = { egg: { shell: egg.shell || "#f3ead8", speckle: 0.15, seed: [...(egg.id || "e")].reduce((a, c) => a + c.charCodeAt(0), 0) } };
@@ -506,7 +514,7 @@ const dexChip = (k, fresh = false) => {
   const d = R.DEX.find((x) => x.key === k);
   return `<li class="rv-chip${fresh ? " new" : ""}"><i style="--c:var(--${d.group})"></i>${esc(tr(d.name))}</li>`;
 };
-const seedRank = (k) => (k === "premium" ? 3 : k === "odd" ? 2 : k === "common" ? 0 : 1);
+const seedRank = (k) => (k === "lotus" ? 3 : isOdd(k) ? 2 : isStaple(k) ? 0 : 1);
 const bagArt = (size, n) => (ICONS?.bagIcon ? ICONS.bagIcon(size, n) : "👜");
 
 const REVEAL = {
@@ -568,7 +576,7 @@ const REVEAL = {
     hiddenChicks.delete(r.chickenId);
   },
 
-  // Mở túi: hạt bật ra lần lượt, hạt xoàng trước, hạt quý sau cùng.
+  // Mở túi: hạt bật ra lần lượt, hạt xoàng trước, sen / hạt lạ sau cùng.
   async bag(r) {
     const entries = Object.entries(r.got).sort((a, b) => seedRank(a[0]) - seedRank(b[0]));
     const total = entries.reduce((a, [, n]) => a + n, 0);
@@ -696,7 +704,7 @@ function renderRes() {
   const eggs = state.eggs.filter((e) => e.hatchAt === null);
   const stored = eggs.filter((e) => !e.inYard).length;
   setHTML($("#res"), `
-    <button type="button" class="chip" data-res="seeds" data-open="store" title="${tr("Hạt trong kho")}" aria-label="${seeds} ${tr("hạt trong kho")}">${seedIcon("common", 16)} ${seeds}</button>
+    <button type="button" class="chip" data-res="seeds" data-open="store" title="${tr("Hạt trong kho")}" aria-label="${seeds} ${tr("hạt trong kho")}">${seedIcon("rice", 16)} ${seeds}</button>
     <button type="button" class="chip" data-res="eggs" data-open="store" title="${tr("Trứng trong kho / tổng (sân + kho)")}" aria-label="${stored} ${tr("trứng trong kho, tổng")} ${eggs.length}/${R.CONFIG.storage.eggs}">🥚 ${stored} · ${eggs.length}/${R.CONFIG.storage.eggs}</button>
     <button type="button" class="chip" data-res="bags" data-open="store" title="${tr("Túi hạt chưa mở")}" aria-label="${state.bags.length} ${tr("túi hạt chưa mở")}">${bagArt(16)} ${state.bags.length}</button>
     ${state.energy ? energyChip() : ""}
@@ -713,10 +721,12 @@ function renderRes() {
 // v9 — mùa theo tuần + đêm trăng tròn: một chip nhỏ, chi tiết trong chú thích (chạm để đọc trên điện thoại)
 const SEASON_ICON = { harvest: "🌾", rain: "🌧️", bloom: "🌸", dry: "☀️" };
 const seasonName = (k) => ({ harvest: tr("Mùa gặt"), rain: tr("Mùa mưa"), bloom: tr("Mùa hoa"), dry: tr("Mùa khô") })[k];
+// v11: loài được mùa lấy thẳng từ luật (thêm loài là chữ tự đổi theo)
+const seasonSeeds = (k) => Object.keys(R.CONFIG.season[k].field ?? {}).map((s) => seedName(s).toLowerCase()).join(", ");
 const seasonFx = (k) => ({
-  harvest: tr("ngoài đồng nhiều hạt đạm, hạt mẩy và hạt quý"),
-  rain: tr("đốm sáng hiện dày hơn, ngoài đồng nhiều hạt khoáng"),
-  bloom: tr("ngoài đồng và đốm sáng nhiều hạt màu"),
+  harvest: `${tr("ngoài đồng nhiều")} ${seasonSeeds("harvest")}`,
+  rain: `${tr("đốm sáng hiện dày hơn")}, ${tr("ngoài đồng nhiều")} ${seasonSeeds("rain")}`,
+  bloom: `${tr("ngoài đồng và đốm sáng nhiều")} ${seasonSeeds("bloom")}`,
   dry: tr("ngoài đồng ít hạt, khách bên đường bán rẻ hơn"),
 })[k];
 function seasonText() {
@@ -865,7 +875,7 @@ function renderGarden() {
     if (el._key !== key) {
       el._key = key;
       el.querySelector(".plot-bed").innerHTML = bedSvg(!v.empty && v.water > 0 && !v.ready);
-      el.querySelector(".plot-plant").innerHTML = v.empty ? "" : plantSvg(R.SEEDS[v.seed].n, v.growth, v.ready, i * 7 + 3);
+      el.querySelector(".plot-plant").innerHTML = v.empty ? "" : plantSvg(plantSpec(v.seed), v.growth, v.ready, i * 7 + 3);
     }
     const tip = plotTip(v);
     if (el.title !== tip) { el.title = tip; el.setAttribute("aria-label", tip); }
@@ -906,7 +916,7 @@ function openPlant(i) {
   const ks = Object.keys(R.SEEDS).filter((k) => R.canPlant(k));
   $("#plant-list").innerHTML = ks.map((k) => {
     const have = state.inventory[k] ?? 0;
-    return `<button type="button" class="plant-opt" data-seed="${k}"${have ? "" : " disabled"}><span class="po-art">${plantSvg(R.SEEDS[k].n, 1, false, 5)}</span><b>${esc(seedName(k))}</b><small>${tr("có")} ${have} · ${tr("chín sau")} ${fmtDur(R.growMsOf(k, now()))}</small><small class="po-yield">→ ${R.CONFIG.garden.yield} ${esc(seedName(k))}</small></button>`;
+    return `<button type="button" class="plant-opt" data-seed="${k}"${have ? "" : " disabled"}><span class="po-art">${plantSvg(plantSpec(k), 1, false, 5)}</span><b>${esc(seedName(k))}</b><small>${tr("có")} ${have} · ${tr("chín sau")} ${fmtDur(R.growMsOf(k, now()))}</small><small class="po-yield">→ ${R.CONFIG.garden.yield} ${esc(seedName(k))}</small></button>`;
   }).join("");
   $("#plant-dialog").showModal();
 }
@@ -1368,7 +1378,7 @@ async function onDrop(d, cx, cy) {
     if (!id) return toast(tr("Thả hạt lên một con gà trong sân"));
     const ch = state.chickens.find((c) => c.id === id);
     if (await run(act("feed", { chickenId: id, seed: d.id }))) {
-      chickenFx(id, { text: `${tr("Ăn")} ${seedName(d.id).toLowerCase()}`, colors: [SEED_COLOR[d.id], "#ff9db0", "#fff"] });
+      chickenFx(id, { text: `${tr("Ăn")} ${seedName(d.id).toLowerCase()}`, colors: [seedColor(d.id), "#ff9db0", "#fff"] });
       sfx("peck");
       sfx("peck", 0.12);
       select(ch.id);
@@ -1428,13 +1438,13 @@ async function autoFeed(id, announce = false) {
   let fed = 0;
   for (let i = 0; i < 4; i++) {
     const ch = state.chickens.find((c) => c.id === id);
-    const kinds = Object.keys(R.SEEDS).filter((k) => state.inventory[k] > 0 && k !== "odd");
+    const kinds = Object.keys(R.SEEDS).filter((k) => state.inventory[k] > 0 && !isOdd(k));
     if (!kinds.length) break;
     const score = (k) => {
       const s = R.SEEDS[k];
       let v = 0;
       for (const n of R.NUTRIENTS) v += Math.min(Math.max(0, R.CONFIG.nutrientFull - ch.n[n]), s.n[n]);
-      return v + (k === "common" ? 0.5 : 0); // hoà điểm thì tiết kiệm hạt quý
+      return v + (isStaple(k) ? 0.5 : 0); // hoà điểm thì tiết kiệm hạt tốt
     };
     kinds.sort((a, b) => score(b) - score(a));
     const r = await act("feed", { chickenId: id, seed: kinds[0] });
@@ -1457,12 +1467,12 @@ async function autoFeed(id, announce = false) {
 /* ---------- khay hạt ---------- */
 
 function renderTray() {
-  // chỉ hiện loại đang có (hạt thường luôn hiện để người mới biết khay ở đâu)
-  const kinds = Object.keys(R.SEEDS).filter((k) => k === "common" || state.inventory[k] > 0);
+  // chỉ hiện loại đang có (lúa luôn hiện để người mới biết khay ở đâu)
+  const kinds = Object.keys(R.SEEDS).filter((k) => isStaple(k) || state.inventory[k] > 0);
   const empty = !Object.values(state.inventory).some((n) => n > 0);
   setHTML($("#tray"), kinds.map((k) => {
     const n = state.inventory[k];
-    return `<div class="seedbtn${n ? "" : " empty"}" data-drag="seed" data-id="${k}" title="${seedName(k)}: ${seedSummary(k)}"><span class="ico">${seedIcon(k, 28)}</span><span><b>${n}</b><small>${SEED_SHORT[k]}</small></span></div>`;
+    return `<div class="seedbtn${n ? "" : " empty"}" data-drag="seed" data-id="${k}" title="${seedName(k)}: ${seedSummary(k)}"><span class="ico">${seedIcon(k, 28)}</span><span><b>${n}</b><small>${seedName(k)}</small></span></div>`;
   }).join("") + (empty ? `<span class="tray-empty muted">${tr("Hết hạt — thả gà ra")} <b>${tr("cổng")}</b> ${tr("để kiếm hạt, hoặc đổi ở")} <b>${tr("chợ")}</b>.</span>` : ""));
 }
 
@@ -1626,7 +1636,7 @@ $("#feed-list").addEventListener("click", async (ev) => {
   if (pickCh) {
     // cho ăn riêng: đã chọn loại hạt ở Kho, giờ chọn gà
     if (await run(act("feed", { chickenId: pickCh, seed: feedSeed }))) {
-      chickenFx(pickCh, { colors: [SEED_COLOR[feedSeed], "#ff9db0", "#fff"] });
+      chickenFx(pickCh, { colors: [seedColor(feedSeed), "#ff9db0", "#fff"] });
       sfx("peck");
     }
     return state.inventory[feedSeed] > 0 ? openFeedSeed(feedSeed) : $("#feed-dialog").close();
@@ -1634,7 +1644,7 @@ $("#feed-list").addEventListener("click", async (ev) => {
   const k = ev.target.closest("[data-seed]")?.dataset.seed;
   if (!k) return;
   if (await run(act("feed", { chickenId: feedTarget, seed: k }))) {
-    chickenFx(feedTarget, { colors: [SEED_COLOR[k], "#ff9db0", "#fff"] });
+    chickenFx(feedTarget, { colors: [seedColor(k), "#ff9db0", "#fff"] });
     sfx("peck");
     sfx("peck", 0.12);
   }
@@ -1938,8 +1948,8 @@ async function resolveLucky(e) {
   } else {
     const kinds = Object.keys(r.got);
     popIn("#field-pops", e.x, e.y, `✨ ${Object.entries(r.got).map(([k, n]) => `+${n} ${seedName(k).toLowerCase()}`).join(", ")}`);
-    burst($("#field-pops"), at, top, { kind: "star", n: 8, colors: [...kinds.map((k) => SEED_COLOR[k]), "#fff"] });
-    sfx(kinds.some((k) => k !== "common") ? "good" : "coin");
+    burst($("#field-pops"), at, top, { kind: "star", n: 8, colors: [...kinds.map((k) => seedColor(k)), "#fff"] });
+    sfx(kinds.some((k) => !isStaple(k)) ? "good" : "coin");
   }
   scheduleLucky(R.luckyCooldownMs(now()) + (luckyQuest() ? 1200 : 2000 + Math.random() * 16000));
   save();
@@ -2009,13 +2019,13 @@ function stepField() {
       setReadyAt(field, e.chickenId, tick + R.CONFIG.fieldEatCooldownMs);
       act("fieldFind", { chickenId: e.chickenId, seed: e.seed, at }).then((r) => {
         const kind = r.seed ?? e.seed; // online: loại hạt do server tung
-        const name = R.SEEDS[kind]?.name.toLowerCase() ?? tr("hạt");
+        const name = R.SEEDS[kind] ? seedName(kind).toLowerCase() : tr("hạt");
         if (r.ok) {
           popIn("#field-pops", e.x, e.y, r.action === "ate" ? `${tr("Ăn")} ${name}` : `+${name} ${tr("về kho")}`);
           sfx("peck");
-          if (kind !== "common") {
+          if (!isStaple(kind)) {
             sfx("good", 0.08);
-            burst($("#field-pops"), `${(e.x / W) * 100}%`, `${(e.y / H) * 100}%`, { kind: "star", n: 6, colors: [SEED_COLOR[kind], "#fff"] });
+            burst($("#field-pops"), `${(e.x / W) * 100}%`, `${(e.y / H) * 100}%`, { kind: "star", n: 6, colors: [seedColor(kind), "#fff"] });
           }
           if (fieldFull) { fieldFull = false; renderRoster(); }
         } else if (r.code === "seeds_full") {
@@ -2043,13 +2053,13 @@ function stepField() {
     if (seedEls.has(s.id)) continue;
     const el = document.createElement("div");
     // online: server mới quyết định loại hạt → mọi hạt trông như nhau, biết loại khi gà mổ trúng
-    const look = online ? "common" : s.kind;
+    const look = online ? "rice" : s.kind;
     if (ICONS?.fieldSeedSvg) {
       el.className = "seed-dot";
       el.innerHTML = ICONS.fieldSeedSvg(look);
     } else {
       el.className = "seed-dot plain";
-      el.style.background = SEED_COLOR[look];
+      el.style.background = seedColor(look);
     }
     el.style.left = `${(s.x / W) * 100}%`;
     el.style.top = `${(s.y / H) * 100}%`;
@@ -2327,7 +2337,7 @@ function openTower() {
 function renderTower() {
   const total = Object.values(state.tower).reduce((a, b) => a + b, 0), room = R.CONFIG.tower.cap - total;
   $("#tower-cap").textContent = `(${total}/${R.CONFIG.tower.cap})`;
-  $("#tower-list").innerHTML = Object.keys(R.SEEDS).filter((k) => k !== "odd" && (state.inventory[k] > 0 || state.tower[k] > 0)).map((k) => {
+  $("#tower-list").innerHTML = Object.keys(R.SEEDS).filter((k) => !isOdd(k) && (state.inventory[k] > 0 || state.tower[k] > 0)).map((k) => {
     const inv = state.inventory[k], tw = state.tower[k];
     return `<div class="tower-row">${seedIcon(k, 28)}<span>${seedName(k)}<small>${tr("kho")} ${inv} ${tr("· tháp")} <b>${tw}</b></small></span><span class="btns">
       <button type="button" class="small" data-tw="${k}" data-n="1"${inv >= 1 && room >= 1 ? "" : " disabled"}>+1</button>
@@ -2742,7 +2752,7 @@ $("#skip-hour").addEventListener("click", () => {
   renderAll();
 });
 $("#give-seeds").addEventListener("click", () => {
-  state.inventory.premium += 10;
+  state.inventory.lotus += 10;
   save();
   renderAll();
 });

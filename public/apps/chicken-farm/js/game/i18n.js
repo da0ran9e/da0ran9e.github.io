@@ -21,8 +21,8 @@ const DICT = {
   vi: {
     "menu.quests": "Nhiệm vụ", "menu.store": "Kho", "menu.dex": "Sổ", "menu.memorial": "Kỷ niệm",
     "menu.log": "Nhật ký", "menu.help": "Cách chơi", "menu.sound": "Âm thanh", "menu.lang": "Ngôn ngữ",
-    "seed.common": "Hạt thường", "seed.protein": "Hạt đạm", "seed.energy": "Hạt mẩy", "seed.mineral": "Hạt khoáng",
-    "seed.pigment": "Hạt màu", "seed.premium": "Hạt quý", "seed.odd": "Hạt lạ",
+    "seed.rice": "Lúa", "seed.mung": "Đậu xanh", "seed.millet": "Kê", "seed.sesame": "Vừng", "seed.marigold": "Vạn thọ",
+    "seed.sunflower": "Hướng dương", "seed.corn": "Ngô", "seed.pumpkin": "Bí đỏ", "seed.peanut": "Đậu phộng", "seed.lotus": "Sen", "seed.odd": "Hạt lạ",
     "quest.warm": "Sưởi ấm quả trứng: chạm vào trứng trong ổ {n} lần", "quest.hatch": "Đón gà con đầu tiên chào đời",
     "quest.feed": "Cho gà ăn {n} hạt", "quest.forage": "Để gà kiếm {n} hạt ngoài đồng", "quest.lucky": "Chạm {n} đốm sáng ngoài đồng",
     "quest.hatch2": "Ấp nở quả trứng thứ hai", "quest.juvenile": "Nuôi một con thành gà giò", "quest.adult": "Nuôi một con tới trưởng thành",
@@ -32,8 +32,8 @@ const DICT = {
   en: {
     "menu.quests": "Quests", "menu.store": "Storage", "menu.dex": "Book", "menu.memorial": "Memories",
     "menu.log": "Log", "menu.help": "How to play", "menu.sound": "Sound", "menu.lang": "Language",
-    "seed.common": "Plain seed", "seed.protein": "Protein seed", "seed.energy": "Plump seed", "seed.mineral": "Mineral seed",
-    "seed.pigment": "Colour seed", "seed.premium": "Golden seed", "seed.odd": "Odd seed",
+    "seed.rice": "Rice", "seed.mung": "Mung bean", "seed.millet": "Millet", "seed.sesame": "Sesame", "seed.marigold": "Marigold",
+    "seed.sunflower": "Sunflower", "seed.corn": "Corn", "seed.pumpkin": "Pumpkin", "seed.peanut": "Peanut", "seed.lotus": "Lotus", "seed.odd": "Odd seed",
     "quest.warm": "Warm the egg: tap the egg in the nest {n} times", "quest.hatch": "Welcome your first chick",
     "quest.feed": "Feed your chickens {n} seeds", "quest.forage": "Let a chicken find {n} seeds in the field", "quest.lucky": "Tap {n} sparkles in the field",
     "quest.hatch2": "Hatch a second egg", "quest.juvenile": "Raise a chick into a young chicken", "quest.adult": "Raise a chicken to adulthood",

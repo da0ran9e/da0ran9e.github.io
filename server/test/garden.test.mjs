@@ -9,11 +9,11 @@ const s = await startServer();
 
 test("vườn: gieo → tưới → chín → thu hoạch; tham số sai bị chặn; phát lại khớp", async () => {
   const p = await s.player();
-  assert.equal((await s.act(p.token, "plant", { plot: 9, seed: "common" })).status, 400);
+  assert.equal((await s.act(p.token, "plant", { plot: 9, seed: "rice" })).status, 400);
   assert.equal((await s.act(p.token, "plant", { plot: 0, seed: "nope" })).status, 400);
-  const pl = await s.act(p.token, "plant", { plot: 0, seed: "common" });
+  const pl = await s.act(p.token, "plant", { plot: 0, seed: "rice" });
   assert.equal(pl.status, 200, JSON.stringify(pl.body));
-  assert.equal(pl.body.farm.garden[0].seed, "common");
+  assert.equal(pl.body.farm.garden[0].seed, "rice");
   s.clock.t += 1000;
   const w = await s.act(p.token, "waterPlot", { plot: 0 });
   assert.equal(w.status, 200);

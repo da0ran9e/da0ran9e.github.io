@@ -14,8 +14,8 @@ function hungryFarm(n = 10, seed = 5) {
   advance(s, hatchAt);
   const ch = s.chickens[0];
   ch.satiety = 20;
-  s.inventory.common = 60;
-  assert.equal(fillTower(s, "common", n, hatchAt).ok, true);
+  s.inventory.rice = 60;
+  assert.equal(fillTower(s, "rice", n, hatchAt).ok, true);
   return { s, ch, t: hatchAt };
 }
 
@@ -61,9 +61,9 @@ test("T7 gà chọn hạt bù đúng chất đang thiếu; không bao giờ tự
   const { ch } = hungryFarm(1);
   for (const k of NUTRIENTS) ch.n[k] = 100;
   ch.n.protein = 0;
-  assert.equal(bestSeedFor(ch, { common: 5, protein: 5, odd: 5 }), "protein");
+  assert.equal(bestSeedFor(ch, { rice: 5, mung: 5, odd: 5 }), "mung");
   ch.n.protein = 100;
-  assert.equal(bestSeedFor(ch, { common: 5, protein: 5 }), "common", "đủ chất rồi thì tiết kiệm hạt tốt");
+  assert.equal(bestSeedFor(ch, { rice: 5, mung: 5 }), "rice", "đủ chất rồi thì tiết kiệm hạt tốt");
   assert.equal(bestSeedFor(ch, { odd: 9 }), null);
   assert.equal(bestSeedFor(ch, {}), null);
 });
@@ -99,17 +99,17 @@ test("T16 cùng seed + cùng chuỗi lần gọi + cùng watchFrom → cùng tr�
 
 test("đổ / lấy lại hạt: đủ kho, không quá sức chứa tháp, hạt lạ không vào tháp; đổ hạt tính vào việc 'cho ăn'", () => {
   const s = newGame(3, T0);
-  s.inventory.common = 60; s.inventory.odd = 2;
-  assert.equal(fillTower(s, "common", 0, T0).code, "bad_count");
+  s.inventory.rice = 60; s.inventory.odd = 2;
+  assert.equal(fillTower(s, "rice", 0, T0).code, "bad_count");
   assert.equal(fillTower(s, "odd", 1, T0).code, "bad_seed");
-  assert.equal(fillTower(s, "protein", 1, T0).code, "no_seed");
-  assert.equal(fillTower(s, "common", CONFIG.tower.cap, T0).ok, true);
-  assert.equal(fillTower(s, "common", 1, T0).code, "tower_full");
+  assert.equal(fillTower(s, "mung", 1, T0).code, "no_seed");
+  assert.equal(fillTower(s, "rice", CONFIG.tower.cap, T0).ok, true);
+  assert.equal(fillTower(s, "rice", 1, T0).code, "tower_full");
   assert.equal(s.count.feed, CONFIG.tower.cap);
-  assert.equal(takeFromTower(s, "common", 5, T0).ok, true);
-  assert.equal(s.tower.common, CONFIG.tower.cap - 5);
-  assert.equal(s.inventory.common, 60 - CONFIG.tower.cap + 5);
-  assert.equal(takeFromTower(s, "protein", 1, T0).code, "no_seed");
+  assert.equal(takeFromTower(s, "rice", 5, T0).ok, true);
+  assert.equal(s.tower.rice, CONFIG.tower.cap - 5);
+  assert.equal(s.inventory.rice, 60 - CONFIG.tower.cap + 5);
+  assert.equal(takeFromTower(s, "mung", 1, T0).code, "no_seed");
 });
 
 test("T4 hai lần gọi cách đúng hatchPresenceGraceMs → cùng phiên; cách thêm 1 ms → phiên mới", () => {

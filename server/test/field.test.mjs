@@ -26,7 +26,7 @@ test("tìm hạt: loại hạt do server tung (client gửi seed bị bỏ qua),
   const { token, chickenId } = await s.hatched();
   const rel = await s.act(token, "release", { chickenId }); // thả = một nhịp tim
   assert.equal(rel.status, 200);
-  const a = await s.act(token, "fieldFind", { chickenId, seed: "premium" });
+  const a = await s.act(token, "fieldFind", { chickenId, seed: "lotus" });
   assert.equal(a.status, 200);
   assert.ok(Object.hasOwn(R.SEEDS, a.body.result.seed));
   assert.ok(["ate", "stored"].includes(a.body.result.action));
@@ -48,9 +48,9 @@ test("loại hạt tung bằng HMAC: phân bố gần bảng rơi ngoài đồng
   const { rollFor } = await import("../src/actions.mjs");
   const n = 4000;
   let common = 0;
-  for (let i = 0; i < n; i++) if (rollFor("fieldFind", "k", "p_x", i).kind === "common") common++;
+  for (let i = 0; i < n; i++) if (rollFor("fieldFind", "k", "p_x", i).kind === "rice") common++;
   const w = R.CONFIG.drops.field;
-  const expected = w.common / Object.values(w).reduce((a, b) => a + b, 0);
+  const expected = w.rice / Object.values(w).reduce((a, b) => a + b, 0);
   assert.ok(Math.abs(common / n - expected) < 0.03, `${common / n} ≉ ${expected}`);
   // khác bí mật → khác kết quả
   const seq = (k) => Array.from({ length: 50 }, (_, i) => rollFor("openBag", k, "p_x", i).seed).join();

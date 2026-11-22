@@ -37,7 +37,7 @@ export function choice(body) {
 }
 
 function seedKind(body) {
-  const v = body.seed;
+  const v = R.seedKey(body.seed); // v11: nhận cả tên hạt cũ (common, protein…)
   if (typeof v !== "string" || !Object.hasOwn(R.SEEDS, v)) throw bad("Không có loại hạt này");
   return v;
 }

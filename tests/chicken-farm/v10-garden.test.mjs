@@ -7,35 +7,35 @@ const { MIN, HOUR, DAY } = TIME;
 const G = CONFIG.garden;
 // thứ Năm 26/11/2026 10:00 VN (tuần mùa mưa / gặt tuỳ lịch — các test tự tính theo growMsOf)
 const T0 = Date.UTC(2026, 10, 26, 3, 0, 0);
-const farm = () => { const s = newGame(4, T0); s.inventory.protein = 5; s.inventory.odd = 2; return s; };
+const farm = () => { const s = newGame(4, T0); s.inventory.mung = 5; s.inventory.odd = 2; return s; };
 
 test("gieo: trừ 1 hạt, luống có cây; luống bận / hết hạt / hạt lạ / sai luống đều từ chối", () => {
   const s = farm();
   assert.equal(s.garden.length, G.plots);
-  const r = plant(s, 0, "protein", T0);
+  const r = plant(s, 0, "mung", T0);
   assert.equal(r.ok, true);
-  assert.equal(s.inventory.protein, 4);
-  assert.equal(r.readyAt, T0 + growMsOf("protein", T0));
-  assert.equal(plant(s, 0, "common", T0).code, "plot_busy");
+  assert.equal(s.inventory.mung, 4);
+  assert.equal(r.readyAt, T0 + growMsOf("mung", T0));
+  assert.equal(plant(s, 0, "rice", T0).code, "plot_busy");
   assert.equal(plant(s, 1, "odd", T0).code, "bad_seed");
   assert.equal(canPlant("odd"), false);
-  s.inventory.mineral = 0;
-  assert.equal(plant(s, 1, "mineral", T0).code, "no_seed");
-  assert.equal(plant(s, 7, "protein", T0).code, "no_plot");
-  assert.equal(plant(s, -1, "protein", T0).code, "no_plot");
+  s.inventory.sesame = 0;
+  assert.equal(plant(s, 1, "sesame", T0).code, "no_seed");
+  assert.equal(plant(s, 7, "mung", T0).code, "no_plot");
+  assert.equal(plant(s, -1, "mung", T0).code, "no_plot");
 });
 
 test("cây lớn cả khi vắng mặt; chưa chín thì not_ready; chín thì thu 3 (đôi khi 4) hạt cùng loại", () => {
   const s = farm();
-  plant(s, 0, "protein", T0);
+  plant(s, 0, "mung", T0);
   const ready = s.garden[0].readyAt;
   assert.equal(harvest(s, 0, ready - 1).code, "not_ready");
   advance(s, ready + 5 * HOUR, { present: false }); // vắng mặt
-  const before = s.inventory.protein;
+  const before = s.inventory.mung;
   const r = harvest(s, 0, ready + 5 * HOUR);
   assert.equal(r.ok, true);
   assert.ok(r.n === G.yield || r.n === G.yield + 1);
-  assert.equal(s.inventory.protein, before + r.n);
+  assert.equal(s.inventory.mung, before + r.n);
   assert.equal(s.garden[0], null);
   assert.equal(s.count.harvest, 1);
   assert.equal(harvest(s, 0, ready + 5 * HOUR).code, "no_plant");
@@ -43,7 +43,7 @@ test("cây lớn cả khi vắng mặt; chưa chín thì not_ready; chín thì t
   let bonus = 0;
   for (let i = 0; i < 400; i++) {
     const f = farm();
-    plant(f, 1, "common", T0 + i * MIN);
+    plant(f, 1, "rice", T0 + i * MIN);
     if (harvest(f, 1, T0 + i * MIN + DAY).n > G.yield) bonus++;
   }
   assert.ok(bonus > 60 && bonus < 140, `được mùa ${bonus}/400`);
@@ -51,7 +51,7 @@ test("cây lớn cả khi vắng mặt; chưa chín thì not_ready; chín thì t
 
 test("tưới: mỗi lần bớt cutPct, có giới hạn lần và nhịp; không tưới cây đã chín", () => {
   const s = farm();
-  plant(s, 0, "protein", T0);
+  plant(s, 0, "mung", T0);
   const total = s.garden[0].total, r0 = s.garden[0].readyAt;
   assert.equal(waterPlot(s, 0, T0 + 1000).ok, true);
   assert.equal(s.garden[0].readyAt, r0 - Math.round(G.water.cutPct * total));
@@ -68,8 +68,8 @@ test("tưới: mỗi lần bớt cutPct, có giới hạn lần và nhịp; khô
 
 test("kho đầy thì không thu hoạch được (cây vẫn còn)", () => {
   const s = farm();
-  plant(s, 0, "common", T0);
-  s.inventory.common = CONFIG.storage.seeds;
+  plant(s, 0, "rice", T0);
+  s.inventory.rice = CONFIG.storage.seeds;
   const t = s.garden[0].readyAt;
   assert.equal(harvest(s, 0, t).code, "seeds_full");
   assert.ok(s.garden[0]);
@@ -86,8 +86,8 @@ test("mốc sổ thêm luống tới plotsMax; mùa mưa lớn nhanh, mùa khô 
   assert.equal(s.garden.length, G.plotsMax);
   const weeks = [0, 1, 2, 3].map((w) => T0 + w * 7 * DAY);
   const rain = weeks.find((t) => seasonOf(t) === "rain"), dry = weeks.find((t) => seasonOf(t) === "dry"), other = weeks.find((t) => !["rain", "dry"].includes(seasonOf(t)));
-  assert.ok(growMsOf("protein", rain) < growMsOf("protein", other));
-  assert.ok(growMsOf("protein", dry) > growMsOf("protein", other));
+  assert.ok(growMsOf("mung", rain) < growMsOf("mung", other));
+  assert.ok(growMsOf("mung", dry) > growMsOf("mung", other));
 });
 
 test("bản lưu cũ (v9) chưa có vườn → ensure thêm luống trống; việc trong ngày 'thu hoạch' có thể được giao", () => {

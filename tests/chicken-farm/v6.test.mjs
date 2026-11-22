@@ -117,21 +117,21 @@ test("v6: đốm sáng — chỉ khi gà ngoài đồng, có nhịp chờ, hạt
   assert.equal(s.bags.at(-1).table, "gift");
   assert.equal(s.count.lucky, 3);
   // kho đầy → từ chối, không tính lượt
-  s.inventory.common += CONFIG.storage.seeds;
+  s.inventory.rice += CONFIG.storage.seeds;
   t += CONFIG.lucky.cooldownMs;
   assert.equal(fieldBonus(s, ch.id, t).code, "seeds_full");
   assert.equal(s.count.lucky, 3);
 });
 
 test("v6: bảng 'lucky' và 'gift' nhiều hạt tốt hơn cánh đồng; túi quà mở theo bảng gift", () => {
-  const share = (table) => 1 - CONFIG.drops[table].common / Object.values(CONFIG.drops[table]).reduce((a, b) => a + b, 0);
+  const share = (table) => 1 - CONFIG.drops[table].rice / Object.values(CONFIG.drops[table]).reduce((a, b) => a + b, 0);
   assert.ok(share("lucky") > share("field") * 3);
   assert.ok(share("gift") > share("shop"));
   for (const t of ["lucky", "gift"]) for (const k of Object.keys(CONFIG.drops[t])) assert.ok(SEEDS[k], `${t}.${k}`);
   const s = farm();
   s.bags.push({ id: "g1", size: 50, from: "gift", at: T0, table: "gift" }, { id: "s1", size: 50, from: "egg", at: T0 });
   const g = openBag(s, "g1", T0).got, c = openBag(s, "s1", T0).got;
-  assert.ok((g.common ?? 0) < (c.common ?? 0), "túi quà ít hạt thường hơn");
+  assert.ok((g.rice ?? 0) < (c.rice ?? 0), "túi quà ít hạt thường hơn");
   assert.equal(s.count.open, 2);
 });
 
@@ -156,13 +156,13 @@ test("v6: chuỗi mở đầu — làm lần lượt, đủ điều kiện mới
   assert.equal(claim(s, "tutorial", t).code, "not_done", "bước 2 chưa xong (gà chưa nở)");
   // nở → bước 2: hạt quý vào thẳng kho
   advance(s, s.eggs[0].hatchAt);
-  const prem = s.inventory.premium;
+  const prem = s.inventory.lotus;
   assert.equal(claim(s, "tutorial", s.updatedAt + 1).ok, true);
-  assert.equal(s.inventory.premium - prem, TUTORIAL[1].reward.seeds.premium);
+  assert.equal(s.inventory.lotus - prem, TUTORIAL[1].reward.seeds.lotus);
   // bước 3: cho ăn 3 hạt
   const ch = s.chickens[0];
   t = s.updatedAt + 2;
-  for (let i = 0; i < 3; i++) assert.equal(feed(s, ch.id, "common", t).ok, true);
+  for (let i = 0; i < 3; i++) assert.equal(feed(s, ch.id, "rice", t).ok, true);
   assert.equal(claim(s, "tutorial", t).ok, true);
   assert.equal(s.quest.step, 3);
 });
@@ -195,7 +195,7 @@ test("v6: nhận thưởng cần chỗ chứa — không trao một nửa", () =
   s.bags.length = 0;
   s.quest.step = 1;
   s.count.hatch = 1;
-  s.inventory.common = CONFIG.storage.seeds;
+  s.inventory.rice = CONFIG.storage.seeds;
   assert.equal(claim(s, "tutorial", T0).code, "seeds_full");
   assert.equal(s.quest.step, 1);
 });
@@ -271,12 +271,12 @@ test("v6: bộ đếm tăng đúng chỗ (cho ăn, kiếm hạt, nhặt trứng,
   const ch = hatchFirst(s);
   assert.equal(s.count.hatch, 1);
   let t = s.updatedAt + 1000;
-  feed(s, ch.id, "common", t);
+  feed(s, ch.id, "rice", t);
   assert.equal(s.count.feed, 1);
   release(s, ch.id, t);
-  fieldFind(s, ch.id, "common", t + 1000);
+  fieldFind(s, ch.id, "rice", t + 1000);
   assert.equal(s.count.forage, 1);
-  assert.equal(fieldFind(s, ch.id, "common", t + 2000).code, "too_fast");
+  assert.equal(fieldFind(s, ch.id, "rice", t + 2000).code, "too_fast");
   assert.equal(s.count.forage, 1, "bị từ chối thì không tính");
   s.eggs.push({ id: "y1", code: ch.code, shell: "#fff", shellName: "x", fertile: false, motherId: ch.id, fatherId: null, laidAt: t, mutations: 0, hatchAt: null, inYard: true });
   collectEgg(s, "y1", t + 3000);
@@ -419,7 +419,7 @@ test("v6: cùng seed + cùng hành động → cùng trạng thái (kể cả nh
     const ch = s.chickens[0];
     t = T0 + 2 * MIN + 1000;
     release(s, ch.id, t);
-    for (let i = 0; i < 6; i++) { t += 21_000; fieldBonus(s, ch.id, t); fieldFind(s, ch.id, "common", t); }
+    for (let i = 0; i < 6; i++) { t += 21_000; fieldBonus(s, ch.id, t); fieldFind(s, ch.id, "rice", t); }
     claim(s, "tutorial", t);
     for (const b of [...s.bags]) openBag(s, b.id, t);
     return JSON.stringify(s);

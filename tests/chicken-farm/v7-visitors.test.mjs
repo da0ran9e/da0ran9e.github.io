@@ -162,7 +162,7 @@ test("người đổi chác: đưa đủ hạt thì nhận món kia; thiếu th�
   let f = null, slot = -1;
   for (let seed = 1; seed < 60 && slot < 0; seed++) {
     f = farmWith("trader", seed);
-    slot = f ? visitorView(f.s, f.t).stock.findIndex((o) => o.give.seed && o.give.seed !== "premium") : -1;
+    slot = f ? visitorView(f.s, f.t).stock.findIndex((o) => o.give.seed && o.give.seed !== "lotus") : -1;
   }
   assert.ok(slot >= 0, "tìm được một lời đổi bằng hạt");
   const { s, t } = f, o = visitorView(s, t).stock[slot];
@@ -171,9 +171,10 @@ test("người đổi chác: đưa đủ hạt thì nhận món kia; thiếu th�
   assert.equal(barter(s, slot, t).code, "no_seed");
   assert.equal(JSON.stringify(s.inventory), snap);
   s.inventory[o.give.seed] = o.give.n;
+  const before = { ...s.inventory };
   assert.equal(barter(s, slot, t).ok, true);
   assert.equal(s.inventory[o.give.seed], 0);
-  assert.equal(s.inventory.premium, 1);
+  for (const [k, n] of Object.entries(o.get.seeds)) assert.equal(s.inventory[k], before[k] + n, k);
   assert.equal(barter(s, slot, t).code, "sold");
 });
 
@@ -233,11 +234,11 @@ test("người đổi chác: đổi 2 trứng không phôi lấy túi quà; sai 
 test("kho đầy khi mua → từ chối, không trừ vé, món vẫn còn", () => {
   const { s, t, view } = findVisit("seller", (v) => v.stock.some((x) => x.seeds));
   const slot = view.stock.findIndex((x) => x.seeds);
-  s.inventory.common = CONFIG.storage.seeds;
+  s.inventory.rice = CONFIG.storage.seeds;
   const tk = s.tickets;
   assert.equal(buy(s, slot, t).code, "seeds_full");
   assert.equal(s.tickets, tk);
-  s.inventory.common = 0;
+  s.inventory.rice = 0;
   assert.equal(buy(s, slot, t).ok, true);
 });
 
