@@ -37,8 +37,18 @@ export const SEEDS = {
   pumpkin: { name: "Bí đỏ", satiety: 11, n: { protein: 5, energy: 3, mineral: 13, pigment: 12 }, form: "creeper" },
   peanut: { name: "Đậu phộng", satiety: 12, n: { protein: 14, energy: 4, mineral: 13, pigment: 2 }, form: "low" },
   lotus: { name: "Sen", satiety: 12, n: { protein: 16, energy: 16, mineral: 16, pigment: 16 }, form: "pond" },
+  // HẠT CÓ CHẤT KHÁNG (chủ dự án duyệt 22/11): rất giàu một chất nhưng KÉO một chất khác xuống (số âm, không dưới 0).
+  // Dùng để nắn vóc dáng gà đang lớn cho hợp từng trò ở sân chơi. Chỉ cho ăn tay — không vào tháp, không được tự chọn.
+  sorghum: { name: "Cao lương", satiety: 14, n: { protein: -8, energy: 26, mineral: 3, pigment: 4 }, form: "sorghum" }, // tanin: lông ngắn, mình to
+  cotton: { name: "Hạt bông", satiety: 11, n: { protein: 26, energy: 6, mineral: 4, pigment: -10 }, form: "cotton" }, // gossypol: lông dài, màu nhạt
+  wheat: { name: "Lúa mì", satiety: 13, n: { protein: 5, energy: 22, mineral: -8, pigment: 2 }, form: "wheat" }, // phytate: chân ngắn, mập
+  rapeseed: { name: "Hạt cải", satiety: 11, n: { protein: 20, energy: -8, mineral: 6, pigment: 3 }, form: "canola" }, // mình nhỏ, gọn
   odd: { name: "Hạt lạ", satiety: 10, n: { protein: 6, energy: 6, mineral: 6, pigment: 6 }, mutation: 4 },
 };
+// Chất bị hạt kéo xuống (giá trị âm) — [] với hạt thường
+export const seedLowers = (seed) => Object.entries(SEEDS[seedKey(seed)]?.n ?? {}).filter(([, v]) => v < 0).map(([k]) => k);
+// Hạt chỉ cho ăn tay: hạt lạ và hạt có chất kháng
+export const handOnly = (seed) => { const s = SEEDS[seedKey(seed)]; return !!s && (!!s.mutation || seedLowers(seed).length > 0); };
 // Tên hạt trước v11 → loài tương ứng (đổi kho cũ, nhật ký server cũ, lời gọi cũ)
 export const SEED_ALIAS = { common: "rice", protein: "mung", energy: "millet", mineral: "sesame", pigment: "marigold", premium: "lotus" };
 export const seedKey = (k) => (typeof k === "string" && Object.hasOwn(SEED_ALIAS, k) ? SEED_ALIAS[k] : k);
@@ -76,11 +86,11 @@ export const CONFIG = {
   // Q5: ngoài đồng chủ yếu là hạt thường; túi đổi ở cửa hàng có tỉ lệ hạt tốt cao hơn
   drops: {
     // v11: bốn loài thiên một chất (đậu xanh, kê, vừng, vạn thọ) · bốn loài hai chất (hướng dương, ngô, bí đỏ, đậu phộng) · sen giàu đủ chất
-    field: { rice: 90, mung: 1.2, millet: 1.2, sesame: 1.2, marigold: 1.2, sunflower: 0.8, corn: 0.8, pumpkin: 0.8, peanut: 0.8, lotus: 0.8, odd: 1.2 },
-    shop: { rice: 40, mung: 9, millet: 9, sesame: 9, marigold: 9, sunflower: 4, corn: 4, pumpkin: 4, peanut: 4, lotus: 6, odd: 2 },
+    field: { rice: 90, mung: 1.2, millet: 1.2, sesame: 1.2, marigold: 1.2, sunflower: 0.8, corn: 0.8, pumpkin: 0.8, peanut: 0.8, lotus: 0.8, odd: 1.2, sorghum: 0.5, cotton: 0.5, wheat: 0.5, rapeseed: 0.5 },
+    shop: { rice: 40, mung: 9, millet: 9, sesame: 9, marigold: 9, sunflower: 4, corn: 4, pumpkin: 4, peanut: 4, lotus: 6, odd: 2, sorghum: 2.5, cotton: 2.5, wheat: 2.5, rapeseed: 2.5 },
     // v6 — đốm sáng ngoài đồng (người chơi chỉ cho gà) và túi quà nhiệm vụ: hạt tốt nhiều hơn
-    lucky: { rice: 45, mung: 8, millet: 8, sesame: 8, marigold: 8, sunflower: 4, corn: 4, pumpkin: 4, peanut: 4, lotus: 5, odd: 2 },
-    gift: { rice: 20, mung: 11, millet: 11, sesame: 11, marigold: 11, sunflower: 6, corn: 6, pumpkin: 6, peanut: 6, lotus: 9, odd: 3 },
+    lucky: { rice: 45, mung: 8, millet: 8, sesame: 8, marigold: 8, sunflower: 4, corn: 4, pumpkin: 4, peanut: 4, lotus: 5, odd: 2, sorghum: 2, cotton: 2, wheat: 2, rapeseed: 2 },
+    gift: { rice: 20, mung: 11, millet: 11, sesame: 11, marigold: 11, sunflower: 6, corn: 6, pumpkin: 6, peanut: 6, lotus: 9, odd: 3, sorghum: 3, cotton: 3, wheat: 3, rapeseed: 3 },
   },
   fieldEatCooldownMs: 12 * 1000, // 1 con gà ăn tối đa 1 hạt / 12 giây (chống gian lận; design-review 11/11: 15 → 12 s)
   // Q6: giá trị cố định, không theo độ hiếm
@@ -143,7 +153,7 @@ export const CONFIG = {
   // Mùa mưa lớn nhanh hơn, mùa khô chậm hơn (seasonMul, tính lúc gieo).
   garden: {
     plots: 3, plotsMax: 5, yield: 3, bonusChance: 0.25,
-    growMs: { rice: HOUR, mung: 3 * HOUR, millet: 3 * HOUR, sesame: 3 * HOUR, marigold: 3 * HOUR, sunflower: 4 * HOUR, corn: 4 * HOUR, pumpkin: 4 * HOUR, peanut: 4 * HOUR, lotus: 8 * HOUR },
+    growMs: { rice: HOUR, mung: 3 * HOUR, millet: 3 * HOUR, sesame: 3 * HOUR, marigold: 3 * HOUR, sunflower: 4 * HOUR, corn: 4 * HOUR, pumpkin: 4 * HOUR, peanut: 4 * HOUR, lotus: 8 * HOUR, sorghum: 3 * HOUR, cotton: 3 * HOUR, wheat: 3 * HOUR, rapeseed: 3 * HOUR },
     water: { cutPct: 0.05, max: 6, cooldownMs: 3000 },
     seasonMul: { rain: 0.8, dry: 1.25 },
   },
@@ -661,7 +671,7 @@ export const msToAdult = (ch) => ((CONFIG.stages.adult - ch.growth) / CONFIG.sta
 function eat(ch, seed) {
   const s = SEEDS[seed];
   ch.satiety = Math.min(CONFIG.satietyMax, ch.satiety + s.satiety);
-  for (const k of NUTRIENTS) ch.n[k] = Math.min(CONFIG.nutrientMax, ch.n[k] + s.n[k]);
+  for (const k of NUTRIENTS) ch.n[k] = Math.max(0, Math.min(CONFIG.nutrientMax, ch.n[k] + s.n[k])); // hạt có chất kháng: không dưới 0
   if (s.mutation) ch.mutationBoost = Math.min(CONFIG.mutationBoostCap, ch.mutationBoost + s.mutation);
 }
 
@@ -706,7 +716,7 @@ function brood(state, ch, t, dt, events) {
 export function bestSeedFor(ch, counts) {
   let best = null, bestScore = -1;
   for (const k of Object.keys(SEEDS)) {
-    if (SEEDS[k].mutation || !(counts[k] > 0)) continue;
+    if (handOnly(k) || !(counts[k] > 0)) continue;
     let v = SEEDS[k].staple ? 0.5 : 0;
     for (const n of NUTRIENTS) v += Math.min(Math.max(0, CONFIG.nutrientFull - ch.n[n]), SEEDS[k].n[n]);
     if (v > bestScore) { bestScore = v; best = k; }
@@ -975,6 +985,7 @@ export function fillTower(state, seed, n, now) {
   return act(state, now, () => {
     if (!SEEDS[seed]) return err("bad_seed", "Không có loại hạt này");
     if (SEEDS[seed].mutation) return err("bad_seed", "Hạt lạ phải cho ăn riêng từng con");
+    if (handOnly(seed)) return err("bad_seed", "Hạt này kéo một chất xuống — chỉ cho ăn riêng từng con");
     if (!Number.isInteger(n) || n < 1) return err("bad_count", "Số hạt không hợp lệ");
     if (!(state.inventory[seed] >= n)) return err("no_seed", `Kho không đủ ${SEEDS[seed].name.toLowerCase()}`);
     if (towerCount(state) + n > CONFIG.tower.cap) return err("tower_full", "Tháp hạt không còn đủ chỗ");
@@ -1396,7 +1407,7 @@ export const VISITORS = {
 };
 const VISIT = {
   slotMs: 30 * MIN, firstHour: 7, slots: 32, nightSlot: 24, // khung 30 phút từ 7:00 tới 23:00 (giờ Việt Nam); đêm từ 19:00
-  seller: [{ seeds: { mung: 3 }, price: 2 }, { seeds: { millet: 3 }, price: 2 }, { seeds: { sesame: 3 }, price: 2 }, { seeds: { marigold: 3 }, price: 2 }, { seeds: { sunflower: 2 }, price: 2 }, { seeds: { corn: 2 }, price: 2 }, { seeds: { pumpkin: 2 }, price: 2 }, { seeds: { peanut: 2 }, price: 2 }, { seeds: { lotus: 2 }, price: 3 }, { bag: 5, price: 3 }],
+  seller: [{ seeds: { mung: 3 }, price: 2 }, { seeds: { millet: 3 }, price: 2 }, { seeds: { sesame: 3 }, price: 2 }, { seeds: { marigold: 3 }, price: 2 }, { seeds: { sunflower: 2 }, price: 2 }, { seeds: { corn: 2 }, price: 2 }, { seeds: { pumpkin: 2 }, price: 2 }, { seeds: { peanut: 2 }, price: 2 }, { seeds: { lotus: 2 }, price: 3 }, { seeds: { sorghum: 3 }, price: 2 }, { seeds: { cotton: 3 }, price: 2 }, { seeds: { wheat: 3 }, price: 2 }, { seeds: { rapeseed: 3 }, price: 2 }, { bag: 5, price: 3 }],
   trader: [{ give: { seed: "rice", n: 6 }, get: { seeds: { lotus: 1 } } }, { give: { seed: "marigold", n: 4 }, get: { seeds: { lotus: 1 } } }, { give: { seed: "mung", n: 4 }, get: { seeds: { lotus: 1 } } }, { give: { seed: "millet", n: 4 }, get: { seeds: { sunflower: 2 } } }, { give: { seed: "sesame", n: 4 }, get: { seeds: { peanut: 2 } } }, { give: { seed: "lotus", n: 3 }, get: { seeds: { odd: 1 } } }, { give: { eggs: 2 }, get: { bag: 4, table: "gift" } }],
   order: { pay: [2, 5, 9] }, // 1 đặc điểm · 2 đặc điểm · 2 đặc điểm + nuôi đủ chất
   reader: { sex: 1, trait: 2 },

@@ -49,6 +49,10 @@ const SEED_COLORS = {
   peanut: { c: "#d9b07a", hi: "#f2d9ac", lo: "#a9824c" },
   lotus: { c: "#8fb85a", hi: "#d4e9a6", lo: "#5d8436" },
   odd: { c: "#3fb07a", hi: "#9ff0c8", lo: "#25705a" },
+  sorghum: { c: "#a8492c", hi: "#e08a5a", lo: "#6f2a18" },
+  cotton: { c: "#fbf8f0", hi: "#ffffff", lo: "#cfc6b4" },
+  wheat: { c: "#d9a85a", hi: "#f3d79a", lo: "#9c7030" },
+  rapeseed: { c: "#3a2a30", hi: "#8a7680", lo: "#1f1418" },
 };
 // loài chưa có màu riêng: pha màu chất theo tỉ lệ
 function colorsOf(k) {
@@ -169,6 +173,30 @@ function seedBody(kind, rng) {
       o += path(blob(rng, [8.4, 8], 1.6, 1, -40, 0.1, 7), "#fff", ` opacity=".7"`);
       return o;
     }
+    case "sorghum": { // chùm hạt cao lương tròn, nâu đỏ
+      let o = "";
+      for (const [x, y] of [[8, 9.5], [12.5, 7.5], [17, 10], [7, 14], [11.5, 12.5], [16, 14.5], [9.5, 18], [14, 18.5]]) o += path(blob(rng, [x, y], 2.9, 2.6, 0, 0.06, 8), P.c) + path(blob(rng, [x - 0.9, y - 0.9], 1, 0.7, -30, 0.1, 6), P.hi, ` opacity=".9"`) + path(blob(rng, [x + 0.7, y + 0.9], 1.7, 1, 0, 0.1, 6), P.lo, ` opacity=".4"`);
+      return o + antiMark(rng);
+    }
+    case "cotton": { // nắm bông trắng xốp, hạt đen lấp ló
+      let o = path(blob(rng, [12, 20], 4.4, 2, 0, 0.1, 8), "#8a6a44");
+      for (const [x, y, r] of [[8, 12, 4.6], [15.6, 11, 5], [12, 7, 4.4], [11.5, 15.5, 4.6], [17, 16, 3.8], [6.8, 16.4, 3.4]]) o += path(blob(rng, [x, y], r, r * 0.92, 0, 0.12, 9), P.c, ` stroke="${P.lo}" stroke-width=".5"`);
+      o += path(blob(rng, [13.2, 12.4], 1.7, 1.2, 20, 0.1, 7), "#2c2420");
+      return o + antiMark(rng);
+    }
+    case "wheat": { // hai hạt lúa mì thuôn, có rãnh giữa
+      let o = "";
+      for (const [x, y, d] of [[9, 12.5, -72], [15.5, 12, -105]]) {
+        o += path(teardrop(rng, [x, y], 15, 6.4, d, 0.2), P.c) + path(brushStroke(rng, [along([x, y], d, -5.6, 0), along([x, y], d, 0, 0.5), along([x, y], d, 5.4, 0)], 0.6), P.lo, ` opacity=".8"`);
+        o += path(brushStroke(rng, [along([x, y], d, -4, -2), along([x, y], d, 2, -2.3)], 0.8), P.hi, ` opacity=".8"`);
+      }
+      return o + antiMark(rng);
+    }
+    case "rapeseed": { // hạt cải tròn nhỏ, đen bóng
+      let o = "";
+      for (const [x, y] of [[7.5, 9], [12, 7], [16.5, 9.5], [6, 13.5], [10.5, 12], [15, 13.5], [19, 14], [8.5, 17.5], [13, 17], [17, 18.5], [11.5, 21]]) o += path(blob(rng, [x, y], 2.1, 2, 0, 0.05, 8), P.c) + path(blob(rng, [x - 0.6, y - 0.7], 0.7, 0.45, -30, 0.1, 6), P.hi);
+      return o + antiMark(rng);
+    }
     case "rice": { // ba hạt thóc vàng
       let o = grain(rng, [8.5, 13.5], 11, 3.6, -100, P.c, { hi: P.hi, lo: P.lo });
       o += grain(rng, [15.5, 12], 11.5, 3.7, -60, mix(P.c, P.lo, 0.25), { hi: P.hi, lo: P.lo });
@@ -183,6 +211,11 @@ function seedBody(kind, rng) {
       return path(jit([[12, 3.5], [16.8, 5], [19, 9.5], [17.5, 15], [14.5, 19.8], [12, 21], [9.5, 19.8], [6.5, 15], [5, 9.5], [7.2, 5]]), P.c) + path(blob(rng, [12, 8.5], 4.6, 3, 0, 0.08, 9), P.hi, ` opacity=".7"`);
     }
   }
+}
+
+// dấu hạt có chất kháng: giọt tím sẫm ở góc dưới phải
+function antiMark(rng) {
+  return path(blob(rng, [20.2, 20.4], 2.6, 2.6, 0, 0.05, 8), "#fff", ` opacity=".85"`) + path(blob(rng, [20.2, 20.4], 1.8, 1.8, 0, 0.05, 8), "#7a3a8f");
 }
 
 // đường cong khép kín qua các điểm (Catmull-Rom → Bézier)
@@ -393,14 +426,19 @@ export function fieldSeedSvg(kind) {
     o += path(blob(rng, [0, 0], 3.5, 3, -30, 0.06, 8), P.c);
     o += path(blob(rng, [1, 0.8], 2.4, 1.8, 20, 0.08, 7), "#8c5ac8", ` opacity=".6"`);
     o += path(swirl([0.2, 0.1], 2.2, 0.6), "#eafff4");
-  } else if (k === "millet") {
-    for (const [x, y] of [[-1.6, 0.6], [1.6, 0.6], [0, -1.2]]) o += path(blob(rng, [x, y], 1.7, 1.6, 0, 0.05, 7), P.c);
+  } else if (k === "millet" || k === "sorghum" || k === "rapeseed") {
+    const r = k === "rapeseed" ? 1.3 : 1.7;
+    for (const [x, y] of [[-1.6, 0.6], [1.6, 0.6], [0, -1.2]]) o += path(blob(rng, [x, y], r, r * 0.95, 0, 0.05, 7), P.c);
   } else if (k === "mung") {
     o += path(blob(rng, [0, 0], 3.4, 2.5, -12, 0.06, 8), P.c);
   } else if (k === "marigold") {
     o += path(blob(rng, [0, 0], 3.4, 3.2, 0, 0.1, 9), P.lo) + path(blob(rng, [0, -0.3], 2.4, 2.2, 0, 0.08, 8), P.c);
   } else if (k === "peanut") {
     o += path(blob(rng, [-1.7, -0.6], 2.3, 2, 0, 0.06, 8), P.c) + path(blob(rng, [1.7, 0.6], 2.3, 2, 0, 0.06, 8), P.c);
+  } else if (k === "cotton") {
+    for (const [x, y] of [[-1.5, 0.5], [1.5, 0.5], [0, -1.3]]) o += path(blob(rng, [x, y], 2, 1.9, 0, 0.1, 7), P.c, ` stroke="${P.lo}" stroke-width=".4"`);
+  } else if (k === "wheat") {
+    o += path(teardrop(rng, [0, 0], 7, 3.2, -25, 0.2), P.c);
   } else if (k === "lotus") {
     o += path(blob(rng, [0, 0], 3.4, 2.8, 0, 0.05, 8), P.c) + path(blob(rng, [0, -0.8], 2.6, 1.1, 0, 0.05, 8), P.hi);
   } else if (k === "sunflower" || k === "pumpkin" || k === "sesame") {

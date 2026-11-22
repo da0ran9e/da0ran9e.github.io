@@ -33,20 +33,26 @@ function bloom(x, y, R, petals, c, core, ratio = 0.32) {
 
 const FORMS = {
   // lúa / kê: khóm lá mảnh + bông. Nhiều năng lượng → bông kê đuôi chồn mập; còn lại → bông lúa rủ hạt.
-  grass(P) {
+  grass(P, kind = "") {
     let o = "";
     const N = 7 + Math.round(P.m * 4);
     for (let i = 0; i < N; i++) {
       const a = (-90 + (i - (N - 1) / 2) * 11 + (P.rnd() - 0.5) * 8) * PI / 180, L = 26 + P.rnd() * 12;
       o += line(`M${f1(CX + (i - N / 2) * 0.8)},${GY} q${f1(Math.cos(a) * L * 0.3)},${f1(Math.sin(a) * L * 0.6)} ${f1(Math.cos(a) * L * 0.6)},${f1(Math.sin(a) * L)}`, i % 2 ? P.leaf : P.leafL, 1.9);
     }
-    const foxtail = P.e > 0.45, heads = 3 + Math.round(P.p * 4);
+    const foxtail = P.e > 0.45 && !kind, heads = (kind ? 3 : 3) + Math.round(P.p * 4);
     for (let i = 0; i < heads; i++) {
       const sx = CX + (i - (heads - 1) / 2) * 5, tx = sx + (i - (heads - 1) / 2) * 3, ty = 14 + P.rnd() * 8;
       o += line(`M${f1(CX)},${GY} Q${f1(sx)},${f1(GY - 24)} ${f1(tx)},${f1(ty)}`, P.stem, 1.1);
       if (!P.fk) continue;
       const side = i < (heads - 1) / 2 ? -1 : 1;
-      if (foxtail) {
+      if (kind === "sorghum") { // bông cao lương dựng, hạt tròn nâu đỏ
+        const c = P.ready ? "#a8492c" : "#b9a45a";
+        for (let k = 0; k < 9; k++) o += dot(tx + ((k % 3) - 1) * 1.7 * (0.6 + P.fk * 0.5), ty - 2 - Math.floor(k / 3) * 2.2 * (0.6 + P.fk * 0.5), 1.2 + 0.5 * P.fk, k % 2 ? c : (P.ready ? "#8a3a20" : "#a8984a"));
+      } else if (kind === "wheat") { // bông lúa mì dựng, có râu
+        const c = P.ready ? "#d9a85a" : "#a9c25e", L = 4 + 5 * P.fk;
+        for (let k = 0; k < 5; k++) { const y = ty - k * L * 0.22; o += oval(tx - 1.1, y, 1, 1.7, c, -20) + oval(tx + 1.1, y - 0.6, 1, 1.7, c, 20) + line(`M${f1(tx - 1.4)},${f1(y - 1)} l-2.2,-4 M${f1(tx + 1.4)},${f1(y - 1.6)} l2.2,-4`, P.ready ? "#c9a060" : "#9cb85a", 0.4); }
+      } else if (foxtail) {
         const c = P.ready ? "#dfa63a" : "#c9cf6a";
         o += oval(tx + side * 2.5, ty + 5, 2 + 1.2 * P.fk, 3 + 5 * P.fk, c, side * 28);
         o += oval(tx + side * 1.6, ty + 3, 0.8, 2.2 * P.fk + 0.5, "#fff6c4", side * 28, ` opacity=".5"`);
@@ -55,6 +61,37 @@ const FORMS = {
         o += line(`M${f1(tx)},${f1(ty)} q${f1(side * 5)},-2 ${f1(ex - tx)},${f1(ey - ty)}`, P.ready ? "#b99a3c" : P.stem, 0.8);
         for (let k = 1; k <= 5; k++) { const t = k / 5.5; o += oval(tx + (ex - tx) * t + side * 1.2 * Math.sin(t * PI), ty + (ey - ty) * t * t - 1, 1.1, 1.9 * P.fk + 0.4, P.ready ? "#e8c35a" : "#b9cf6a", side * 30); }
       }
+    }
+    return o;
+  },
+  sorghum(P) { return FORMS.grass(P, "sorghum"); },
+  wheat(P) { return FORMS.grass(P, "wheat"); },
+  // bông vải: thân bụi, lá xẻ thuỳ, hoa vàng nhạt; chín thì quả nang nứt ra nắm bông trắng
+  cotton(P) {
+    let o = line(`M${CX},${GY} L${CX},18 M${CX},44 Q${CX - 9},36 ${CX - 12},26 M${CX},36 Q${CX + 9},28 ${CX + 12},20`, "#7a6a3a", 1.6);
+    for (const [x, y, d] of [[CX - 5, 54, -1], [CX + 5, 48, 1], [CX - 7, 40, -1], [CX + 6, 33, 1], [CX - 3, 26, -1]]) {
+      const r = 4.2 + P.m * 3;
+      for (const a of [-50, 0, 50]) o += leaf(x, y, r, r * 0.45, (d > 0 ? -30 : -150) + a, P.leaf);
+    }
+    const spots = [[CX, 16], [CX - 12, 24], [CX + 12, 18], [CX - 5, 32], [CX + 7, 30]];
+    for (const [x, y] of spots) {
+      if (!P.fk) continue;
+      if (P.fk < 0.6) { o += bloom(x, y, 1.6 + P.fk * 2, 5, "#f6e7a6", "#c9506a", 0.4); continue; }
+      if (!P.ready) { o += oval(x, y, 2.2 + P.fk, 2.8 + P.fk, "#7f9f45"); continue; }
+      o += path4(x, y) + [[-2, -1.4], [2, -1.4], [0, -3.2], [-1.4, 1], [1.4, 1]].map(([dx, dy]) => dot(x + dx, y + dy, 2.1, "#fbf8f0", ` stroke="#d8d0c0" stroke-width=".4"`)).join("");
+    }
+    return o;
+  },
+  // cải dầu: thân mảnh cao, lá ôm thân dưới gốc, chùm hoa vàng bốn cánh trên ngọn; chín thì quả cải dài mảnh
+  canola(P) {
+    let o = "";
+    for (const d of [-1, 1]) for (let i = 0; i < 2; i++) o += leaf(CX, GY - 4 - i * 6, 9 + P.m * 6 - i * 2, 3 + P.m * 2, d > 0 ? -25 - i * 15 : -155 + i * 15, P.leaf, P.leafD);
+    const stems = [[CX - 7, 12], [CX, 6], [CX + 7, 12]];
+    for (const [x, y] of stems) {
+      o += line(`M${CX},${GY - 6} Q${f1((CX + x) / 2)},${f1(GY - 30)} ${x},${y}`, P.stem, 1.1);
+      if (!P.fk) continue;
+      if (P.ready) for (let k = 0; k < 5; k++) o += line(`M${f1(x)},${f1(y + 3 + k * 3)} l${k % 2 ? 4 : -4},-3`, "#a99a5a", 0.9);
+      else for (let k = 0; k < 6; k++) { const fx = x + ((k % 3) - 1) * 2.2, fy = y + Math.floor(k / 3) * 2.4; o += bloom(fx, fy, 0.9 + P.fk * 1.1, 4, "#f7d322", "#e0a020", 0.42); }
     }
     return o;
   },
@@ -204,11 +241,15 @@ const FORMS = {
     return o;
   },
 };
+// quả nang bông nứt (đài nâu)
+function path4(x, y) { return `<path d="M${f1(x - 3)},${f1(y + 2)} L${f1(x)},${f1(y + 4)} L${f1(x + 3)},${f1(y + 2)}" stroke="#7a5a30" stroke-width="1" fill="none"/>`; }
 export const PLANT_FORMS = Object.keys(FORMS);
 
 export function plantSvg(sp, growth = 1, ready = false, seed = 1) {
   const n = sp?.n ?? { protein: 4, energy: 6, mineral: 3, pigment: 3 };
-  const tot = n.protein + n.energy + n.mineral + n.pigment || 1;
+  const pos = (k) => Math.max(0, n[k]); // chất bị kéo xuống (âm) không làm cây lớn
+  const tot = pos("protein") + pos("energy") + pos("mineral") + pos("pigment") || 1;
+  const anti = n.protein < 0 || n.energy < 0 || n.mineral < 0 || n.pigment < 0;
   const g = Math.max(0, Math.min(1, growth));
   let r = ((seed >>> 0) * 2654435761) % 4294967296;
   const rnd = () => ((r = (r * 1664525 + 1013904223) % 4294967296) / 4294967296);
@@ -216,12 +257,14 @@ export function plantSvg(sp, growth = 1, ready = false, seed = 1) {
     const k = 0.5 + g * 4;
     return svg(`<path d="M30,62 V${f1(62 - 8 * k)}" stroke="#6fae3f" stroke-width="1.6"/><path d="M30,${f1(62 - 7 * k)} q-6,-4 -8,0 q4,3 8,0z M30,${f1(62 - 8 * k)} q6,-5 8,-1 q-4,3 -8,1z" fill="#8cc95a"/>`, "plant");
   }
-  const m = n.mineral / tot, rich = Math.min(1, tot / 64);
+  const m = pos("mineral") / tot, rich = Math.min(1, tot / 64);
   const P = {
-    p: n.protein / tot, e: n.energy / tot, m, pg: n.pigment / tot, rich, rnd, ready,
+    p: pos("protein") / tot, e: pos("energy") / tot, m, pg: pos("pigment") / tot, rich, rnd, ready,
     fk: Math.max(0, (g - 0.55) / 0.45),
     leaf: m > 0.35 ? "#3f8f3a" : m > 0.2 ? "#4f9f42" : "#62ad48", leafL: m > 0.35 ? "#55a347" : "#7cbf57", leafD: "#2f7a2e", stem: "#5c9a37",
   };
+  // hạt có chất kháng: lá ngả tím (nhận ra ngay trong vườn)
+  if (anti) Object.assign(P, { leafL: "#8a76a0", leafD: "#5a3f6e", stem: "#6f7a45" });
   const body = (FORMS[sp?.form] ?? FORMS.grass)(P);
   const k = (0.35 + 0.65 * Math.min(1, (g - 0.12) / 0.6)) * (0.84 + 0.16 * rich);
   let o = `<g transform="translate(${CX} ${GY}) scale(${f1(k * 100) / 100}) translate(${-CX} ${-GY})">${body}</g>`;

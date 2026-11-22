@@ -206,6 +206,11 @@ body.dragging, body.dragging * { cursor: grabbing !important; }
 .meters { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 12px; }
 .meter { display: grid; grid-template-columns: 96px 1fr; gap: 6px; align-items: center; }
 .nutr { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+/* v11: lợi thế vóc dáng ở sân chơi — 4 ô nhỏ, nhãn + vạch */
+.pstats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; font-size: 11px; }
+.pstats span { display: grid; gap: 2px; padding: 3px 5px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 10%, transparent); cursor: help; }
+.pstats b { font-weight: 600; color: var(--muted); }
+.pstats i, .pg-perks i { display: block; height: 5px; border-radius: 99px; background: linear-gradient(90deg, var(--accent) calc(var(--v, .5) * 100%), color-mix(in srgb, var(--muted) 20%, transparent) 0); }
 .nutr .n { display: grid; gap: 2px; font-size: 11px; color: var(--muted); }
 .progress { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 25%, transparent); overflow: hidden; }
 .progress > i { display: block; height: 100%; width: calc(var(--v, 0) * 100%); background: var(--c, var(--accent)); border-radius: 3px; transition: width .4s; }
@@ -605,6 +610,10 @@ body.v7 .hud { justify-content: flex-end; }
 /* sân chơi: bốn trò theo tuổi (js/game/play.js) */
 .pg-time { height: 6px; border-radius: 99px; background: rgb(255 255 255 / .18); overflow: hidden; margin: 8px 0 10px; }
 .pg-time i { display: block; height: 100%; width: 100%; background: #ffd95a; border-radius: 99px; }
+.pg-perks { display: flex; justify-content: center; gap: 10px; margin: -2px 0 8px; font-size: 12px; }
+.pg-perks span { display: grid; gap: 3px; min-width: 72px; padding: 3px 8px; border-radius: 8px; background: rgb(255 255 255 / .12); cursor: help; }
+.pg-perks b { font-weight: 600; opacity: .85; }
+.pg-perks i { background: linear-gradient(90deg, #ffd95a calc(var(--v, .5) * 100%), rgb(255 255 255 / .2) 0); }
 .pg-field { position: relative; height: 170px; border-radius: 16px; overflow: hidden; background: linear-gradient(#bfe6ff 0 58%, #a6d36f 58%); }
 .pg-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 30%; background: #a6d36f; border-top: 3px solid #7fb552; }
 .pg-hero { position: absolute; bottom: 20%; width: 92px; height: 92px; transform: translate(-50%, 0); z-index: 2; }
@@ -861,6 +870,8 @@ body.idle { cursor: none; }
 .seed-tile .nm { font-size: 13px; font-weight: 700; line-height: 1.2; }
 .seed-tile .nbars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; width: 82%; margin: 2px 0 4px; }
 .seed-tile .nbars i { height: 5px; border-radius: 999px; background: linear-gradient(90deg, var(--c) calc(var(--v) * 100%), color-mix(in srgb, var(--muted) 18%, transparent) 0); }
+/* chất bị kéo xuống: vạch đỏ chạy từ phải sang trái */
+.seed-tile .nbars i.neg { background: linear-gradient(270deg, transparent calc(var(--v) * 100%), color-mix(in srgb, var(--muted) 18%, var(--chip)) 0), repeating-linear-gradient(135deg, #6f3483 0 2px, #c9a3d6 2px 4px); }
 .seed-tile button { width: 100%; }
 .seed-tile.none { opacity: .55; }
 .seed-tile.none .cnt { color: var(--muted); }

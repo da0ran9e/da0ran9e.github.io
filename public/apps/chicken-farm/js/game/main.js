@@ -13,7 +13,7 @@ import { renderChickenFlat, renderEggFlat } from "../chicken-flat.js";
 import * as R from "./rules.js";
 import { FIELD, createField, addChicken, removeChicken, tickField, snapshot, fieldTraits, setReadyAt, setLure } from "./field.js";
 import { sfx, sound, buzz, burst, confetti, flyTo, bump } from "./fx.js";
-import { GAMES, GAME_NAMES } from "./play.js";
+import { GAMES, GAME_NAMES, PLAY_STATS } from "./play.js";
 import { playIntro as runIntro } from "./intro.js";
 import { music } from "./music.js";
 import { t as tr, name as tname, errText, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
@@ -161,6 +161,8 @@ const seedColor = (k) => ICONS?.seedColor?.(k) ?? "#c9a66b";
 const isStaple = (k) => !!R.SEEDS[k]?.staple;
 const isOdd = (k) => !!R.SEEDS[k]?.mutation;
 // v11: cây trong vườn vẽ theo loài (dáng) + chất của hạt
+// hạt có chất kháng: thiếu chất nào thì gà đang lớn ra dáng nào (để nắn dáng cho từng trò chơi)
+const LOWER_LOOK = { protein: "lông ngắn, kém bóng", energy: "mình nhỏ, gọn", mineral: "chân ngắn, đứng vững", pigment: "màu lông nhạt" };
 const plantSpec = (k) => ({ n: R.SEEDS[k]?.n ?? R.SEEDS.rice.n, form: R.formOf(k) });
 
 function seedIcon(kind, size = 24) {
@@ -173,6 +175,8 @@ function seedSummary(kind) {
   if (s.staple) return tr("Ít chất, no bụng");
   if (s.mutation) return tr("Tăng biến dị lứa sau");
   const [a, b, c] = Object.entries(s.n).sort((x, y) => y[1] - x[1]);
+  const low = R.seedLowers(kind)[0];
+  if (low) return `${tr("Giàu")} ${tr(R.NUTRIENT_INFO[a[0]].name).toLowerCase()}, ${tr("kéo {x} xuống", { x: tr(R.NUTRIENT_INFO[low].name).toLowerCase() })} → ${tr(LOWER_LOOK[low])}`;
   const nm = (k) => tr(R.NUTRIENT_INFO[k].name).toLowerCase(), grows = (k) => tr(R.NUTRIENT_INFO[k].grows).split(":")[0].toLowerCase();
   if (c[1] >= a[1] * 0.75) return tr("Giàu cả 4 chất");
   const first = (k) => grows(k).split(",")[0]; // hai chất: mỗi chất một chữ cho gọn
@@ -1438,7 +1442,7 @@ async function autoFeed(id, announce = false) {
   let fed = 0;
   for (let i = 0; i < 4; i++) {
     const ch = state.chickens.find((c) => c.id === id);
-    const kinds = Object.keys(R.SEEDS).filter((k) => state.inventory[k] > 0 && !isOdd(k));
+    const kinds = Object.keys(R.SEEDS).filter((k) => state.inventory[k] > 0 && !R.handOnly(k));
     if (!kinds.length) break;
     const score = (k) => {
       const s = R.SEEDS[k];
@@ -1509,6 +1513,7 @@ function renderInfo() {
           <div class="meter m-life"><span>${tr("Tuổi thọ")}</span><div class="progress"><i style="--c:var(--muted)"></i></div></div>
           <div class="meter m-speed"><span>${tr("Tốc độ")}</span><div class="progress"><i style="--c:var(--accent)"></i></div></div>
           <div class="meter m-stam"><span>${tr("Thể lực")}</span><div class="progress"><i style="--c:var(--energy)"></i></div></div>
+          <div class="pstats" title="${tr("Lợi thế ở sân chơi — theo vóc dáng gà")}">${PLAY_STATS.map(([k, label, tip]) => `<span class="ps-${k}" title="${tip}"><b>${label}</b><i></i></span>`).join("")}</div>
           <div class="nutr">${R.NUTRIENTS.map((k) => `<div class="n n-${k}" title="${tr(R.NUTRIENT_INFO[k].name)}: ${tr(R.NUTRIENT_INFO[k].grows)}"><span>${tr(R.NUTRIENT_INFO[k].name)}</span><div class="progress"><i style="--c:${NUT_COLOR[k]}"></i></div></div>`).join("")}</div>
         </div>
         <div class="ck-actions">
@@ -1546,6 +1551,8 @@ function renderInfo() {
   host.querySelector(".m-life span").textContent = `${tr("Tuổi thọ")} ~${fmtDur(Math.max(0, v.lifeLeftMs))}`;
   host.querySelector(".m-speed i").style.setProperty("--v", v.speed01.toFixed(3));
   host.querySelector(".m-speed span").textContent = `${tr("Tốc độ")} ${Math.round(1 + v.speed01 * 9)}/10`;
+  const ps = playStats(ch);
+  for (const [k] of PLAY_STATS) host.querySelector(`.ps-${k} i`).style.setProperty("--v", ps[k].toFixed(2));
   host.querySelector(".m-stam").hidden = !hasV7();
   if (hasV7()) {
     const sm = R.staminaMaxOf(ch), sn = Math.round(R.staminaOf(ch));
@@ -1736,7 +1743,7 @@ function renderStore() {
   // thẻ hạt: hình to, số lượng, 4 vạch chất dinh dưỡng (mô tả chữ nằm trong chú thích)
   setHTML($("#seeds"), Object.keys(R.SEEDS).map((k) => {
     const n = state.inventory[k], nut = R.SEEDS[k].n;
-    const bars = R.NUTRIENTS.map((x) => `<i style="--c:${NUT_COLOR[x]};--v:${Math.min(1, nut[x] / 26).toFixed(2)}" title="${esc(tr(R.NUTRIENT_INFO[x].name))} ${nut[x]}"></i>`).join("");
+    const bars = R.NUTRIENTS.map((x) => `<i${nut[x] < 0 ? ' class="neg"' : ""} style="--c:${nut[x] < 0 ? "var(--bad, #d64545)" : NUT_COLOR[x]};--v:${Math.min(1, Math.abs(nut[x]) / 26).toFixed(2)}" title="${esc(tr(R.NUTRIENT_INFO[x].name))} ${nut[x]}"></i>`).join("");
     return `<div class="seed-tile${n ? "" : " none"}" title="${esc(seedName(k))}: ${esc(seedSummary(k))}"><span class="ico">${seedIcon(k, 40)}</span><b class="cnt">${n}</b><span class="nm">${seedName(k)}</span><span class="nbars" aria-hidden="true">${bars}</span>${hasV7() ? `<button type="button" class="small" data-feed-seed="${k}"${n > 0 && state.chickens.length ? "" : " disabled"}>${tr("Cho ăn")}</button>` : ""}</div>`;
   }).join(""));
   setHTML($("#bags"), state.bags.length
@@ -2337,7 +2344,7 @@ function openTower() {
 function renderTower() {
   const total = Object.values(state.tower).reduce((a, b) => a + b, 0), room = R.CONFIG.tower.cap - total;
   $("#tower-cap").textContent = `(${total}/${R.CONFIG.tower.cap})`;
-  $("#tower-list").innerHTML = Object.keys(R.SEEDS).filter((k) => !isOdd(k) && (state.inventory[k] > 0 || state.tower[k] > 0)).map((k) => {
+  $("#tower-list").innerHTML = Object.keys(R.SEEDS).filter((k) => !R.handOnly(k) && (state.inventory[k] > 0 || state.tower[k] > 0)).map((k) => {
     const inv = state.inventory[k], tw = state.tower[k];
     return `<div class="tower-row">${seedIcon(k, 28)}<span>${seedName(k)}<small>${tr("kho")} ${inv} ${tr("· tháp")} <b>${tw}</b></small></span><span class="btns">
       <button type="button" class="small" data-tw="${k}" data-n="1"${inv >= 1 && room >= 1 ? "" : " disabled"}>+1</button>
@@ -2501,11 +2508,26 @@ function rhythmGame(host, ch, kind) {
     addEventListener("keydown", key);
   });
 }
-// Thuộc tính đưa vào trò chơi (0..1), suy từ kiểu hình — chỉ đổi cách trò diễn ra, không gửi lên server.
+// Thuộc tính đưa vào trò chơi (0..1), suy từ VÓC DÁNG (gen + dinh dưỡng lúc lớn) — chỉ đổi cách trò diễn ra,
+// không gửi lên server (luật vẫn kẹp điểm và thưởng). Mỗi dáng một lợi thế: chân dài người nhẹ chạy / nhảy giỏi,
+// mình to chân ngắn vững chân, lông dài bay lâu, mắt to mỏ dài mổ giỏi. Hạt có chất kháng dùng để nắn dáng.
+const playCache = new Map();
 function playStats(ch) {
-  if (!ch) return { speed: 0.5, jump: 0.5, eye: 0.5 };
-  const ph = express(decodeGenome(ch.code), R.chickenView(ch, now()).care);
-  return { speed: clampN(ph.stats.speed ?? 0.5, 0, 1), jump: clampN((ph.shape.legLen - 0.55) / 0.9, 0, 1), eye: clampN((ph.shape.eyeSize - 0.8) / 0.45, 0, 1) };
+  if (!ch) return { speed: 0.5, jump: 0.5, steady: 0.5, eye: 0.5 };
+  const care = R.chickenView(ch, now()).care, key = `${ch.id}|${R.NUTRIENTS.map((k) => (care.dev?.[k] ?? 0).toFixed(2)).join(",")}`;
+  if (playCache.has(key)) return playCache.get(key);
+  const ph = express(decodeGenome(ch.code), care), sh = ph.shape, c = (v) => clampN(v, 0, 1);
+  const weight = c((sh.size * sh.plump - 0.5) / 1.1), legs = c((sh.legLen - 0.55) / 0.9);
+  const feathers = c(((sh.tailLen - 0.45) / 1.05) * 0.6 + sh.saddle * 0.4), beak = c((sh.beakLen - 0.6) / 0.85), eye = c((sh.eyeSize - 0.8) / 0.45);
+  const out = {
+    speed: c(0.45 * (ph.stats.speed ?? 0.5) + 0.35 * legs + 0.2 * (1 - weight)),
+    jump: c(0.4 * legs + 0.35 * (1 - weight) + 0.25 * feathers),
+    steady: c(0.6 * weight + 0.4 * (1 - legs)),
+    eye: c(0.6 * eye + 0.4 * beak),
+  };
+  if (playCache.size > 200) playCache.clear();
+  playCache.set(key, out);
+  return out;
 }
 // Cách trả cho lượt kế tiếp: sức chơi trước (miễn phí), hết thì vé; không còn gì → null.
 const canPlay = () => (state.energy && R.energyOf(state, now()) > 0 ? "energy" : (state.tickets ?? 0) >= R.CONFIG.play.cost ? "ticket" : null);

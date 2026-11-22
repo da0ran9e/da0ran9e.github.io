@@ -313,7 +313,9 @@ function runGame({ R, F, G }, job) {
     return r;
   };
 
-  const PREF_ADULT = ["common", "energy", "protein", "mineral", "pigment", "odd", "premium"];
+  // gà lớn rồi: hạt rẻ trước, no lâu trước; sen / hạt lạ cuối; hạt chỉ cho ăn tay (chất kháng) không dùng (v11)
+  const PREF_ADULT = Object.keys(R.SEEDS).filter((k) => !R.handOnly(k) || R.SEEDS[k].mutation)
+    .sort((a, b) => (R.SEEDS[b].staple ? 1 : 0) - (R.SEEDS[a].staple ? 1 : 0) || (a === "lotus") - (b === "lotus") || (R.SEEDS[a].mutation ? 1 : 0) - (R.SEEDS[b].mutation ? 1 : 0) || R.SEEDS[b].satiety - R.SEEDS[a].satiety);
 
   /* ---------- lấy mẫu trạng thái (mỗi 10 phút) ---------- */
   let nextSample = start;
@@ -374,14 +376,14 @@ function runGame({ R, F, G }, job) {
   const lifeLeft = (c) => c.lifespanMs - c.lifeUsed;
   const pickSeed = (c) => {
     const inv = st.inventory;
-    const avail = Object.keys(R.SEEDS).filter((k) => inv[k] > 0);
+    const avail = Object.keys(R.SEEDS).filter((k) => inv[k] > 0 && !(R.handOnly(k) && !R.SEEDS[k].mutation));
     if (!avail.length) return null;
     if (c.growth >= R.CONFIG.stages.adult) return PREF_ADULT.find((k) => inv[k] > 0) ?? avail[0];
     let best = null, bs = -1;
     for (const k of avail) {
       let s = 0;
       for (const n of R.NUTRIENTS) s += Math.min(R.SEEDS[k].n[n], Math.max(0, R.CONFIG.nutrientFull - c.n[n]));
-      if (k === "common") s += 0.5; // hoà điểm → dùng hạt rẻ
+      if (R.SEEDS[k].staple) s += 0.5; // hoà điểm → dùng hạt rẻ
       if (s > bs) { bs = s; best = k; }
     }
     return best;

@@ -4,11 +4,25 @@ import { t as tr } from "./i18n.js";
 //
 // Hợp đồng: GAMES[kind](host, ctx) → Promise<điểm 0..1>
 //   host: phần tử để vẽ vào (trò tự dọn timer / listener khi xong; host do người gọi xoá)
-//   ctx:  { art: chuỗi SVG của con gà hoặc quả trứng, name, stats: { speed, jump, eye } mỗi số 0..1, sfx(name) }
+//   ctx:  { art: chuỗi SVG của con gà hoặc quả trứng, name, stats: { speed, jump, steady, eye } mỗi số 0..1, sfx(name) }
+//   (v11: stats suy từ VÓC DÁNG — gen + dinh dưỡng lúc lớn; nắn dáng bằng hạt để hợp từng trò. Xem PLAY_STATS.)
 // Thuộc tính của gà đổi CÁCH trò diễn ra (nhảy xa hơn, hạt hiện lâu hơn…), không đổi trần phần thưởng.
 // Mỗi trò dài 16–20 giây (luật chỉ nhận kết quả sau 10 giây) và chơi được bằng một nút / phím cách.
 
 const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+
+// Lợi thế vóc dáng ở sân chơi: [khoá, nhãn ngắn, chú thích]. Thứ tự hiển thị trên thẻ gà.
+export const PLAY_STATS = [
+  ["speed", tr("Chạy"), tr("Chạy đua: mỗi bước dài hơn. Nhờ gen tốc độ, chân dài, người nhẹ.")],
+  ["jump", tr("Nhảy"), tr("Nhảy vũng nước: bay lâu hơn. Nhờ chân dài, người nhẹ, lông dài.")],
+  ["steady", tr("Vững"), tr("Chạy đua: vấp đèn đỏ ít bị lùi hơn. Nhờ mình to, chân ngắn.")],
+  ["eye", tr("Mắt"), tr("Mổ hạt: hạt hiện lâu hơn. Nhờ mắt to, mỏ dài.")],
+];
+// Dải lợi thế đang có tác dụng trong trò này (để người chơi thấy vóc dáng gà giúp gì)
+function perks(ctx, keys) {
+  if (!ctx.stats || ctx.egg) return "";
+  return `<div class="pg-perks">${PLAY_STATS.filter(([k]) => keys.includes(k)).map(([k, label, tip]) => `<span title="${tip}"><b>${label}</b><i style="--v:${clamp(ctx.stats[k] ?? 0.5).toFixed(2)}"></i></span>`).join("")}</div>`;
+}
 const rand = (a, b) => a + Math.random() * (b - a);
 
 // Khung chung: tiêu đề, vùng chơi, dòng hướng dẫn. Trả về các phần tử và hàm loop/finish.
@@ -43,7 +57,7 @@ function stage(host, title, hint, inner) {
 function hop(host, ctx) {
   return new Promise((done) => {
     const total = 10, air = 0.55 + 0.25 * ctx.stats.jump;
-    const s = stage(host, tr("Nhảy vũng nước"), tr("Bấm để nhảy qua vũng nước"), `
+    const s = stage(host, tr("Nhảy vũng nước"), tr("Bấm để nhảy qua vũng nước"), `${perks(ctx, ["jump"])}
       <div class="pg-field"><div class="pg-hero" style="left:18%">${ctx.art}</div><div class="pg-ground"></div></div>
       <div class="pg-dots">${"<i></i>".repeat(total)}</div><div class="rv-actions"><button type="button" class="gold" data-pg>${tr("Nhảy!")}</button></div>`);
     const field = s.root.querySelector(".pg-field"), hero = s.root.querySelector(".pg-hero"), dots = s.root.querySelectorAll(".pg-dots i");
@@ -90,13 +104,15 @@ function hop(host, ctx) {
 function dash(host, ctx) {
   return new Promise((done) => {
     const dur = 16, gain = 0.024 * (0.85 + 0.35 * ctx.stats.speed);
-    const s = stage(host, tr("Chạy đua"), tr("Bấm thật nhanh khi đèn XANH — đèn ĐỎ thì đứng yên!"), `
+    // gà vững chân (mình to, chân ngắn) vấp đèn đỏ thì lùi ít và đứng dậy nhanh hơn
+    const steady = ctx.stats.steady ?? 0.5, slip = 0.07 * (1.25 - 0.75 * steady), lock = 0.4 * (1.2 - 0.6 * steady);
+    const s = stage(host, tr("Chạy đua"), tr("Bấm thật nhanh khi đèn XANH — đèn ĐỎ thì đứng yên!"), `${perks(ctx, ["speed", "steady"])}
       <div class="pg-field track"><div class="pg-light go"></div><div class="pg-flag"></div><div class="pg-hero" style="left:6%">${ctx.art}</div><div class="pg-ground"></div></div>
       <div class="rv-actions"><button type="button" class="gold" data-pg>${tr("Chạy!")}</button></div>`);
     const hero = s.root.querySelector(".pg-hero"), light = s.root.querySelector(".pg-light");
     let p = 0, red = false, flip = rand(2.2, 3.4), stumble = 0;
     const tap = () => {
-      if (red) { p = Math.max(0, p - 0.07); stumble = 0.4; ctx.sfx("error"); hero.classList.add("oops"); setTimeout(() => hero.classList.remove("oops"), 380); }
+      if (red) { p = Math.max(0, p - slip); stumble = lock; ctx.sfx("error"); hero.classList.add("oops"); setTimeout(() => hero.classList.remove("oops"), 380); }
       else if (stumble <= 0) { p = Math.min(1, p + gain); ctx.sfx("tap"); }
     };
     s.on(s.root.querySelector("[data-pg]"), "pointerdown", tap);
@@ -122,7 +138,7 @@ function dash(host, ctx) {
 function peck(host, ctx) {
   return new Promise((done) => {
     const dur = 18, life = 0.85 + 0.45 * ctx.stats.eye;
-    const s = stage(host, tr("Mổ hạt"), tr("Chạm vào HẠT vàng — đừng mổ sỏi xám"), `
+    const s = stage(host, tr("Mổ hạt"), tr("Chạm vào HẠT vàng — đừng mổ sỏi xám"), `${perks(ctx, ["eye"])}
       <div class="pg-hero small">${ctx.art}</div><div class="pg-grid">${'<button type="button" class="pg-hole"></button>'.repeat(9)}</div>`);
     const holes = [...s.root.querySelectorAll(".pg-hole")], hero = s.root.querySelector(".pg-hero");
     const slot = holes.map(() => ({ kind: null, until: 0 }));
