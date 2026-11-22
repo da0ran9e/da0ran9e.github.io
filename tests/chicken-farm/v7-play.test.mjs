@@ -52,9 +52,9 @@ test("P5 kết thúc hai lần → lần hai no_play, không cộng thêm gì", 
   const { s, ch, t } = farm(3);
   startPlay(s, ch.id, t);
   assert.equal(endPlay(s, 1, t + 20_000).ok, true);
-  const snap = JSON.stringify([s.tickets, ch.growth, ch.fitness, s.count.play, s.playDay]);
+  const snap = JSON.stringify([s.tickets, ch.growth, s.count.play, s.playDay]);
   assert.equal(endPlay(s, 1, t + 21_000).code, "no_play");
-  assert.equal(JSON.stringify([s.tickets, ch.growth, ch.fitness, s.count.play, s.playDay]), snap);
+  assert.equal(JSON.stringify([s.tickets, ch.growth, s.count.play, s.playDay]), snap);
 });
 
 test("thắng chỉ hoàn lại vé đã bỏ ra (minigame không sinh vé ròng); thua thì mất vé", () => {

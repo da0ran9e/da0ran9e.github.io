@@ -121,10 +121,10 @@ export const CONFIG = {
   tickets: { cap: 99, start: 3, perEgg: 1, perChicken: 2, eggsPerDay: 3, chickensPerDay: 2 },
   // v7 — THỂ LỰC: tối đa theo gen sức đề kháng × tuổi × rèn luyện; hồi khi ở chuồng và không đói (đêm hồi gấp đôi);
   // kiếm ăn ngoài đồng và chơi làm tiêu. Hết thể lực chỉ là "phải nghỉ", không gây hại.
-  stamina: { base: [60, 100], stage: { chick: 0.6, juvenile: 0.8, adult: 1 }, regenPerHour: 20, nightMul: 2, night: [22, 5], fieldPerHour: 30, fitnessStep: 0.04, fitnessMax: 0.3 },
+  stamina: { base: [60, 100], stage: { chick: 0.6, juvenile: 0.8, adult: 1 }, regenPerHour: 20, nightMul: 2, night: [22, 5], fieldPerHour: 30 }, // 22/11: bỏ "độ dẻo dai" (không luyện tập)
   // v7 — SÂN CHƠI: minigame chạy ở client, luật chỉ nhận điểm 0..1 và KẸP phần thưởng (không tin client).
   // Thắng chỉ hoàn lại vé đã bỏ ra → minigame không sinh vé ròng. Xem design-hard-parts §H2.
-  play: { cost: 1, ticketMul: 1.5, minMs: 10 * 1000, maxMs: 120 * 1000, growth: 8, hunger: 60, eggCutPct: 0.15, eggMax: 2, adultLifeMs: 30 * MIN, winAt: 0.6, winTicketsPerDay: 6, fitnessAt: 0.3 },
+  play: { cost: 1, ticketMul: 1.5, minMs: 10 * 1000, maxMs: 120 * 1000, growth: 8, hunger: 60, eggCutPct: 0.15, eggMax: 2, adultLifeMs: 30 * MIN, winAt: 0.6, winTicketsPerDay: 6 },
   // v6 — ĐỐM SÁNG ngoài đồng: người chơi chạm đốm sáng, gà chạy tới bới được 1–3 hạt (bảng "lucky"),
   // đôi khi cả một túi hạt. Mỗi trại tối đa 1 lần / cooldownMs. count: [ngưỡng xác suất, số hạt].
   lucky: { cooldownMs: 20 * 1000, count: [[0.6, 1], [0.85, 2], [0.96, 3]], bagSize: 3 },
@@ -223,7 +223,7 @@ function traitsOf(code) {
 // Thể lực tối đa lúc này: gốc theo gen × hệ số tuổi × (1 + rèn luyện). Gà nở trước v7 chưa có gốc → 80.
 export function staminaMaxOf(ch) {
   const S = CONFIG.stamina;
-  return Math.round((ch.stamBase ?? 80) * S.stage[stageOf(ch)] * (1 + (ch.fitness ?? 0)));
+  return Math.round((ch.stamBase ?? 80) * S.stage[stageOf(ch)]);
 }
 export const staminaOf = (ch) => Math.min(staminaMaxOf(ch), ch.stamina ?? staminaMaxOf(ch));
 const isNight = (t) => {
@@ -392,6 +392,7 @@ function ensure(state) {
   if (!state.energy) state.energy = { n: CONFIG.energy.max, at: state.updatedAt ?? 0 };
   if (!state.feathers) { state.feathers = []; state.family = {}; } // v9
   padSeeds(state);
+  for (const ch of state.chickens) delete ch.fitness; // 22/11: bỏ độ dẻo dai
   if (!state.garden) state.garden = []; // v10 (độ dài theo gardenSize, bù dần)
   while (state.garden.length < gardenSize(state)) state.garden.push(null);
   if (!state.count) {
@@ -1328,7 +1329,6 @@ export function endPlay(state, score, now) {
       // chưa lớn: lớn thêm, nhưng dừng sát ngưỡng — bước mô phỏng kế tiếp mới là nơi phát "adult", chấm sổ, chấm giống
       if (ch.growth < CONFIG.stages.adult) ch.growth = Math.min(CONFIG.stages.adult - 0.001, ch.growth + P.growth * mul * s);
       else ch.lifeUsed = Math.max(0, ch.lifeUsed - P.adultLifeMs * mul * s);
-      if (s >= P.fitnessAt) ch.fitness = Math.min(CONFIG.stamina.fitnessMax, (ch.fitness ?? 0) + CONFIG.stamina.fitnessStep);
     }
     const win = s >= P.winAt, day = dayIndex(now);
     let ticket = false;
