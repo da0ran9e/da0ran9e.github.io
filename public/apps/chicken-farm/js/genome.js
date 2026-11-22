@@ -256,12 +256,19 @@ function mutateAllele(gene, value, rng, rate, log, side) {
 }
 
 // Bố truyền 1 trong 2 bản của mình, mẹ cũng vậy; mỗi bản có thể biến dị.
-export function breed(father, mother, rng = mulberry32(randomSeed()), { mutationRate = 1 } = {}) {
+// prefer: [bố, mẹ] — mỗi phần tử null hoặc { gen: Set(alen) }: bên đó truyền alen trong tập với xác suất
+// preferP thay vì 1/2 khi mang một bản trong tập và một bản ngoài (thuốc giữ giống). Không tốn thêm số ngẫu nhiên.
+export function breed(father, mother, rng = mulberry32(randomSeed()), { mutationRate = 1, prefer = [null, null], preferP = 0.75 } = {}) {
   const g = {};
   const mutations = [];
+  const pick = (pair, want, r) => {
+    const i = want ? pair.findIndex((x) => want.has(x)) : -1;
+    if (i < 0 || want.has(pair[1 - i])) return pair[r < 0.5 ? 0 : 1];
+    return pair[r < preferP ? i : 1 - i];
+  };
   for (const gene of GENES) {
-    const a = father.g[gene.key][rng() < 0.5 ? 0 : 1];
-    const b = mother.g[gene.key][rng() < 0.5 ? 0 : 1];
+    const a = pick(father.g[gene.key], prefer[0]?.[gene.key], rng());
+    const b = pick(mother.g[gene.key], prefer[1]?.[gene.key], rng());
     g[gene.key] = [mutateAllele(gene, a, rng, mutationRate, mutations, 0), mutateAllele(gene, b, rng, mutationRate, mutations, 1)];
   }
   return { genome: { v: 1, g }, mutations };

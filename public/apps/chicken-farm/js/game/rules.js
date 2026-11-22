@@ -62,7 +62,7 @@ export function formOf(seed) {
 }
 
 export const CONFIG = {
-  version: 11,
+  version: 12,
   stepMs: MIN,
   // Ấp 5–30 phút theo gen "thời gian ấp" của chính quả trứng (genome.express).
   // Lớn: chất lượng dinh dưỡng 1 → 20 phút, 0 → 24 giờ (thang lũy thừa), nhân gen "tốc độ lớn".
@@ -82,7 +82,7 @@ export const CONFIG = {
   laySatiety: 60,
   mutationBoostCap: 6,
   stages: { juvenile: 30, adult: 100 },
-  storage: { eggs: 12, seeds: 120, bags: 20 },
+  storage: { eggs: 12, seeds: 120, bags: 20, potions: 6 },
   // Q5: ngoài đồng chủ yếu là hạt thường; túi đổi ở cửa hàng có tỉ lệ hạt tốt cao hơn
   drops: {
     // v11: bốn loài thiên một chất (đậu xanh, kê, vừng, vạn thọ) · bốn loài hai chất (hướng dương, ngô, bí đỏ, đậu phộng) · sen giàu đủ chất
@@ -116,7 +116,17 @@ export const CONFIG = {
   energy: { max: 5, regenMs: 30 * MIN },
   // v8 — TRỨNG BÍ ẨN của khách lạ (chủ dự án chốt 17/11): rất đắt; nở ra gà có tỉ lệ mang một KỲ VẬT — bộ phận độc nhất
   // không nằm trong bộ gen nên không lai giống ra được và không di truyền. Kết quả tung lúc mua, giấu tới khi nở.
-  mystery: { price: 40, chance: 0.3, shell: "#5b4a7a" },  // v7 — VÉ: vật phẩm tiêu hao chung, CHỈ dùng trong game (không chuyển giữa người chơi). Đổi trứng có phôi / gà
+  mystery: { price: 40, chance: 0.3, shell: "#5b4a7a" },
+  // v12 — tính cách: tỉ lệ giống bố hoặc mẹ; tác dụng của tham ăn / chăm đẻ lên luật
+  mood: { inherit: 0.2, greedyHunger: 1, greedyGrowth: 1.1, layerMul: 1.1 },
+  // v12 — THUỐC (Thầy lang bán, cất trong kho, dùng cho MỘT con; mỗi con chỉ một thuốc đang có tác dụng):
+  //   ms: thời gian tác dụng (giờ thật, chạy cả khi vắng) · eggs: số lứa trứng tác dụng · hen / adult: điều kiện dùng
+  potions: {
+    laying: { name: "Thuốc đẻ sai", price: 5, ms: 6 * HOUR, hen: true, adult: true, layMul: 2 }, // đẻ gấp đôi
+    breed: { name: "Thuốc giữ giống", price: 8, eggs: 2, adult: true, preferP: 0.75 }, // đặc điểm (alen hiếm) truyền 75% thay vì 50%
+    swift: { name: "Thuốc chạy nhanh", price: 3, ms: 2 * HOUR, play: { speed: 0.15, jump: 0.15 } }, // chỉ ở sân chơi (client)
+    full: { name: "Thuốc no lâu", price: 4, ms: 4 * HOUR }, // không đói
+  },  // v7 — VÉ: vật phẩm tiêu hao chung, CHỈ dùng trong game (không chuyển giữa người chơi). Đổi trứng có phôi / gà
   // trưởng thành lấy vé có trần mỗi ngày (không thì người chơi nhiều đổi vô hạn — design-hard-parts §H3).
   tickets: { cap: 99, start: 3, perEgg: 1, perChicken: 2, eggsPerDay: 3, chickensPerDay: 2 },
   // v7 — THỂ LỰC: tối đa theo gen sức đề kháng × tuổi × rèn luyện; hồi khi ở chuồng và không đói (đêm hồi gấp đôi);
@@ -239,7 +249,7 @@ export const seasonOf = (now) => CONFIG.season.order[((weekIndex(now) % 4) + 4) 
 const seasonFx = (now) => CONFIG.season[seasonOf(now)];
 export const luckyCooldownMs = (now) => Math.round(CONFIG.lucky.cooldownMs * (seasonFx(now).luckyCooldown ?? 1));
 export const fieldSpawnMul = (now) => seasonFx(now).spawn ?? 1;
-const seasonPrice = (now, price) => (seasonFx(now).price ? Math.max(1, Math.round(price * seasonFx(now).price)) : price);
+export const seasonPrice = (now, price) => (seasonFx(now).price ? Math.max(1, Math.round(price * seasonFx(now).price)) : price);
 // pha trăng 0..1 (0 = trăng non, 0,5 = trăng tròn)
 export const moonPhase = (t) => {
   const M = CONFIG.moon, p = ((t - M.newRef) / M.synodicMs) % 1;
@@ -392,7 +402,8 @@ function ensure(state) {
   if (!state.energy) state.energy = { n: CONFIG.energy.max, at: state.updatedAt ?? 0 };
   if (!state.feathers) { state.feathers = []; state.family = {}; } // v9
   padSeeds(state);
-  for (const ch of state.chickens) delete ch.fitness; // 22/11: bỏ độ dẻo dai
+  for (const ch of state.chickens) { delete ch.fitness; ch.mood ??= personalityOf(ch.code)[0]; } // 22/11: bỏ độ dẻo dai; v12: tính cách lưu sẵn
+  if (!state.potions) state.potions = Object.fromEntries(Object.keys(CONFIG.potions).map((k) => [k, 0])); // v12
   if (!state.garden) state.garden = []; // v10 (độ dài theo gardenSize, bù dần)
   while (state.garden.length < gardenSize(state)) state.garden.push(null);
   if (!state.count) {
@@ -502,6 +513,7 @@ export function newGame(seed, now, choice = 0) {
     memorial: [],
     feathers: [], // v9: lông kỷ niệm
     garden: Array(CONFIG.garden.plots).fill(null), // v10: luống rau — null | { seed, at, readyAt, water }
+    potions: Object.fromEntries(Object.keys(CONFIG.potions).map((k) => [k, 0])), // v12: thuốc trong kho
     family: {}, // v9: gà đã rời trại còn trong gia phả
     stats: { hatched: 0, laid: 0, traded: 0, died: 0 },
     seenAt: now, // lần cuối người chơi có mặt (Q14)
@@ -604,13 +616,41 @@ export function kinOf(state, id) {
 
 // Tính cách suy từ gen sẵn có (ideas 4): tối đa 2 nhãn, nhãn rõ nhất trước. Chủ yếu là dáng đi đứng trên sân;
 // không đổi luật. greedy: hay quanh máng · lively: đi lại nhiều · shy: nép gần chuồng · layer: hay quanh ổ (chỉ gà mái).
+// v12 (chủ dự án chốt 22/11): mỗi con MỘT tính cách, tung ngẫu nhiên lúc nở; có tỉ lệ nhỏ giống bố hoặc mẹ;
+// Thầy soi trứng gieo được tính cách cho quả trứng. Tính cách có tác dụng nhỏ:
+//   hiếu động: Chạy +0.1 · điềm tĩnh: Vững +0.1 · nhút nhát: Mắt +0.1 (ba cái này chỉ ở sân chơi, phía client)
+//   tham ăn: lớn nhanh ×1.1 · chăm đẻ (mái): đẻ ×1.1. Mỗi tính cách chỉ là một lợi thế nhỏ, không có mặt trái
+//   (thử đói nhanh hơn cho tham ăn: người chơi ghé thăm vượt mốc đói của mô phỏng cân bằng).
+// stat / hi: gen cũ dùng để suy tính cách cho gà nở trước v12 (personalityOf).
 export const PERSONALITY = {
-  greedy: { name: "Tham ăn", stat: "appetite", hi: true },
-  lively: { name: "Hiếu động", stat: "speed", hi: true },
-  shy: { name: "Nhút nhát", stat: "hardiness", hi: false },
-  layer: { name: "Chăm đẻ", stat: "eggRate", hi: true, hen: true },
-  calm: { name: "Điềm tĩnh" }, // không nổi bật điều gì
+  greedy: { name: "Tham ăn", stat: "appetite", hi: true, weight: 2 },
+  lively: { name: "Hiếu động", stat: "speed", hi: true, weight: 2, play: { speed: 0.1 } },
+  shy: { name: "Nhút nhát", stat: "hardiness", hi: false, weight: 2, play: { eye: 0.1 } },
+  layer: { name: "Chăm đẻ", stat: "eggRate", hi: true, hen: true, weight: 2 },
+  calm: { name: "Điềm tĩnh", weight: 2, play: { steady: 0.1 } },
 };
+// Thuốc đang có tác dụng trên con gà lúc t (hoặc null). ch.buff = { key, until? , eggs? }
+export function buffOf(ch, t) {
+  const b = ch.buff;
+  if (!b || !CONFIG.potions[b.key]) return null;
+  if (b.until != null && t >= b.until) return null;
+  if (b.eggs != null && b.eggs <= 0) return null;
+  return b;
+}
+const buffOn = (ch, key, t) => buffOf(ch, t)?.key === key;
+// Tính cách của một con gà (v12: lưu sẵn trong ch.mood; gà cũ suy từ gen)
+export const moodOf = (ch) => ch.mood ?? personalityOf(ch.code)[0];
+const moodFits = (k, sex) => !!PERSONALITY[k] && !(PERSONALITY[k].hen && sex !== "hen");
+function rollMood(state, egg, sex) {
+  const rng = rngFor(state, "mood", egg.id), M = CONFIG.mood;
+  if (moodFits(egg.mood, sex)) return egg.mood; // thầy soi trứng đã gieo
+  const parents = (egg.pm ?? []).filter((k) => moodFits(k, sex));
+  if (parents.length && rng() < M.inherit) return parents[Math.floor(rng() * parents.length)];
+  const pool = Object.entries(PERSONALITY).filter(([k]) => moodFits(k, sex));
+  let r = rng() * pool.reduce((a, [, p]) => a + p.weight, 0);
+  for (const [k, p] of pool) if ((r -= p.weight) < 0) return k;
+  return "calm";
+}
 export function personalityOf(code) {
   const ph = express(decodeGenome(code));
   const out = Object.entries(PERSONALITY).filter(([, p]) => p.stat)
@@ -649,6 +689,7 @@ function hatch(state, egg, at, events) {
     ...(egg.mystery ? { relic: egg.mystery } : {}), // kỳ vật từ trứng bí ẩn (không nằm trong gen)
     ...t,
   };
+  ch.mood = rollMood(state, egg, ch.sex); // v12
   state.chickens.push(ch);
   state.stats.hatched++;
   bump(state, "hatch");
@@ -666,7 +707,7 @@ export function qualityOf(ch) {
   return NUTRIENTS.reduce((s, k) => s + Math.min(1, ch.n[k] / CONFIG.nutrientFull), 0) / NUTRIENTS.length;
 }
 
-const growMsAt = (ch) => CONFIG.growMs.worst * Math.pow(CONFIG.growMs.best / CONFIG.growMs.worst, qualityOf(ch)) / ch.growthMul;
+const growMsAt = (ch) => CONFIG.growMs.worst * Math.pow(CONFIG.growMs.best / CONFIG.growMs.worst, qualityOf(ch)) / ch.growthMul / (moodOf(ch) === "greedy" ? CONFIG.mood.greedyGrowth : 1);
 export const msToAdult = (ch) => ((CONFIG.stages.adult - ch.growth) / CONFIG.stages.adult) * growMsAt(ch);
 
 function eat(ch, seed) {
@@ -736,13 +777,15 @@ function stepChicken(state, ch, t, dt, events, watchedFrom = Infinity) {
   }
   brood(state, ch, t, dt, events);
   const h = dt / HOUR;
-  const fed = ch.satiety > 0;
+  const fed = ch.satiety > 0 || buffOn(ch, "full", t); // v12: thuốc no lâu = được tính là no
   // thể lực: ngoài đồng thì tiêu, ở chuồng và không đói thì hồi (đêm gấp đôi)
   const S = CONFIG.stamina, sMax = staminaMaxOf(ch), sNow = Math.min(sMax, ch.stamina ?? sMax);
   ch.stamina = ch.location === "field" ? Math.max(0, sNow - S.fieldPerHour * h)
     : fed ? Math.min(sMax, sNow + S.regenPerHour * h * (isNight(t) ? S.nightMul : 1)) : sNow;
   const layReady = ch.satiety >= CONFIG.laySatiety;
-  ch.satiety = Math.max(0, ch.satiety - CONFIG.satietyDrainPerHour * h);
+  // v12: thuốc no lâu thì không đói; tham ăn thì đói nhanh hơn
+  const drain = buffOn(ch, "full", t) ? 0 : CONFIG.satietyDrainPerHour * (moodOf(ch) === "greedy" ? CONFIG.mood.greedyHunger : 1);
+  ch.satiety = Math.max(0, ch.satiety - drain * h);
 
   // tuổi: lúc bụng rỗng già nhanh hơn (Q2)
   ch.lifeUsed += fed ? dt : dt * CONFIG.starveAging;
@@ -776,7 +819,8 @@ function stepChicken(state, ch, t, dt, events, watchedFrom = Infinity) {
     }
   } else if (layReady && !ch.broodEgg && ch.sex === "hen" && ch.growth >= CONFIG.stages.adult && storedEggs(state) < CONFIG.storage.eggs) {
     // Q3: đẻ ngẫu nhiên khi no bụng — xác suất mỗi bước = dt / thời gian trung bình
-    if (rngFor(state, "lay", ch.id, t)() < dt / ch.layMeanMs) layEgg(state, ch, t + dt, events);
+    const layMul = (buffOn(ch, "laying", t) ? CONFIG.potions.laying.layMul : 1) * (moodOf(ch) === "layer" ? CONFIG.mood.layerMul : 1);
+    if (rngFor(state, "lay", ch.id, t)() < (dt * layMul) / ch.layMeanMs) layEgg(state, ch, t + dt, events);
   }
   for (const k of NUTRIENTS) ch.n[k] = Math.max(0, ch.n[k] - CONFIG.nutrientDrainPerHour * h);
 }
@@ -789,7 +833,10 @@ function layEgg(state, hen, at, events) {
   if (roosters.length) {
     const father = roosters[Math.floor(rng() * roosters.length)];
     moon = fullMoonAt(at); // v9: đêm trăng tròn
-    const r = breed(decodeGenome(father.code), decodeGenome(hen.code), rng, { mutationRate: (1 + hen.mutationBoost) * (moon ? CONFIG.moon.mutationMul : 1) });
+    // v12: thuốc giữ giống — bên đang uống truyền alen đặc điểm nhiều hơn; mỗi lứa trứng trừ một lần
+    const keep = (c) => (buffOn(c, "breed", at) ? (c.buff.eggs--, TRAIT_ALLELES) : null);
+    const prefer = [keep(father), keep(hen)];
+    const r = breed(decodeGenome(father.code), decodeGenome(hen.code), rng, { mutationRate: (1 + hen.mutationBoost) * (moon ? CONFIG.moon.mutationMul : 1), prefer, preferP: CONFIG.potions.breed.preferP });
     code = encodeGenome(r.genome);
     mutations = r.mutations.length;
     fertile = true;
@@ -800,7 +847,9 @@ function layEgg(state, hen, at, events) {
   }
   // id gắn với (mẹ, thời điểm) để không phụ thuộc thứ tự mô phỏng
   // trứng mới đẻ nằm ngoài SÂN; người chơi nhặt (collectEgg) mới vào kho
-  const egg = { id: `e-${hen.id}-${at.toString(36)}`, code, shell: hen.shell, shellName: hen.shellName, fertile, motherId: hen.id, fatherId, laidAt: at, mutations, hatchAt: null, inYard: true, ...(line.length ? { line } : {}), ...(moon ? { moon: true } : {}) };
+  const father = fatherId ? state.chickens.find((c) => c.id === fatherId) : null;
+  const pm = fertile ? [moodOf(hen), moodOf(father)] : null; // v12: tính cách bố mẹ (tỉ lệ nhỏ được giống)
+  const egg = { id: `e-${hen.id}-${at.toString(36)}`, code, shell: hen.shell, shellName: hen.shellName, fertile, motherId: hen.id, fatherId, laidAt: at, mutations, hatchAt: null, inYard: true, ...(line.length ? { line } : {}), ...(moon ? { moon: true } : {}), ...(pm ? { pm } : {}) };
   state.eggs.push(egg);
   state.stats.laid++;
   events.push({ type: "laid", at, chickenId: hen.id, eggId: egg.id, fertile });
@@ -1300,7 +1349,7 @@ export function startPlay(state, id, now, opts = {}) {
     if (pay === "energy" && energyOf(state, now) < 1) return err("no_energy", "Hết sức chơi — chờ hồi (1 điểm mỗi 30 phút) hoặc chơi bằng vé");
     if (ch) {
       if (ch.location !== "coop") return err("in_field", `${ch.name} đang ngoài đồng`);
-      if (ch.satiety < P.hunger) return err("too_hungry", `${ch.name} đang đói — cho ăn rồi hãy chơi`);
+      if (ch.satiety < P.hunger && !buffOn(ch, "full", now)) return err("too_hungry", `${ch.name} đang đói — cho ăn rồi hãy chơi`);
     } else if ((egg.played ?? 0) >= P.eggMax) return err("too_tired", "Quả trứng này đã chơi đủ rồi");
     else egg.played = (egg.played ?? 0) + 1;
     if (pay === "ticket") state.tickets -= P.cost;
@@ -1403,14 +1452,15 @@ export const VISITORS = {
   reader: { name: "Thầy soi trứng", chance: 0.3 }, // bán thông tin về quả trứng
   haggler: { name: "Lái buôn", chance: 0.2 }, // một món khá hiếm, mặc cả được
   artisan: { name: "Nghệ nhân", weekly: true }, // đồ trang trí, mỗi tuần một lần
-  stranger: { name: "Khách lạ đêm khuya", chance: 0.35, night: true, minutes: 15 }, // ba giỏ đậy kín
+  stranger: { name: "Khách lạ đêm khuya", chance: 0.35, night: true, minutes: 15 }, // trứng bí ẩn
+  herbalist: { name: "Thầy lang", chance: 0.25 }, // v12: thuốc cho gà, cất trong kho
 };
 const VISIT = {
   slotMs: 30 * MIN, firstHour: 7, slots: 32, nightSlot: 24, // khung 30 phút từ 7:00 tới 23:00 (giờ Việt Nam); đêm từ 19:00
   seller: [{ seeds: { mung: 3 }, price: 2 }, { seeds: { millet: 3 }, price: 2 }, { seeds: { sesame: 3 }, price: 2 }, { seeds: { marigold: 3 }, price: 2 }, { seeds: { sunflower: 2 }, price: 2 }, { seeds: { corn: 2 }, price: 2 }, { seeds: { pumpkin: 2 }, price: 2 }, { seeds: { peanut: 2 }, price: 2 }, { seeds: { lotus: 2 }, price: 3 }, { seeds: { sorghum: 3 }, price: 2 }, { seeds: { cotton: 3 }, price: 2 }, { seeds: { wheat: 3 }, price: 2 }, { seeds: { rapeseed: 3 }, price: 2 }, { bag: 5, price: 3 }],
   trader: [{ give: { seed: "rice", n: 6 }, get: { seeds: { lotus: 1 } } }, { give: { seed: "marigold", n: 4 }, get: { seeds: { lotus: 1 } } }, { give: { seed: "mung", n: 4 }, get: { seeds: { lotus: 1 } } }, { give: { seed: "millet", n: 4 }, get: { seeds: { sunflower: 2 } } }, { give: { seed: "sesame", n: 4 }, get: { seeds: { peanut: 2 } } }, { give: { seed: "lotus", n: 3 }, get: { seeds: { odd: 1 } } }, { give: { eggs: 2 }, get: { bag: 4, table: "gift" } }],
   order: { pay: [2, 5, 9] }, // 1 đặc điểm · 2 đặc điểm · 2 đặc điểm + nuôi đủ chất
-  reader: { sex: 1, trait: 2 },
+  reader: { sex: 1, trait: 2, mood: 6 }, // v12: gieo tính cách cho quả trứng
   haggler: [{ seeds: { odd: 2 }, price: 8 }, { bag: 8, table: "gift", price: 7 }, { egg: "common", price: 18 }],
   haggle: { floor: [0.6, 0.85], walk: 0.75, step: 0.08, tries: 3 }, // sàn bí mật; trả dưới 75% sàn → bỏ đi; mỗi lần hạ 8%
   artisan: [{ decor: "bench", price: 12 }, { decor: "well", price: 18 }, { decor: "birdhouse", price: 10 }, { decor: "windchime", price: 14 }],
@@ -1426,6 +1476,16 @@ const TRAIT_GENES = {
   longTail: { tailType: ["Gt", "t"] }, rumpless: { tailType: ["Rp", "t"] }, rose: { combR: ["R", "r"], combP: ["p", "p"] },
   pea: { combR: ["r", "r"], combP: ["P", "p"] }, walnut: { combR: ["R", "r"], combP: ["P", "p"] }, fiveToes: { poly: ["Po", "po"] },
 };
+// v12: alen mang đặc điểm (cho thuốc giữ giống): { gen: Set(alen) } — lấy bản trội / bản đặc điểm của TRAIT_GENES
+const TRAIT_ALLELES = (() => {
+  const out = {};
+  for (const genes of Object.values(TRAIT_GENES)) for (const [g, pair] of Object.entries(genes)) {
+    const a = pair[0];
+    if (["t", "r", "p", "po", "pti", "fz", "cr", "mb", "fm", "d"].includes(a)) continue; // bản thường
+    (out[g] ??= new Set()).add(a);
+  }
+  return out;
+})();
 export const RARE_TRAITS = ["silkie", "splash", "fiveToes", "rumpless", "frizzle", "longTail"];
 const COMMON_TRAITS = DEX.map((d) => d.key).filter((k) => !RARE_TRAITS.includes(k));
 
@@ -1468,6 +1528,7 @@ function stockRaw(state, v) {
     return [item.egg ? { ...item, egg: pickN(COMMON_TRAITS, 1)[0] } : item];
   }
   if (v.who === "stranger") return [{ mystery: true, price: CONFIG.mystery.price }];
+  if (v.who === "herbalist") return pickN(Object.keys(CONFIG.potions), 3).map((k) => ({ potion: k, price: CONFIG.potions[k].price }));
   if (v.who === "reader") return [{ what: "sex", price: VISIT.reader.sex }, { what: "trait", price: VISIT.reader.trait }];
   // người sưu tầm: chỉ đòi đặc điểm trại ĐÃ từng nở (có ★); trại chưa có gì thì đòi "một gà trưởng thành nuôi đủ chất"
   const known = DEX.map((d) => d.key).filter((k) => (state.dex[k] ?? 0) >= 1);
@@ -1520,7 +1581,13 @@ function traitEgg(state, key, now, rng) {
   const ph = express(randomGenome(rng, { sex: "hen" }));
   return { id: nextId(state, "e"), code: encodeGenome(g), shell: ph.egg.shell, shellName: ph.egg.name, fertile: true, motherId: null, fatherId: null, laidAt: now, mutations: 0, hatchAt: null, gift: true, known: { traits: [key] } };
 }
+const potionCount = (state) => Object.values(state.potions ?? {}).reduce((a, b) => a + b, 0);
 function giveItem(state, item, now, rng) {
+  if (item.potion) {
+    if (potionCount(state) >= CONFIG.storage.potions) return err("potions_full", "Kệ thuốc trong kho đã đầy");
+    state.potions[item.potion] = (state.potions[item.potion] ?? 0) + 1;
+    return { ok: true, got: { potion: item.potion } };
+  }
   if (item.decor) {
     state.decorOwned ??= [];
     if (state.decorOwned.includes(item.decor)) return err("owned", "Trại đã có món này");
@@ -1556,7 +1623,7 @@ export function buy(state, slot, now, opts = {}) {
     const ctx = visiting(state, now);
     if (ctx.ok === false) return ctx;
     const { v, stock, mine } = ctx;
-    if (!["seller", "artisan", "stranger"].includes(v.who)) return err("bad_deal", "Người này không bán kiểu đó");
+    if (!["seller", "artisan", "stranger", "herbalist"].includes(v.who)) return err("bad_deal", "Người này không bán kiểu đó");
     const item = stock[slot];
     if (!item) return err("no_item", "Không có món này");
     if (mine.bought.includes(slot)) return err("sold", "Món này bạn mua rồi");
@@ -1637,8 +1704,23 @@ export function deliver(state, chickenId, now) {
 }
 
 // Thầy soi trứng: what = "sex" (trống hay mái) | "trait" (một đặc điểm quả trứng mang, hoặc "không có gì đặc biệt").
+// v12: what = "mood" + opts.mood — gieo tính cách cho quả trứng (con nở ra mang tính cách đó; "chăm đẻ" chỉ thành nếu là mái).
 export function candle(state, eggId, what, now, opts = {}) {
   return act(state, now, () => {
+    if (what === "mood") {
+      const ctx = visiting(state, now, "reader");
+      if (ctx.ok === false) return ctx;
+      if (!PERSONALITY[opts.mood]) return err("bad_mood", "Không có tính cách này");
+      const egg = state.eggs.find((e) => e.id === eggId);
+      if (!egg) return err("no_egg", "Không tìm thấy trứng");
+      if (!egg.fertile) return err("infertile", "Trứng không có phôi thì không gieo được");
+      if (egg.mood) return err("known", "Quả trứng này đã được gieo tính cách");
+      const price = seasonPrice(ctx.v.from, VISIT.reader.mood), short = pay(state, price);
+      if (short) return short;
+      egg.mood = opts.mood;
+      state.tickets -= price;
+      return { eggId, mood: egg.mood };
+    }
     const ctx = visiting(state, now, "reader");
     if (ctx.ok === false) return ctx;
     const price = VISIT.reader[what] && seasonPrice(ctx.v.from, VISIT.reader[what]);
@@ -1664,6 +1746,23 @@ export function candle(state, eggId, what, now, opts = {}) {
     }
     state.tickets -= price;
     return { eggId, known: egg.known };
+  });
+}
+
+// v12: cho một con gà uống thuốc trong kho. Mỗi con chỉ một thuốc đang có tác dụng.
+export function usePotion(state, chickenId, key, now) {
+  return act(state, now, () => {
+    const P = CONFIG.potions[key];
+    if (!P) return err("bad_potion", "Không có loại thuốc này");
+    if (!(state.potions?.[key] > 0)) return err("no_potion", "Kho không còn thuốc này");
+    const ch = state.chickens.find((c) => c.id === chickenId);
+    if (!ch) return err("no_chicken", "Không tìm thấy gà");
+    if (P.adult && ch.adultAt == null) return err("not_adult", `${ch.name} chưa trưởng thành`);
+    if (P.hen && ch.sex !== "hen") return err("not_hen", "Thuốc này chỉ dành cho gà mái");
+    if (buffOf(ch, now)) return err("buff_active", `${ch.name} đang có thuốc khác tác dụng`);
+    state.potions[key]--;
+    ch.buff = { key, ...(P.ms ? { until: now + P.ms } : {}), ...(P.eggs ? { eggs: P.eggs } : {}) };
+    return { chickenId, buff: ch.buff };
   });
 }
 
@@ -1708,7 +1807,7 @@ export function chickenView(ch, now) {
   return {
     stage: stageOf(ch),
     growth01: ch.growth / CONFIG.stages.adult,
-    hungry: ch.satiety <= 0,
+    hungry: ch.satiety <= 0 && !buffOn(ch, "full", now),
     satiety01: ch.satiety / CONFIG.satietyMax,
     canLay: ch.satiety >= CONFIG.laySatiety,
     quality: qualityOf(ch),

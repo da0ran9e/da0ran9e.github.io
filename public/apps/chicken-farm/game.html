@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Trại Gà</title>
   <meta name="description" content="Nuôi gà, thả đồng, ấp trứng, sưu tầm — mỗi con gà được vẽ từ bộ gen riêng.">
-  <link rel="stylesheet" href="game.css?v=43">
+  <link rel="stylesheet" href="game.css?v=44">
 </head>
 <body>
   <header class="bar">
@@ -89,6 +89,7 @@
           <li data-i18n-html>Kéo gà ra <b>Cổng</b> để kiếm hạt ngoài cánh đồng. Thấy <b>đốm sáng</b> thì chạm vào: gà chạy tới bới được hạt tốt.</li>
           <li data-i18n-html>Kéo gà hoặc trứng vào <b>gian hàng bên đường</b> để đổi lấy hạt, trứng hoặc vé. Khách qua đường cũng ghé ở đây.</li>
           <li data-i18n-html>Kéo gà vào <b>Sân chơi</b> để chơi: tốn 1 sức chơi (hồi 1 điểm mỗi 30 phút), hết thì dùng vé.</li>
+          <li data-i18n-html>Mỗi con gà có một <b>tính cách</b> (đôi khi giống bố mẹ) với một lợi thế nhỏ. <b>Thầy lang</b> bán thuốc cất trong kho; <b>thầy soi trứng</b> gieo được tính cách cho trứng.</li>
           <li data-i18n-html>Mỗi vóc dáng có lợi thế riêng ở <b>sân chơi</b> (chạy, nhảy, vững chân, tinh mắt). Hạt có <b>chấm tím</b> kéo một chất xuống — dùng để nắn dáng gà đang lớn.</li>
           <li data-i18n-html>Gieo hạt ở <b>vườn rau</b>: cây lớn cả khi bạn vắng mặt, chạm để tưới, chín thì thu hoạch được 3 hạt cùng loại.</li>
           <li data-i18n-html>Mỗi tuần một <b>mùa</b> (gặt, mưa, hoa, khô) đổi loại hạt ngoài đồng; <b>đêm trăng tròn</b> trứng dễ biến dị hơn. Xem biểu tượng mùa trên thanh trên cùng.</li>
@@ -162,6 +163,7 @@
         <button type="button" class="tab" role="tab" data-tab="seeds" aria-selected="true"><span data-i18n="store.seeds">Hạt</span> <span class="tab-n" id="seed-cap"></span></button>
         <button type="button" class="tab" role="tab" data-tab="bags" aria-selected="false"><span data-i18n="store.bags">Túi hạt</span> <span class="tab-n" id="bag-cap"></span></button>
         <button type="button" class="tab" role="tab" data-tab="eggs" aria-selected="false"><span data-i18n="store.eggs">Trứng</span> <span class="tab-n" id="egg-cap"></span></button>
+        <button type="button" class="tab" role="tab" data-tab="potions" aria-selected="false"><span data-i18n="store.potions">Thuốc</span> <span class="tab-n" id="potion-cap"></span></button>
       </div>
       <section class="pane" data-pane="seeds">
         <div class="cap-bar" id="seed-bar" title="Sức chứa kho hạt"><i></i></div>
@@ -174,6 +176,10 @@
       <section class="pane" data-pane="eggs" hidden>
         <p class="muted">Trứng có phôi (cần gà trống trong trại) thì ấp được. Trứng nào cũng đổi được túi 2 hạt.</p>
         <div class="eggs" id="eggs"></div>
+      </section>
+      <section class="pane" data-pane="potions" hidden>
+        <p class="muted">Mua của Thầy lang ở gian hàng bên đường. Mỗi con gà chỉ một thuốc có tác dụng một lúc.</p>
+        <div class="seed-tiles" id="potions"></div>
       </section>
     </form>
   </dialog>
@@ -263,24 +269,24 @@
        main.js mới với rules.js / field.js cũ còn trong bộ nhớ đệm và trang game không chạy. -->
   <script type="importmap">
   {"imports": {
-    "./js/genome.js": "./js/genome.js?v=43",
-    "./js/chicken-flat.js": "./js/chicken-flat.js?v=43",
-    "./js/chicken-svg.js": "./js/chicken-svg.js?v=43",
-    "./js/art/icons.js": "./js/art/icons.js?v=43",
-    "./js/art/decor.js": "./js/art/decor.js?v=43",
-    "./js/art/plants.js": "./js/art/plants.js?v=43",
-    "./js/game/rules.js": "./js/game/rules.js?v=43",
-    "./js/game/field.js": "./js/game/field.js?v=43",
-    "./js/game/net.js": "./js/game/net.js?v=43",
-    "./js/game/fx.js": "./js/game/fx.js?v=43",
-    "./js/game/i18n.js": "./js/game/i18n.js?v=43",
-    "./js/game/i18n-en.js": "./js/game/i18n-en.js?v=43",
-    "./js/game/play.js": "./js/game/play.js?v=43",
-    "./js/game/body.js": "./js/game/body.js?v=43",
-    "./js/game/intro.js": "./js/game/intro.js?v=43",
-    "./js/game/music.js": "./js/game/music.js?v=43"
+    "./js/genome.js": "./js/genome.js?v=44",
+    "./js/chicken-flat.js": "./js/chicken-flat.js?v=44",
+    "./js/chicken-svg.js": "./js/chicken-svg.js?v=44",
+    "./js/art/icons.js": "./js/art/icons.js?v=44",
+    "./js/art/decor.js": "./js/art/decor.js?v=44",
+    "./js/art/plants.js": "./js/art/plants.js?v=44",
+    "./js/game/rules.js": "./js/game/rules.js?v=44",
+    "./js/game/field.js": "./js/game/field.js?v=44",
+    "./js/game/net.js": "./js/game/net.js?v=44",
+    "./js/game/fx.js": "./js/game/fx.js?v=44",
+    "./js/game/i18n.js": "./js/game/i18n.js?v=44",
+    "./js/game/i18n-en.js": "./js/game/i18n-en.js?v=44",
+    "./js/game/play.js": "./js/game/play.js?v=44",
+    "./js/game/body.js": "./js/game/body.js?v=44",
+    "./js/game/intro.js": "./js/game/intro.js?v=44",
+    "./js/game/music.js": "./js/game/music.js?v=44"
   }}
   </script>
-  <script type="module" src="js/game/main.js?v=43"></script>
+  <script type="module" src="js/game/main.js?v=44"></script>
 </body>
 </html>

@@ -878,3 +878,11 @@ body.idle { cursor: none; }
 .pane-tools { display: flex; justify-content: flex-end; margin: -4px 0 8px; }
 .pane-tools:has(> [hidden]:only-child) { display: none; }
 #store-dialog > form { min-height: min(72vh, 640px); } /* đổi thẻ không làm hộp co giãn */
+
+/* v12: thuốc + gieo tính cách */
+.potion-tile small { font-size: 10.5px; line-height: 1.25; padding: 0 2px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.potion-tile .ico svg { width: 40px; height: 48px; }
+.badge.potion { background: color-mix(in srgb, #9a6ad6 18%, var(--card)); color: #5a3a8a; cursor: help; }
+.v-mood { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.v-mood select { font: inherit; font-size: 12px; padding: 3px 4px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+.v-card .muted { font-size: 11.5px; line-height: 1.3; }

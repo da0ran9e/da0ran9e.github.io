@@ -91,8 +91,14 @@ export const ARGS = {
   barter: (b) => ({ slot: slot(b), eggs: idList(b, "eggs", 4) }),
   deliver: (b) => ({ chickenId: id(b, "chickenId") }),
   candle: (b) => {
-    if (b.what !== "sex" && b.what !== "trait") throw bad('"what" phải là "sex" hoặc "trait"');
-    return { eggId: id(b, "eggId"), what: b.what };
+    if (b.what !== "sex" && b.what !== "trait" && b.what !== "mood") throw bad('"what" phải là "sex", "trait" hoặc "mood"');
+    if (b.what === "mood" && !(typeof b.mood === "string" && Object.hasOwn(R.PERSONALITY, b.mood))) throw bad('"mood" không hợp lệ');
+    return { eggId: id(b, "eggId"), what: b.what, ...(b.what === "mood" ? { mood: b.mood } : {}) };
+  },
+  // luật v12 — thuốc
+  usePotion: (b) => {
+    if (!(typeof b.potion === "string" && Object.hasOwn(R.CONFIG.potions, b.potion))) throw bad('"potion" không hợp lệ');
+    return { chickenId: id(b, "chickenId"), potion: b.potion };
   },
   haggle: (b) => ({ offer: count(b, "offer", R.CONFIG.tickets.cap) }),
   knockEgg: (b) => ({ eggId: id(b, "eggId") }), // luật v7 — gõ cho trứng nở sớm

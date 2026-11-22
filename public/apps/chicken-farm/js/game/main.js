@@ -18,7 +18,7 @@ import { bodyStats } from "./body.js";
 import { playIntro as runIntro } from "./intro.js";
 import { music } from "./music.js";
 import { t as tr, name as tname, errText, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
-import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, playgroundSvg, towerSvg, plantSvg, bedSvg, gardenSvg, ticketSvg, ownedDecor, roadSvg, relicSvg, fieldHorizon } from "../art/decor.js";
+import { decorItems, sparkleSvg, chestSvg, flameSvg, nestCrackSvg, stallSvg, visitorSvg, potionSvg, playgroundSvg, towerSvg, plantSvg, bedSvg, gardenSvg, ticketSvg, ownedDecor, roadSvg, relicSvg, fieldHorizon } from "../art/decor.js";
 
 let ICONS = null;
 try {
@@ -213,12 +213,20 @@ function chickenSvg(ch, { pose = "stand", phase = 0, detail = "low" } = {}) {
   return { svg, key };
 }
 // v9 — tính cách (từ gen) và chỗ con gà thích quanh quẩn trên sân
+// v12: tính cách tung lúc nở (đôi khi giống bố mẹ); mỗi tính cách một lợi thế nhỏ
 const MOOD_TIP = () => ({
-  greedy: tr("Hay quanh quẩn bên máng ăn"), lively: tr("Đi lại không ngừng, ít khi đứng yên"), shy: tr("Thích nép gần chuồng"),
-  layer: tr("Hay ghé quanh ổ"), calm: tr("Thong thả, không vội gì"),
+  greedy: tr("Hay quanh quẩn bên máng ăn. Lớn nhanh hơn một chút."), lively: tr("Đi lại không ngừng. Chạy +0.1 ở sân chơi."), shy: tr("Thích nép gần chuồng. Mắt +0.1 ở sân chơi."),
+  layer: tr("Hay ghé quanh ổ. Đẻ nhiều hơn một chút."), calm: tr("Thong thả, không vội gì. Vững +0.1 ở sân chơi."),
 });
 const moodName = (k) => tr(R.PERSONALITY[k].name);
-const moodsOf = (ch) => (R.personalityOf ? R.personalityOf(ch.code) : []);
+const moodsOf = (ch) => (R.moodOf ? [R.moodOf(ch)] : R.personalityOf ? R.personalityOf(ch.code) : []);
+// v12: thuốc
+const POTION_TIP = () => ({
+  laying: tr("Gà mái trưởng thành đẻ gấp đôi trong 6 giờ."), breed: tr("Hai lứa trứng tới: đặc điểm con gà mang truyền sang con 75% thay vì 50%."),
+  swift: tr("Chạy và Nhảy +0.15 ở sân chơi trong 2 giờ."), full: tr("Không đói trong 4 giờ, kể cả khi bạn vắng mặt."),
+});
+const potionName = (k) => tr(R.CONFIG.potions[k]?.name ?? k);
+const potionArt = (k, size = 40) => potionSvg(k, potionName(k)).replace("<svg ", `<svg width="${size}" height="${Math.round(size * 1.2)}" `);
 function yardMood(ch) {
   const m = moodsOf(ch)[0];
   if (m === "greedy") return { home: { x: SPOTS.feeder.x, y: SPOTS.feeder.y + 60, pull: 0.55 }, restMul: 1 };
@@ -389,7 +397,8 @@ const OFFLINE = {
   buy: (a, t) => R.buy(state, a.slot, t),
   barter: (a, t) => R.barter(state, a.slot, t, { eggs: a.eggs }),
   deliver: (a, t) => R.deliver(state, a.chickenId, t),
-  candle: (a, t) => R.candle(state, a.eggId, a.what, t),
+  candle: (a, t) => R.candle(state, a.eggId, a.what, t, { mood: a.mood }),
+  usePotion: (a, t) => R.usePotion(state, a.chickenId, a.potion, t), // v12
   haggle: (a, t) => R.haggle(state, a.offer, t),
   knockEgg: (a, t) => R.knockEgg(state, a.eggId, t),
   startPlay: (a, t) => R.startPlay(state, a.id, t),
@@ -1533,6 +1542,8 @@ function renderInfo() {
   host.querySelector(".ck-name").textContent = `${ch.sex === "rooster" ? "♂" : "♀"} ${ch.name}`;
   host.querySelector(".ck-sub").textContent = `${STAGE[v.stage]} · ${fmtDur(v.ageMs)} ${tr("tuổi")}${v.stage === "adult" ? "" : ` ${tr("· lớn sau ~")}${fmtDur(R.msToAdult(ch))}`}`;
   const b = moodsOf(ch).map((k) => `<span class="badge mood" title="${MOOD_TIP()[k]}">${moodName(k)}</span>`);
+  const bf = R.buffOf?.(ch, now());
+  if (bf) b.push(`<span class="badge potion" title="${esc(POTION_TIP()[bf.key])}">🧪 ${esc(potionName(bf.key))}${bf.until ? ` · ${fmtDur(bf.until - now())}` : bf.eggs ? ` · ${bf.eggs} ${tr("lứa")}` : ""}</span>`);
   if (ch.location === "field") b.push(`<span class="badge ok">${tr("Đang ngoài đồng")}</span>`);
   if (v.hungry) b.push(`<span class="badge bad">${tr("Đói — chóng già")}</span>`);
   else if (v.satiety01 < 0.3) b.push(`<span class="badge warn">${tr("Sắp đói")}</span>`);
@@ -1640,6 +1651,16 @@ function renderFeed() {
     : `<p class="muted">${tr("Kho hết hạt. Thả gà ra đồng để kiếm hạt, hoặc đổi trứng lấy túi hạt.")}</p>`;
 }
 $("#feed-list").addEventListener("click", async (ev) => {
+  const potCh = ev.target.closest("[data-potion-chick]");
+  if (potCh && !potCh.disabled) {
+    if (await run(act("usePotion", { chickenId: potCh.dataset.potionChick, potion: potionKey }))) {
+      chickenFx(potCh.dataset.potionChick, { text: potionName(potionKey), colors: ["#b89cff", "#fff", "#7cd6e8"] });
+      sfx("sparkle");
+      $("#feed-dialog").close();
+      if ($("#store-dialog").open) renderStore();
+    }
+    return;
+  }
   const pickCh = ev.target.closest("[data-chick]")?.dataset.chick;
   if (pickCh) {
     // cho ăn riêng: đã chọn loại hạt ở Kho, giờ chọn gà
@@ -1759,12 +1780,17 @@ function renderStore() {
   setHTML($("#eggs"), stored.length
     ? stored.map((e) => `<div class="item"><div class="art">${eggArt(e)}</div><div>${e.fertile ? `<span class="badge ok">${tr("Có phôi")}</span>` : `<span class="badge">${tr("Không phôi")}</span>`}</div>${e.fertile ? `<div class="muted">${tr("Ấp")} ${Math.round((e.incubateMin ?? R.incubateMsOf(e.code) / MIN))} ${tr("phút")}</div>` : `<div class="muted">${tr("Chỉ để đổi hạt")}</div>`}<div class="row">${e.fertile ? `<button type="button" class="small primary" data-incubate="${e.id}" ${freeSlot ? "" : tr("disabled title=\"Ổ ấp đang bận\"")}>${tr("Ấp")}</button>` : ""}<button type="button" class="small" data-trade-egg="${e.id}">${tr("Đổi túi 2 hạt")}</button></div></div>`).join("")
     : `<p class="muted">${tr("Kho chưa có trứng. Trứng gà mái đẻ nằm ngoài sân — chạm để nhặt.")}</p>`);
+  // v12: kệ thuốc
+  const pots = state.potions ?? {}, potN = Object.values(pots).reduce((a, b) => a + b, 0);
+  $("#potion-cap").textContent = potN ? `${potN}/${R.CONFIG.storage.potions ?? 6}` : "";
+  setHTML($("#potions"), Object.keys(R.CONFIG.potions ?? {}).map((k) => `<div class="seed-tile potion-tile${pots[k] ? "" : " none"}" title="${esc(POTION_TIP()[k])}"><span class="ico">${potionArt(k, 40)}</span><b class="cnt">${pots[k] ?? 0}</b><span class="nm">${esc(potionName(k))}</span><small class="muted">${esc(POTION_TIP()[k])}</small><button type="button" class="small" data-use-potion="${k}"${pots[k] > 0 && state.chickens.length ? "" : " disabled"}>${tr("Dùng")}</button></div>`).join(""));
 }
 $("#store-dialog").addEventListener("click", async (ev) => {
   const t = ev.target.closest("button") ?? ev.target;
   if (t.dataset.tab) return showStoreTab(t.dataset.tab);
   if (t.dataset.bag) await openBags([t.dataset.bag]);
   if (t.dataset.feedSeed) return openFeedSeed(t.dataset.feedSeed);
+  if (t.dataset.usePotion) return openPotion(t.dataset.usePotion);
   if (t.id === "open-all-bags") await openBags(state.bags.map((b) => b.id));
   if (t.dataset.incubate) await run(act("incubate", { eggId: t.dataset.incubate }), tr("Đã đặt trứng vào ổ ấp"));
   if (t.dataset.tradeEgg) await run(act("tradeToShop", { eggs: [t.dataset.tradeEgg] }), tr("Nhận túi 2 hạt"));
@@ -2362,9 +2388,22 @@ $("#tower-list").addEventListener("click", async (ev) => {
 });
 
 let feedSeed = null;
+// v12: chọn gà để uống thuốc (dùng chung hộp thoại cho ăn)
+let potionKey = null;
+function openPotion(key) {
+  potionKey = key;
+  feedSeed = null;
+  const P = R.CONFIG.potions[key];
+  $("#feed-title").textContent = tr("{x} (còn {n}) — chọn gà", { x: potionName(key), n: state.potions?.[key] ?? 0 });
+  $("#feed-list").innerHTML = state.chickens.map((c) => {
+    const busy = R.buffOf(c, now()), why = busy ? `${tr("đang có")} ${potionName(busy.key).toLowerCase()}` : P.adult && c.adultAt == null ? tr("chưa trưởng thành") : P.hen && c.sex !== "hen" ? tr("chỉ cho gà mái") : "";
+    return `<button type="button" data-potion-chick="${c.id}"${why ? " disabled" : ""}><span class="ico">${chickenSvg(c).svg}</span><span><b>${c.sex === "rooster" ? "♂" : "♀"} ${esc(c.name)}</b><br><small class="muted">${why || STAGE[R.chickenView(c, now()).stage]}</small></span><b></b></button>`;
+  }).join("") || `<p class="muted">${tr("Trại chưa có con gà nào.")}</p>`;
+  if (!$("#feed-dialog").open) $("#feed-dialog").showModal();
+}
 function openFeedSeed(kind) {
   feedSeed = kind;
-  $("#feed-title").textContent = `${tr("Cho ăn")} ${seedName(kind).toLowerCase()} ${tr("(còn")} ${state.inventory[kind]}${tr(") — chọn gà")}`;
+  $("#feed-title").textContent = tr("{x} (còn {n}) — chọn gà", { x: `${tr("Cho ăn")} ${seedName(kind).toLowerCase()}`, n: state.inventory[kind] });
   $("#feed-list").innerHTML = state.chickens.filter((c) => c.location === "coop").map((c) => {
     const v = R.chickenView(c, now());
     return `<button type="button" data-chick="${c.id}"><span class="ico">${chickenSvg(c).svg}</span><span><b>${c.sex === "rooster" ? "♂" : "♀"} ${esc(c.name)}</b><br><small class="muted">${STAGE[v.stage]} · no ${Math.round(v.satiety01 * 100)}%</small></span><b></b></button>`;
@@ -2381,10 +2420,11 @@ const V_SAY = {
   reader: tr("Đưa quả trứng đây, để ta soi xem trong đó có gì."),
   haggler: tr("Hàng hiếm đấy! Nhưng giá thì… ta nói chuyện được."),
   artisan: tr("Tự tay tôi làm cả. Trại đẹp thì gà cũng vui."),
-  stranger: tr("Ba cái giỏ. Chọn một. Một trong số đó có thứ rất quý…"),
+  stranger: tr("Một quả trứng. Bên trong có thể là thứ rất quý… hoặc không."),
+  herbalist: tr("Thuốc gia truyền đây. Mỗi con một chén thôi, uống nhiều không hay."),
 };
 const itemText = (it) => (it.decor ? ({ bench: tr("Ghế gỗ"), well: tr("Giếng nước"), birdhouse: tr("Chuồng chim"), windchime: tr("Chuông gió") })[it.decor] : it.egg ? `${tr("Trứng mang")} ${dexName(it.egg).toLowerCase()}` : rewardText(it));
-const itemArt = (it) => (it.egg ? eggArt({ id: "v", shell: "#e9dcc3", fertile: true }) : it.bag ? bagArt(64, it.bag) : it.seeds ? seedIcon(Object.keys(it.seeds)[0], 56) : chestSvg(true));
+const itemArt = (it) => (it.potion ? potionArt(it.potion, 48) : it.egg ? eggArt({ id: "v", shell: "#e9dcc3", fertile: true }) : it.bag ? bagArt(64, it.bag) : it.seeds ? seedIcon(Object.keys(it.seeds)[0], 56) : chestSvg(true));
 const dexName = (k) => tname("dex", k, R.DEX.find((d) => d.key === k)?.name ?? k);
 const price = (n) => `<span class="v-price">${ticketSvg(15)} ${n}</span>`;
 const orderText = (o) => `${o.traits.length ? `${tr("gà trưởng thành có")} ${o.traits.map((t) => dexName(t).toLowerCase()).join(tr(" và "))}` : tr("một con gà trưởng thành")}${o.quality ? tr(", nuôi đủ chất") : ""}`;
@@ -2406,11 +2446,13 @@ function renderVisitor() {
   const head = `<div class="v-head">${visitorSvg(v.who)}<div class="v-say">${V_SAY[v.who]}<br><small class="muted">${tr("Ở lại thêm")} ${fmtEta(v.until - now())} ${tr("· bạn có")} ${state.tickets} ${tr("vé")}</small></div></div>`;
   const done = (i) => v.bought.includes(i);
   let html = "";
-  if (v.who === "seller" || v.who === "artisan") {
-    html = `<div class="v-list">${v.stock.map((it, i) => `<div class="v-card${done(i) ? " done" : ""}"><div class="art">${itemArt(it)}</div><b>${esc(itemText(it))}</b><button type="button" class="small primary" data-buy="${i}"${done(i) ? " disabled" : ""}>${done(i) ? tr("Đã mua") : `Mua ${price(it.price)}`}</button></div>`).join("")}</div>`;
+  if (v.who === "herbalist") {
+    html = `<div class="v-list">${v.stock.map((it, i) => `<div class="v-card${done(i) ? " done" : ""}" title="${esc(POTION_TIP()[it.potion])}"><div class="art">${itemArt(it)}</div><b>${esc(potionName(it.potion))}</b><span class="muted">${esc(POTION_TIP()[it.potion])}</span><button type="button" class="small primary" data-buy="${i}"${done(i) ? " disabled" : ""}>${done(i) ? tr("Đã mua") : `${tr("Mua")} ${price(it.price)}`}</button></div>`).join("")}</div>`;
+  } else if (v.who === "seller" || v.who === "artisan") {
+    html = `<div class="v-list">${v.stock.map((it, i) => `<div class="v-card${done(i) ? " done" : ""}"><div class="art">${itemArt(it)}</div><b>${esc(itemText(it))}</b><button type="button" class="small primary" data-buy="${i}"${done(i) ? " disabled" : ""}>${done(i) ? tr("Đã mua") : `${tr("Mua")} ${price(it.price)}`}</button></div>`).join("")}</div>`;
   } else if (v.who === "stranger") {
     const it = v.stock[0];
-    html = `<p class="muted">${tr("Trứng bí ẩn: khoảng")} ${Math.round(R.CONFIG.mystery.chance * 100)}${tr("% nở ra gà mang một")} <b>${tr("kỳ vật")}</b> ${tr("— bộ phận độc nhất không lai giống ra được (đuôi công, cánh bướm…). Có hay không, chỉ biết khi trứng nở.")}</p><div class="v-list"><div class="v-card${done(0) ? " done" : ""}"><div class="art">${eggArt({ id: "m", shell: R.CONFIG.mystery.shell, fertile: true })}</div><b>${tr("Trứng bí ẩn")}</b><button type="button" class="small primary" data-buy="0"${done(0) ? " disabled" : ""}>${done(0) ? tr("Đã mua") : `Mua ${price(it.price)}`}</button></div></div>`;
+    html = `<p class="muted">${tr("Trứng bí ẩn: khoảng")} ${Math.round(R.CONFIG.mystery.chance * 100)}${tr("% nở ra gà mang một")} <b>${tr("kỳ vật")}</b> ${tr("— bộ phận độc nhất không lai giống ra được (đuôi công, cánh bướm…). Có hay không, chỉ biết khi trứng nở.")}</p><div class="v-list"><div class="v-card${done(0) ? " done" : ""}"><div class="art">${eggArt({ id: "m", shell: R.CONFIG.mystery.shell, fertile: true })}</div><b>${tr("Trứng bí ẩn")}</b><button type="button" class="small primary" data-buy="0"${done(0) ? " disabled" : ""}>${done(0) ? tr("Đã mua") : `${tr("Mua")} ${price(it.price)}`}</button></div></div>`;
   } else if (v.who === "trader") {
     html = `<div class="v-list">${v.stock.map((o, i) => `<div class="v-card${done(i) ? " done" : ""}"><div class="art">${itemArt(o.get)}</div><b>${esc(rewardText(o.get))}</b><span class="muted">${tr("đổi lấy")} ${o.give.seed ? `${o.give.n} ${seedName(o.give.seed).toLowerCase()}` : `${o.give.eggs} ${tr("trứng không phôi")}`}</span><button type="button" class="small primary" data-barter="${i}"${done(i) ? " disabled" : ""}>${done(i) ? tr("Đã đổi") : tr("Đổi")}</button></div>`).join("")}</div>`;
   } else if (v.who === "collector") {
@@ -2418,7 +2460,7 @@ function renderVisitor() {
     html = `<p>${tr("Cần:")} <b>${esc(orderText(o))}</b> ${tr("— trả")} ${price(o.pay)}</p>${done(0) ? `<p class="muted">${tr("Bạn đã giao rồi. Cảm ơn nhé!")}</p>` : `<div class="v-list">${list.map((c) => { const ok = R.matchesOrder(c, o); return `<div class="v-card${ok ? " match" : ""}"><div class="art">${chickenSvg(c).svg}</div><b>${esc(c.name)}</b><button type="button" class="small${ok ? " primary" : ""}" data-deliver="${c.id}"${ok ? "" : " disabled"}>${ok ? tr("Giao con này") : tr("Chưa đúng")}</button></div>`; }).join("") || `<p class="muted">${tr("Trại chưa có gà trưởng thành nào ở chuồng.")}</p>`}</div>`}`;
   } else if (v.who === "reader") {
     const eggs = state.eggs.filter((e) => e.fertile);
-    html = `<div class="v-list">${eggs.map((e) => `<div class="v-card"><div class="art">${eggArt(e)}</div>${knownText(e) || `<span class="muted">${tr("chưa soi")}</span>`}<button type="button" class="small" data-candle="${e.id}" data-what="sex"${e.known?.sex ? " disabled" : ""}>${tr("Trống hay mái")} ${price(v.stock[0].price)}</button><button type="button" class="small" data-candle="${e.id}" data-what="trait"${e.known?.all ? " disabled" : ""}>${tr("Một đặc điểm")} ${price(v.stock[1].price)}</button></div>`).join("") || `<p class="muted">${tr("Bạn không có quả trứng có phôi nào.")}</p>`}</div>`;
+    html = `<div class="v-list">${eggs.map((e) => `<div class="v-card"><div class="art">${eggArt(e)}</div>${knownText(e) || `<span class="muted">${tr("chưa soi")}</span>`}<button type="button" class="small" data-candle="${e.id}" data-what="sex"${e.known?.sex ? " disabled" : ""}>${tr("Trống hay mái")} ${price(v.stock[0].price)}</button><button type="button" class="small" data-candle="${e.id}" data-what="trait"${e.known?.all ? " disabled" : ""}>${tr("Một đặc điểm")} ${price(v.stock[1].price)}</button>${e.mood ? `<span class="badge mood" title="${MOOD_TIP()[e.mood]}">${tr("Đã gieo:")} ${moodName(e.mood)}</span>` : `<span class="v-mood"><select data-mood-for="${e.id}" aria-label="${tr("Tính cách")}">${Object.keys(R.PERSONALITY).map((k) => `<option value="${k}" title="${esc(MOOD_TIP()[k])}">${moodName(k)}</option>`).join("")}</select><button type="button" class="small" data-candle="${e.id}" data-what="mood" title="${tr("Con nở ra mang tính cách này (chăm đẻ chỉ thành nếu là mái)")}">${tr("Gieo")} ${price(R.seasonPrice(v.from, R.VISIT_CONFIG.reader.mood))}</button></span>`}</div>`).join("") || `<p class="muted">${tr("Bạn không có quả trứng có phôi nào.")}</p>`}</div>`;
   } else if (v.who === "haggler") {
     const it = v.stock[0], cur = v.price ?? it.price, left = R.VISIT_CONFIG.haggle.tries - v.tries;
     html = `<div class="v-list"><div class="v-card${done(0) ? " done" : ""}"><div class="art">${itemArt(it)}</div><b>${esc(itemText(it))}</b><span>${tr("Giá đang ra:")} ${price(cur)}</span></div></div>${done(0) ? `<p class="muted">${tr("Bạn đã mua món này.")}</p>` : `<div class="v-haggle"><label>${tr("Trả giá")} <input id="offer" type="number" min="1" max="${cur}" value="${Math.max(1, Math.round(cur * 0.8))}" inputmode="numeric"> ${tr("vé")}</label><button type="button" class="primary" data-haggle="offer"${left > 0 ? "" : " disabled"}>${tr("Trả giá (còn")} ${Math.max(0, left)} ${tr("lần)")}</button><button type="button" data-haggle="${cur}">${tr("Mua giá")} ${cur}</button></div><p class="muted">${tr("Trả thấp quá ông ấy sẽ bỏ đi.")}</p>`}`;
@@ -2443,7 +2485,7 @@ $("#visitor-body").addEventListener("click", async (ev) => {
     const eggs = o.give.eggs ? state.eggs.filter((e) => e.hatchAt === null && !e.fertile).slice(0, o.give.eggs).map((e) => e.id) : [];
     r = await act("barter", { slot: Number(d.barter), eggs });
   } else if (d.deliver) r = await act("deliver", { chickenId: d.deliver });
-  else if (d.candle) r = await act("candle", { eggId: d.candle, what: d.what });
+  else if (d.candle) r = await act("candle", { eggId: d.candle, what: d.what, ...(d.what === "mood" ? { mood: $(`[data-mood-for="${d.candle}"]`).value } : {}) });
   else if (d.haggle) r = await act("haggle", { offer: d.haggle === "offer" ? Math.round(Number($("#offer").value)) : Number(d.haggle) });
   if (!r) return;
   handleEvents(r.events ?? []);
@@ -2454,11 +2496,13 @@ $("#visitor-body").addEventListener("click", async (ev) => {
     save();
     if (r.gone) { sfx("sad"); toast(tr("Ông lái buôn lắc đầu bỏ đi.")); }
     else if (r.counter != null) { sfx("tap"); toast(r.left ? `“${r.counter} ${tr("vé, không bớt nữa đâu!” — còn")} ${r.left} ${tr("lần trả giá")}` : `${tr("“Giá chót")} ${r.counter} ${tr("vé. Mua thì mua.”")}`); }
+    else if (d.candle && r.mood) { sfx("sparkle"); toast(`${tr("Đã gieo tính cách:")} ${moodName(r.mood)}`); }
     else if (d.candle) { sfx("sparkle"); toast(`${tr("Thầy soi thấy:")} ${knownText({ known: r.known }).replace(/<[^>]+>/g, "")}`); }
+    else if (r.got?.potion) { sfx("coin"); toast(`${tr("Đã cất vào kho:")} ${potionName(r.got.potion)}`); }
     else if (d.deliver) { sfx("coin"); if (d.deliver === selectedId) select(null); toast(`${tr("Giao gà, nhận")} ${r.tickets} ${tr("vé")}`); }
     else if (r.got) {
       $("#visitor-dialog").close();
-      queueReveal({ kind: "reward", id: "shop", title: d.barter != null ? tr("Đổi xong!") : "Mua xong!", got: r.got });
+      queueReveal({ kind: "reward", id: "shop", title: d.barter != null ? tr("Đổi xong!") : tr("Mua xong!"), got: r.got });
       pumpReveals();
     }
   }
@@ -2513,9 +2557,12 @@ function rhythmGame(host, ch, kind) {
 const playCache = new Map();
 function playStats(ch) {
   if (!ch) return { speed: 0.5, jump: 0.5, steady: 0.5, eye: 0.5 };
-  const care = R.chickenView(ch, now()).care, key = `${ch.id}|${R.NUTRIENTS.map((k) => (care.dev?.[k] ?? 0).toFixed(2)).join(",")}`;
+  const care = R.chickenView(ch, now()).care, buff = R.buffOf?.(ch, now())?.key ?? "", mood = R.moodOf?.(ch) ?? "";
+  const key = `${ch.id}|${R.NUTRIENTS.map((k) => (care.dev?.[k] ?? 0).toFixed(2)).join(",")}|${mood}|${buff}`;
   if (playCache.has(key)) return playCache.get(key);
   const out = bodyStats(express(decodeGenome(ch.code), care));
+  // v12: tính cách và thuốc cộng thêm (kẹp 0..1)
+  for (const add of [R.PERSONALITY?.[mood]?.play, R.CONFIG.potions?.[buff]?.play]) for (const [k, v] of Object.entries(add ?? {})) out[k] = Math.min(1, out[k] + v);
   if (playCache.size > 200) playCache.clear();
   playCache.set(key, out);
   return out;

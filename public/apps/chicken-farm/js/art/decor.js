@@ -224,7 +224,36 @@ const VISITOR_ART = {
     <circle cx="73" cy="78" r="15" fill="#ffd95a" opacity=".22" class="glow"/><path d="M73,66 v4" stroke="#8a8f94" stroke-width="1.4"/><path d="M67,70 h12 l-2,4 h-8z" fill="#5a4028"/>
     <rect x="67" y="74" width="12" height="12" rx="2" fill="#ffe08a" stroke="#5a4028" stroke-width="1.4"/><path d="M73,74 v12 M67,80 h12" stroke="#5a4028" stroke-width=".9"/><path d="M73,83 q-2,-3 0,-6 q2,3 0,6z" fill="#e4572e"/>
     ${[[20, 30], [70, 24], [16, 60]].map(([x, y]) => `<path d="M${x},${y - 2.4} l.7,1.7 1.7,.7 -1.7,.7 -.7,1.7 -.7,-1.7 -1.7,-.7 1.7,-.7z" fill="#e6dcff" opacity=".8" class="glint"/>`).join("")}`,
+  // Thầy lang (v12): khăn xếp đen, râu dê bạc, áo dài chàm, đòn gánh trên vai treo bầu hồ lô và bó thảo dược
+  herbalist: () => `
+    ${body("#3f4f7a", "#2a3556")}<path d="M45,52 L45,98" stroke="#2a3556" stroke-width="1.4" opacity=".6"/><path d="M38,54 q7,5 14,0" stroke="#e9dcc3" stroke-width="1.6" fill="none"/>
+    <path d="M6,44 L86,30" stroke="#8d5f33" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M12,43 v10 M80,31 v10" stroke="#6b4a2a" stroke-width="1"/>
+    <ellipse cx="12" cy="57" rx="4" ry="4.2" fill="#d9a85a"/><ellipse cx="12" cy="66" rx="6.4" ry="6.6" fill="#d9a85a"/><path d="M10,53 h4" stroke="#8d5f33" stroke-width="1.6"/><path d="M8,63 q2,6 1,9" stroke="#fff4d0" stroke-width="1.2" fill="none" opacity=".7"/>
+    <path d="M74,41 l6,16 l6,-16z" fill="#6f9f3a"/><path d="M76,41 l4,-6 M80,41 v-7 M84,41 l-3,-6" stroke="#4f7f2a" stroke-width="1.4" stroke-linecap="round"/><circle cx="78" cy="36" r="1.6" fill="#e4572e"/><circle cx="83" cy="37" r="1.4" fill="#f2b318"/><path d="M75,47 h10" stroke="#c9a66b" stroke-width="1.6"/>
+    ${head("#e8b98c")}
+    <path d="M30,30 Q30,16 45,15 Q60,16 60,30 Q45,25 30,30Z" fill="#1f1b1a"/>${[19, 22.5, 26].map((y) => `<path d="M${31 + (y - 19) * 0.2},${y + 3} Q45,${y - 2} ${59 - (y - 19) * 0.2},${y + 3}" stroke="#3a3330" stroke-width="1" fill="none"/>`).join("")}
+    ${eyes(34, "#3d2a17", 4.6)}<path d="M37,30 q3,-1.4 6,0 M47,30 q3,-1.4 6,0" stroke="#d6d2cc" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+    <path d="M41,41 q4,2 8,0" stroke="#3d2a17" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M40,39 q5,-2 10,0" stroke="#d6d2cc" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <path d="M42,43 Q45,56 48,43Z" fill="#e6e2dc"/>${blush(37, "#e0957a")}
+    ${arm(28, 58, 22, 46, "#3f4f7a", "#e8b98c")}${arm(62, 58, 64, 72, "#3f4f7a", "#e8b98c")}
+    <rect x="58" y="70" width="11" height="12" rx="2" fill="#a9743f"/><path d="M60,70 q3.5,-4 7,0" stroke="#6b4a2a" stroke-width="1.2" fill="none"/>`,
 };
+// Lọ thuốc (v12): bình cầu nút bần, màu nước theo loại; nhãn có dấu nhận biết. Khung 40×48.
+const POTION_LOOK = {
+  laying: { c: "#f28aa0", mark: `<ellipse cx="20" cy="33" rx="3.4" ry="4.2" fill="#fff8ee"/>` }, // quả trứng
+  breed: { c: "#9a6ad6", mark: `<path d="M17,28 q6,5 0,10 M23,28 q-6,5 0,10" stroke="#fff8ee" stroke-width="1.4" fill="none"/>` }, // chuỗi gen
+  swift: { c: "#3fb6d1", mark: `<path d="M15,36 l5,-8 l1,4 l4,-1 l-5,8 l-1,-4z" fill="#fff8ee"/>` }, // tia chạy
+  full: { c: "#7cbf4a", mark: `<path d="M20,29 q-5,4 0,9 q5,-5 0,-9z" fill="#fff8ee"/>` }, // chiếc lá
+};
+export function potionSvg(key, label = "") {
+  const P = POTION_LOOK[key] ?? POTION_LOOK.full;
+  return svg("0 0 40 48", `<ellipse cx="20" cy="45" rx="11" ry="2" fill="#000" opacity=".12"/>
+    <path d="M16,6 h8 v9 q11,4 11,16 q0,13 -15,13 q-15,0 -15,-13 q0,-12 11,-16z" fill="#eef6f8" opacity=".85" stroke="#9fb3b8" stroke-width="1"/>
+    <path d="M7,29 q13,-4 26,0 q1,12 -13,13 q-14,-1 -13,-13z" fill="${P.c}"/><path d="M9,31 q5,-2 9,-1" stroke="#fff" stroke-width="1.4" opacity=".55" fill="none"/>
+    <rect x="15" y="2" width="10" height="6" rx="1.6" fill="#b98652"/><path d="M11,19 q-2,5 -1,9" stroke="#fff" stroke-width="1.6" opacity=".7" fill="none"/>
+    <circle cx="20" cy="33" r="6.4" fill="${P.c}" stroke="#fff8ee" stroke-width=".8" opacity=".95"/>${P.mark}`, `potion potion-${key}`, label);
+}
 export function visitorSvg(who) {
   const art = (VISITOR_ART[who] ?? VISITOR_ART.seller)();
   return svg("0 0 90 104", `<ellipse cx="45" cy="100" rx="24" ry="3.4" fill="#000" opacity=".12"/><g class="v-body">${art}</g>`, `visitor visitor-${who}`, tr("Khách qua đường"));
