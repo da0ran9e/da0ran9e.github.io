@@ -535,7 +535,8 @@ export const YARD_SPOTS = Object.freeze({
   water: Object.freeze({ x: 452, y: 136, r: 40 }), // cạnh đĩa nước
   nest: Object.freeze({ x: 600, y: 104, r: 66 }), // giữa ổ rơm (trứng / ổ ấp đặt ở đây)
   gate: Object.freeze({ x: 680, y: 234, r: 48 }), // cổng ra đồng ở hàng rào phải (dời vào trong: ngoài rào là con đường + gian hàng)
-  market: Object.freeze({ x: 748, y: 340, r: 50 }), // gian hàng bên đường (ngoài hàng rào): chợ + khách qua đường
+  market: Object.freeze({ x: 748, y: 340, r: 50 }), // gian hàng bên đường (ngoài hàng rào): chợ — kéo gà / trứng vào để đổi
+  visitor: Object.freeze({ x: 764, y: 170, r: 34 }), // khách qua đường đứng trên đường, phía trên lối ra cổng — tách khỏi quầy cho khỏi bấm nhầm
 });
 
 // tấm gỗ: chữ nhật bo góc, mép hơi xô lệch

@@ -769,7 +769,8 @@ const DEFAULT_SPOTS = {
   water: { x: 430, y: 118, r: 30 },
   nest: { x: 600, y: 104, r: 66 },
   gate: { x: 680, y: 234, r: 48 },
-  market: { x: 748, y: 340, r: 50 }, // gian hàng bên đường: chợ + khách qua đường
+  market: { x: 748, y: 340, r: 50 }, // gian hàng bên đường: chợ
+  visitor: { x: 764, y: 170, r: 34 }, // khách qua đường đứng trên đường, tách khỏi quầy
   play: { x: 160, y: 382, r: 70 }, // góc dưới trái
 };
 const SPOTS = {};
@@ -777,7 +778,8 @@ for (const [k, d] of Object.entries(DEFAULT_SPOTS)) SPOTS[k] = { ...d, ...(ICONS
 for (const s of Object.values(SPOTS)) s.r ??= 50;
 const ZONES = [
   { key: "gate", label: tr("Cổng · Cánh đồng"), accepts: ["chicken"], aria: tr("Cổng: xem cánh đồng. Kéo gà vào đây để thả ra đồng") },
-  { key: "market", label: tr("Chợ"), accepts: ["chicken", "egg"], aria: tr("Gian hàng bên đường: kéo gà hoặc trứng vào để đổi; chạm để gặp khách đang ghé") },
+  { key: "market", label: tr("Chợ"), accepts: ["chicken", "egg"], aria: tr("Gian hàng bên đường: kéo gà hoặc trứng vào để đổi lấy hạt, trứng hoặc vé") },
+  { key: "visitor", label: "", accepts: [], aria: tr("Khách qua đường: chạm để gặp") },
   { key: "coop", label: tr("Chuồng · Kho"), accepts: ["egg"], aria: tr("Chuồng: mở Kho. Kéo trứng vào để cất") },
   { key: "feeder", label: tr("Tháp hạt"), accepts: [], aria: tr("Tháp hạt: đổ hạt vào cho gà tự ăn") },
   { key: "play", label: tr("Sân chơi"), accepts: ["chicken"], aria: tr("Sân chơi: kéo gà vào để chơi (tốn 1 sức chơi, hết thì 1 vé)") },
@@ -797,11 +799,8 @@ function zoneTap(z) {
     else toast(tr("Kéo một con gà ra cổng để thả ra cánh đồng"));
   }
   if (z === "coop") openStore();
-  if (z === "market") {
-    const vis = hasV7() && R.visitorView(state, now());
-    if (vis?.who && !vis.gone) openVisitor();
-    else toast(tr("Kéo gà hoặc trứng vào gian hàng để đổi lấy hạt / trứng / vé"));
-  }
+  if (z === "market") toast(tr("Kéo gà hoặc trứng vào gian hàng để đổi lấy hạt / trứng / vé"));
+  if (z === "visitor") openVisitor();
   if (z === "feeder") hasV7() ? openTower() : toast(tr("Kéo gà vào máng: tự chọn hạt hợp với gà nhất"));
   if (z === "play") {
     // trứng đang ấp không kéo được: chạm sân chơi để chơi với quả trứng trong ổ
@@ -2259,11 +2258,13 @@ function renderDecor() {
     extra.push({ key: "play", x: SPOTS.play.x, y: SPOTS.play.y + 46, w: 220, html: playgroundSvg() });
     const inTower = Object.values(state.tower ?? {}).reduce((a, b) => a + b, 0);
     extra.push({ key: "tower", x: 384, y: 156, w: 54, html: towerSvg(inTower / R.CONFIG.tower.cap) });
-    if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.market.x + 2, y: SPOTS.market.y + 17, w: 52, html: visitorSvg(vis.who) }); // đứng sau quầy
-    const z = $('#yard-zones [data-zone="market"]');
+    // khách đứng riêng trên đường (không đứng sau quầy nữa): chạm khách = gặp khách, quầy chỉ để kéo gà / trứng vào đổi
+    if (here) extra.push({ key: `visitor-${vis.who}`, x: SPOTS.visitor.x, y: SPOTS.visitor.y + SPOTS.visitor.r + 4, w: 56, html: visitorSvg(vis.who) });
+    const z = $('#yard-zones [data-zone="visitor"]');
     if (z) {
+      z.hidden = !here;
       z.classList.toggle("has-visitor", !!here);
-      const lb = z.querySelector(".label"), txt = here ? tr(vis.name) : tr("Chợ");
+      const lb = z.querySelector(".label"), txt = here ? tr(vis.name) : "";
       if (lb.textContent !== txt) lb.textContent = txt;
       if (here && z.dataset.seen !== String(vis.from)) { z.dataset.seen = String(vis.from); sfx("merchant"); }
     }
@@ -2271,12 +2272,7 @@ function renderDecor() {
     if (tw && tw.textContent !== tx) tw.textContent = tx;
   }
   // gian hàng bên đường luôn có (chợ), kể cả với server luật cũ
-  // gian hàng tách hai lớp: mái + cột (sau khách) và quầy (trước khách)
-  const stallAt = { x: SPOTS.market.x + 2, y: SPOTS.market.y + 42, w: 92 };
-  const vi = extra.findIndex((d) => d.key.startsWith("visitor-"));
-  const front = { key: "stall-front", ...stallAt, html: stallSvg(tr("CHỢ"), "front") };
-  if (vi >= 0) extra.splice(vi + 1, 0, front); else extra.push(front);
-  extra.unshift({ key: "stall", ...stallAt, html: stallSvg(tr("CHỢ"), "back") });
+  extra.unshift({ key: "stall", x: SPOTS.market.x + 2, y: SPOTS.market.y + 42, w: 92, html: stallSvg(tr("CHỢ")) });
   // cập nhật từng món (theo key): món mới mới "bật" ra; món đổi nội dung (vd. mức hạt trong tháp) chỉ thay hình, không nhảy lại
   const host = $("#yard-decor"), items = [...decorItems(R.decorOf(state), sceneSeed()), ...extra];
   const keep = new Set(items.map((d) => d.key));
