@@ -14,6 +14,7 @@ import * as R from "./rules.js";
 import { FIELD, createField, addChicken, removeChicken, tickField, snapshot, fieldTraits, setReadyAt, setLure } from "./field.js";
 import { sfx, sound, buzz, burst, confetti, flyTo, bump } from "./fx.js";
 import { GAMES, GAME_NAMES, PLAY_STATS } from "./play.js";
+import { bodyStats } from "./body.js";
 import { playIntro as runIntro } from "./intro.js";
 import { music } from "./music.js";
 import { t as tr, name as tname, errText, lang, setLang, applyI18n, LANG_NAMES } from "./i18n.js";
@@ -2508,23 +2509,13 @@ function rhythmGame(host, ch, kind) {
     addEventListener("keydown", key);
   });
 }
-// Thuộc tính đưa vào trò chơi (0..1), suy từ VÓC DÁNG (gen + dinh dưỡng lúc lớn) — chỉ đổi cách trò diễn ra,
-// không gửi lên server (luật vẫn kẹp điểm và thưởng). Mỗi dáng một lợi thế: chân dài người nhẹ chạy / nhảy giỏi,
-// mình to chân ngắn vững chân, lông dài bay lâu, mắt to mỏ dài mổ giỏi. Hạt có chất kháng dùng để nắn dáng.
+// Thể trạng đưa vào trò chơi (0..1): mỗi thể trạng một hàm của kiểu hình — xem body.js. Không gửi lên server.
 const playCache = new Map();
 function playStats(ch) {
   if (!ch) return { speed: 0.5, jump: 0.5, steady: 0.5, eye: 0.5 };
   const care = R.chickenView(ch, now()).care, key = `${ch.id}|${R.NUTRIENTS.map((k) => (care.dev?.[k] ?? 0).toFixed(2)).join(",")}`;
   if (playCache.has(key)) return playCache.get(key);
-  const ph = express(decodeGenome(ch.code), care), sh = ph.shape, c = (v) => clampN(v, 0, 1);
-  const weight = c((sh.size * sh.plump - 0.5) / 1.1), legs = c((sh.legLen - 0.55) / 0.9);
-  const feathers = c(((sh.tailLen - 0.45) / 1.05) * 0.6 + sh.saddle * 0.4), beak = c((sh.beakLen - 0.6) / 0.85), eye = c((sh.eyeSize - 0.8) / 0.45);
-  const out = {
-    speed: c(0.45 * (ph.stats.speed ?? 0.5) + 0.35 * legs + 0.2 * (1 - weight)),
-    jump: c(0.4 * legs + 0.35 * (1 - weight) + 0.25 * feathers),
-    steady: c(0.6 * weight + 0.4 * (1 - legs)),
-    eye: c(0.6 * eye + 0.4 * beak),
-  };
+  const out = bodyStats(express(decodeGenome(ch.code), care));
   if (playCache.size > 200) playCache.clear();
   playCache.set(key, out);
   return out;

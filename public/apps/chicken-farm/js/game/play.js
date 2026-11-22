@@ -5,7 +5,7 @@ import { t as tr } from "./i18n.js";
 // Hợp đồng: GAMES[kind](host, ctx) → Promise<điểm 0..1>
 //   host: phần tử để vẽ vào (trò tự dọn timer / listener khi xong; host do người gọi xoá)
 //   ctx:  { art: chuỗi SVG của con gà hoặc quả trứng, name, stats: { speed, jump, steady, eye } mỗi số 0..1, sfx(name) }
-//   (v11: stats suy từ VÓC DÁNG — gen + dinh dưỡng lúc lớn; nắn dáng bằng hạt để hợp từng trò. Xem PLAY_STATS.)
+//   (v11: mỗi thể trạng là một hàm của kiểu hình — body.js; nắn dáng bằng hạt để hợp từng trò.)
 // Thuộc tính của gà đổi CÁCH trò diễn ra (nhảy xa hơn, hạt hiện lâu hơn…), không đổi trần phần thưởng.
 // Mỗi trò dài 16–20 giây (luật chỉ nhận kết quả sau 10 giây) và chơi được bằng một nút / phím cách.
 
@@ -13,10 +13,10 @@ const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 
 // Lợi thế vóc dáng ở sân chơi: [khoá, nhãn ngắn, chú thích]. Thứ tự hiển thị trên thẻ gà.
 export const PLAY_STATS = [
-  ["speed", tr("Chạy"), tr("Chạy đua: mỗi bước dài hơn. Nhờ gen tốc độ, chân dài, người nhẹ.")],
-  ["jump", tr("Nhảy"), tr("Nhảy vũng nước: bay lâu hơn. Nhờ chân dài, người nhẹ, lông dài.")],
-  ["steady", tr("Vững"), tr("Chạy đua: vấp đèn đỏ ít bị lùi hơn. Nhờ mình to, chân ngắn.")],
-  ["eye", tr("Mắt"), tr("Mổ hạt: hạt hiện lâu hơn. Nhờ mắt to, mỏ dài.")],
+  ["speed", tr("Chạy"), tr("Chạy đua: mỗi bước dài hơn. Chân dài thì nhanh, mình to thì chậm.")],
+  ["jump", tr("Nhảy"), tr("Nhảy vũng nước: bay lâu hơn. Chân dài, lông dài thì nhảy xa; mình to thì nặng.")],
+  ["steady", tr("Vững"), tr("Chạy đua: vấp đèn đỏ ít bị lùi hơn. Mình to, năm ngón thì vững; chân dài thì chênh vênh.")],
+  ["eye", tr("Mắt"), tr("Mổ hạt: hạt hiện lâu hơn. Mắt to, mỏ dài, cổ dài thì tinh.")],
 ];
 // Dải lợi thế đang có tác dụng trong trò này (để người chơi thấy vóc dáng gà giúp gì)
 function perks(ctx, keys) {
