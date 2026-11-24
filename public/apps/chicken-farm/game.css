@@ -614,6 +614,15 @@ body.v7 .hud { justify-content: flex-end; }
 .pg-perks span { display: grid; gap: 3px; min-width: 72px; padding: 3px 8px; border-radius: 8px; background: rgb(255 255 255 / .12); cursor: help; }
 .pg-perks b { font-weight: 600; opacity: .85; }
 .pg-perks i { background: linear-gradient(90deg, #ffd95a calc(var(--v, .5) * 100%), rgb(255 255 255 / .2) 0); }
+.pg-perks .pg-best { display: flex; align-items: center; gap: 5px; min-width: 0; cursor: help; }
+.pg-perks .pg-best b { opacity: 1; color: #ffd95a; font-size: 14px; }
+.rv-list .pg-best-line b { color: #ffd95a; }
+.rv-list .pg-best-line.new { background: rgb(255 217 90 / .22); box-shadow: inset 0 0 0 1px rgb(255 217 90 / .55); }
+.rv-list .pg-edge span { cursor: help; white-space: nowrap; }
+.rv-list .pg-edge .pos { color: #9be59b; }
+.rv-list .pg-edge .neg { color: #ffab96; }
+.rv-actions button small { font-weight: 500; opacity: .8; }
+.rv-list .pg-block { color: #ffd39a; background: rgb(255 180 90 / .14); }
 .pg-field { position: relative; height: 170px; border-radius: 16px; overflow: hidden; background: linear-gradient(#bfe6ff 0 58%, #a6d36f 58%); }
 .pg-ground { position: absolute; left: 0; right: 0; bottom: 0; height: 30%; background: #a6d36f; border-top: 3px solid #7fb552; }
 .pg-hero { position: absolute; bottom: 20%; width: 92px; height: 92px; transform: translate(-50%, 0); z-index: 2; }

@@ -13,7 +13,7 @@ import { renderChickenFlat, renderEggFlat } from "../chicken-flat.js";
 import * as R from "./rules.js";
 import { FIELD, createField, addChicken, removeChicken, tickField, snapshot, fieldTraits, setReadyAt, setLure } from "./field.js";
 import { sfx, sound, buzz, burst, confetti, flyTo, bump } from "./fx.js";
-import { GAMES, GAME_NAMES, PLAY_STATS } from "./play.js";
+import { GAMES, GAME_NAMES, PLAY_STATS, buildEdge } from "./play.js";
 import { bodyStats } from "./body.js";
 import { playIntro as runIntro } from "./intro.js";
 import { music } from "./music.js";
@@ -2565,44 +2565,15 @@ function playStats(ch) {
 }
 // Cách trả cho lượt kế tiếp: sức chơi trước (miễn phí), hết thì vé; không còn gì → null.
 const canPlay = () => (state.energy && R.energyOf(state, now()) > 0 ? "energy" : (state.tickets ?? 0) >= R.CONFIG.play.cost ? "ticket" : null);
+// Vòng chơi: một lượt → màn kết quả có nút "Chơi lại" (trả bằng sức chơi, hết thì vé) → lượt kế tiếp ngay trong hộp thoại.
 async function playFlow(id) {
-  const ch = state.chickens.find((c) => c.id === id);
-  const eggSubject = ch ? null : state.eggs.find((e) => e.id === id);
   const pay = canPlay();
   if (!pay) { sfx("error"); return toast(tr("Hết sức chơi và vé — sức chơi hồi 1 điểm mỗi 30 phút")); }
   if (pay === "ticket" && !confirm(tr("Hết sức chơi. Chơi bằng 1 vé (thưởng gấp rưỡi, thắng thì hoàn vé)?"))) return;
-  const st = await act("startPlay", { id, ...(pay === "ticket" ? { pay } : {}) });
-  handleEvents(st.events ?? []);
-  if (!st.ok) { sfx("error"); toast(errText(st)); return renderAll(); }
-  save();
-  renderAll();
-  const dlg = $("#reveal"), t0 = Date.now();
+  const dlg = $("#reveal");
   revealBusy = true;
   try {
-    rvBody().innerHTML = "";
-    if (!dlg.open) dlg.showModal();
-    sfx("whoosh");
-    const art = ch ? chickenSvg(ch, { detail: "high" }).svg : eggArt(eggSubject ?? { id: "p", shell: "#f3ead8", fertile: true });
-    const game = GAMES[st.kind];
-    const running = game ? game(rvBody(), { art, name: ch?.name ?? tr("Trứng"), stats: playStats(ch), sfx }) : rhythmGame(rvBody(), ch, st.kind);
-    for (const el of rvBody().querySelectorAll(".pg-hero")) zoomArt(el); // gà con / trứng chỉ chiếm một góc bản vẽ
-    const score = await running;
-    // luật chỉ nhận kết quả sau ít nhất minMs kể từ lúc bắt đầu
-    const wait = R.CONFIG.play.minMs + 300 - (Date.now() - t0);
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    const r = await act("endPlay", { score });
-    handleEvents(r.events ?? []);
-    save();
-    const pct = Math.round((r.score ?? 0) * 100);
-    rvShow(`${r.win ? '<div class="rv-rays"></div>' : ""}<p class="rv-kicker">${GAME_NAMES[st.kind] ?? PLAY_INFO[st.kind].name}</p>
-      <div class="rv-art">${ch ? chickenSvg(ch, { detail: "high" }).svg : eggArt(eggSubject ?? { id: "p", shell: "#f3ead8", fertile: true })}</div>
-      <h2 class="rv-title">${r.win ? tr("Thắng rồi!") : pct >= 30 ? tr("Cũng được đấy") : tr("Hụt mất rồi")}</h2>
-      <p class="rv-sub">${tr("Điểm")} ${pct}/100${r.win ? "" : ` ${tr("· cần")} ${Math.round(R.CONFIG.play.winAt * 100)} ${tr("để thắng")}`}</p>
-      <ul class="rv-list"><li>${!ch ? tr("Quả trứng sẽ nở sớm hơn") : (r.score ?? 0) <= 0 ? `${esc(ch.name)} ${tr("chơi xong thì đói và mệt hơn")}` : st.kind === "peck" ? `${esc(ch.name)} ${tr("khoẻ ra một chút, nhưng đói và mệt hơn")}` : `${esc(ch.name)} ${tr("lớn nhanh hơn một chút, nhưng đói và mệt hơn")}`}</li>${r.ticket ? `<li>${ticketSvg(16)} ${tr("Thắng: nhận lại 1 vé")}</li>` : r.win && r.pay === "ticket" ? `<li>${tr("Hôm nay đã nhận đủ vé thưởng")}</li>` : ""}${r.pay === "ticket" ? `<li>${tr("Chơi bằng vé: thưởng gấp rưỡi")}</li>` : `<li>${tr("Sức chơi còn")} ${R.energyOf(state, now())}/${R.CONFIG.energy.max}</li>`}</ul>
-      <div class="rv-actions"><button type="button" class="gold" data-go="ok">${tr("Về trại")}</button></div>`);
-    sfx(r.win ? "claim" : "pop");
-    if (r.win) confetti($("#reveal"), { n: 30 });
-    await rvWait();
+    while ((await playRound(id)) === "again");
   } finally {
     revealBusy = false;
     if (dlg.open) dlg.close();
@@ -2610,6 +2581,67 @@ async function playFlow(id) {
     syncYard();
     renderAll();
   }
+}
+// Lý do không chơi tiếp được với con / quả trứng này (null = chơi được)
+function replayBlock(id) {
+  const t = now(), ch = state.chickens.find((c) => c.id === id);
+  if (ch) {
+    if (ch.location !== "coop") return `${esc(ch.name)} ${tr("đang ngoài đồng")}`;
+    if (ch.satiety < R.CONFIG.play.hunger && !R.buffOn?.(ch, "full", t)) return `${esc(ch.name)} ${tr("đói rồi — cho ăn rồi chơi tiếp")}`;
+  } else {
+    const egg = state.eggs.find((e) => e.id === id && e.hatchAt !== null);
+    if (!egg) return tr("Quả trứng đã nở");
+    if ((egg.played ?? 0) >= R.CONFIG.play.eggMax) return tr("Quả trứng này đã chơi đủ rồi");
+  }
+  if (!canPlay()) return tr("Hết sức chơi và vé — sức chơi hồi 1 điểm mỗi 30 phút");
+  return null;
+}
+async function playRound(id) {
+  const ch = state.chickens.find((c) => c.id === id);
+  const eggSubject = ch ? null : state.eggs.find((e) => e.id === id);
+  const pay = canPlay();
+  if (!pay) { sfx("error"); toast(tr("Hết sức chơi và vé — sức chơi hồi 1 điểm mỗi 30 phút")); return "ok"; }
+  const st = await act("startPlay", { id, ...(pay === "ticket" ? { pay } : {}) });
+  handleEvents(st.events ?? []);
+  if (!st.ok) { sfx("error"); toast(errText(st)); renderAll(); return "ok"; }
+  save();
+  renderAll();
+  const dlg = $("#reveal"), t0 = Date.now();
+  rvBody().innerHTML = "";
+  if (!dlg.open) dlg.showModal();
+  sfx("whoosh");
+  const art = ch ? chickenSvg(ch, { detail: "high" }).svg : eggArt(eggSubject ?? { id: "p", shell: "#f3ead8", fertile: true });
+  const stats = playStats(ch);
+  const game = GAMES[st.kind];
+  const running = game ? game(rvBody(), { art, name: ch?.name ?? tr("Trứng"), stats, best: ch?.best?.[st.kind] ?? 0, sfx }) : rhythmGame(rvBody(), ch, st.kind);
+  for (const el of rvBody().querySelectorAll(".pg-hero")) zoomArt(el); // gà con / trứng chỉ chiếm một góc bản vẽ
+  const score = await running;
+  // luật chỉ nhận kết quả sau ít nhất minMs kể từ lúc bắt đầu
+  const wait = R.CONFIG.play.minMs + 300 - (Date.now() - t0);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  const r = await act("endPlay", { score });
+  handleEvents(r.events ?? []);
+  save();
+  const pct = Math.round((r.score ?? 0) * 100), need = Math.round(R.CONFIG.play.winAt * 100);
+  const close = !r.win && pct >= need - 10 && pct > 0; // suýt thắng
+  const title = r.newBest ? tr("Kỷ lục mới!") : r.win ? tr("Thắng rồi!") : close ? tr("Suýt nữa!") : pct >= 30 ? tr("Cũng được đấy") : tr("Hụt mất rồi");
+  const sub = `${tr("Điểm")} ${pct}/100${r.win ? "" : close ? ` ${tr("· chỉ thiếu {n} điểm", { n: need - pct })}` : ` ${tr("· cần")} ${need} ${tr("để thắng")}`}`;
+  // kỷ lục + vóc dáng giúp gì (so với gà trung bình)
+  const bestLine = ch && r.best > 0 ? (r.newBest ? `<li class="pg-best-line new">${tr("Kỷ lục của")} ${esc(ch.name)}: <b>${Math.round(r.best * 100)}</b> <small>(${tr("trước:")} ${Math.round(r.prevBest * 100)})</small></li>` : `<li class="pg-best-line">${tr("Kỷ lục của")} ${esc(ch.name)}: <b>${Math.round(r.best * 100)}</b></li>`) : "";
+  const edge = ch ? buildEdge(st.kind, stats).filter((e) => Math.abs(e.pct) >= 3) : []; // lệch vài % coi như trung bình
+  const label = Object.fromEntries(PLAY_STATS.map(([k, l, tip]) => [k, [l, tip]]));
+  const edgeLine = !edge.length ? (ch && GAMES[st.kind] && st.kind !== "roll" ? `<li class="pg-edge">${tr("Vóc dáng: trung bình — nắn dáng bằng hạt để có lợi thế")}</li>` : "") : `<li class="pg-edge">${tr("Vóc dáng:")} ${edge.map((e) => `<span title="${label[e.key][1]}"><b class="${e.pct > 0 ? "pos" : "neg"}">${e.pct > 0 ? "+" : "−"}${Math.abs(e.pct)}%</b> ${e.text}</span>`).join(" · ")}</li>`;
+  const block = replayBlock(id), nextPay = canPlay();
+  const againBtn = block ? "" : `<button type="button" class="gold" data-go="again">${tr("Chơi lại")} <small>${nextPay === "ticket" ? `· 1 ${tr("vé")}` : `· ${tr("sức chơi")} ${R.energyOf(state, now())}`}</small></button>`;
+  rvShow(`${r.win || r.newBest ? '<div class="rv-rays"></div>' : ""}<p class="rv-kicker">${GAME_NAMES[st.kind] ?? PLAY_INFO[st.kind].name}</p>
+    <div class="rv-art">${ch ? chickenSvg(ch, { detail: "high" }).svg : eggArt(eggSubject ?? { id: "p", shell: "#f3ead8", fertile: true })}</div>
+    <h2 class="rv-title">${title}</h2>
+    <p class="rv-sub">${sub}</p>
+    <ul class="rv-list">${bestLine}${edgeLine}<li>${!ch ? tr("Quả trứng sẽ nở sớm hơn") : (r.score ?? 0) <= 0 ? `${esc(ch.name)} ${tr("chơi xong thì đói và mệt hơn")}` : st.kind === "peck" ? `${esc(ch.name)} ${tr("khoẻ ra một chút, nhưng đói và mệt hơn")}` : `${esc(ch.name)} ${tr("lớn nhanh hơn một chút, nhưng đói và mệt hơn")}`}</li>${r.ticket ? `<li>${ticketSvg(16)} ${tr("Thắng: nhận lại 1 vé")}</li>` : r.win && r.pay === "ticket" ? `<li>${tr("Hôm nay đã nhận đủ vé thưởng")}</li>` : ""}${r.pay === "ticket" ? `<li>${tr("Chơi bằng vé: thưởng gấp rưỡi")}</li>` : ""}${block ? `<li class="pg-block">${block}</li>` : ""}</ul>
+    <div class="rv-actions">${againBtn}<button type="button" class="${againBtn ? "plain" : "gold"}" data-go="ok">${tr("Về trại")}</button></div>`);
+  sfx(r.win || r.newBest ? "claim" : "pop");
+  if (r.win || r.newBest) confetti($("#reveal"), { n: r.newBest ? 40 : 30 });
+  return rvWait();
 }
 
 /* ---------- gợi ý bước tiếp theo (thay dòng hướng dẫn dài) ---------- */

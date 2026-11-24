@@ -18,10 +18,27 @@ export const PLAY_STATS = [
   ["steady", tr("Vững"), tr("Chạy đua: vấp đèn đỏ ít bị lùi hơn. Mình to, năm ngón thì vững; chân dài thì chênh vênh.")],
   ["eye", tr("Mắt"), tr("Mổ hạt: hạt hiện lâu hơn. Mắt to, mỏ dài, cổ dài thì tinh.")],
 ];
-// Dải lợi thế đang có tác dụng trong trò này (để người chơi thấy vóc dáng gà giúp gì)
+// Dải lợi thế đang có tác dụng trong trò này (để người chơi thấy vóc dáng gà giúp gì) + kỷ lục của con này
 function perks(ctx, keys) {
   if (!ctx.stats || ctx.egg) return "";
-  return `<div class="pg-perks">${PLAY_STATS.filter(([k]) => keys.includes(k)).map(([k, label, tip]) => `<span title="${tip}"><b>${label}</b><i style="--v:${clamp(ctx.stats[k] ?? 0.5).toFixed(2)}"></i></span>`).join("")}</div>`;
+  const best = ctx.best > 0 ? `<span class="pg-best" title="${tr("Kỷ lục của con này ở trò này")}">${tr("Kỷ lục")} <b>${Math.round(ctx.best * 100)}</b></span>` : "";
+  return `<div class="pg-perks">${PLAY_STATS.filter(([k]) => keys.includes(k)).map(([k, label, tip]) => `<span title="${tip}"><b>${label}</b><i style="--v:${clamp(ctx.stats[k] ?? 0.5).toFixed(2)}"></i></span>`).join("")}${best}</div>`;
+}
+
+// Vóc dáng giúp được bao nhiêu so với một con gà trung bình (mọi thể trạng 0.5) — dùng đúng công thức trong từng trò.
+// Trả [{ key, pct, text }]: pct > 0 là lợi, < 0 là thiệt. Trò của trứng không dùng thể trạng → [].
+const AVG = 0.5;
+const rel = (f, v) => Math.round((f(v) / f(AVG) - 1) * 100);
+const EDGE = {
+  hop: (st) => [{ key: "jump", pct: rel((j) => 0.55 + 0.25 * j, st.jump), text: tr("thời gian bay") }],
+  dash: (st) => [
+    { key: "speed", pct: rel((v) => 0.85 + 0.35 * v, st.speed), text: tr("sải bước") },
+    { key: "steady", pct: 0 - rel((v) => 1.25 - 0.75 * v, st.steady), text: tr("bám chân khi vấp") },
+  ],
+  peck: (st) => [{ key: "eye", pct: rel((e) => 0.85 + 0.45 * e, st.eye), text: tr("hạt hiện lâu") }],
+};
+export function buildEdge(kind, stats) {
+  return stats && EDGE[kind] ? EDGE[kind](stats) : [];
 }
 const rand = (a, b) => a + Math.random() * (b - a);
 

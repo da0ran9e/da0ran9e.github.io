@@ -62,7 +62,7 @@ export function formOf(seed) {
 }
 
 export const CONFIG = {
-  version: 12,
+  version: 13,
   stepMs: MIN,
   // Ấp 5–30 phút theo gen "thời gian ấp" của chính quả trứng (genome.express).
   // Lớn: chất lượng dinh dưỡng 1 → 20 phút, 0 → 24 giờ (thang lũy thừa), nhân gen "tốc độ lớn".
@@ -1379,6 +1379,14 @@ export function endPlay(state, score, now) {
       if (ch.growth < CONFIG.stages.adult) ch.growth = Math.min(CONFIG.stages.adult - 0.001, ch.growth + P.growth * mul * s);
       else ch.lifeUsed = Math.max(0, ch.lifeUsed - P.adultLifeMs * mul * s);
     }
+    // v13 — kỷ lục riêng của từng con ở từng trò (cho vòng "chơi lại"): chỉ gà, không tính trứng
+    let best = 0, prevBest = 0;
+    if (ch) {
+      ch.best ??= {};
+      prevBest = ch.best[p.kind] ?? 0;
+      if (s > prevBest) ch.best[p.kind] = Math.round(s * 1000) / 1000;
+      best = ch.best[p.kind] ?? 0;
+    }
     const win = s >= P.winAt, day = dayIndex(now);
     let ticket = false;
     if (win) {
@@ -1391,7 +1399,7 @@ export function endPlay(state, score, now) {
       }
       state.playDay = d;
     }
-    return { score: s, win, ticket, kind: p.kind, pay: p.pay };
+    return { score: s, win, ticket, kind: p.kind, pay: p.pay, best, prevBest, newBest: !!ch && s > prevBest && prevBest > 0 };
   });
 }
 
